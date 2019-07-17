@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	lspd "lspd/rpc"
+	lspdrpc "github.com/breez/lspd/rpc"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -30,16 +30,16 @@ var (
 	openChannelReqGroup singleflight.Group
 )
 
-func (s *server) CanOpenChannel(ctx context.Context, in *lspd.CanOpenChannelRequest) (*lspd.CanOpenChannelReply, error) {
-	return &lspd.CanOpenChannelReply{
-		Addr: &lspd.LightningAddress{
+func (s *server) CanOpenChannel(ctx context.Context, in *lspdrpc.CanOpenChannelRequest) (*lspdrpc.CanOpenChannelReply, error) {
+	return &lspdrpc.CanOpenChannelReply{
+		Addr: &lspdrpc.LightningAddress{
 			Pubkey: os.Getenv("NODE_PUBKEY"),
 			Host:   os.Getenv("NODE_HOST"),
 		},
 	}, nil
 }
 
-func (s *server) OpenChannel(ctx context.Context, in *lspd.OpenChannelRequest) (*lspd.OpenChannelReply, error) {
+func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest) (*lspdrpc.OpenChannelReply, error) {
 	r, err, _ := openChannelReqGroup.Do(in.Pubkey, func() (interface{}, error) {
 		clientCtx := metadata.AppendToOutgoingContext(context.Background(), "macaroon", os.Getenv("LND_MACAROON_HEX"))
 		nodeChannels, err := getNodeChannels(in.Pubkey)
@@ -75,13 +75,13 @@ func (s *server) OpenChannel(ctx context.Context, in *lspd.OpenChannelRequest) (
 				txidStr = txid.String()
 			}
 		}
-		return &lspd.OpenChannelReply{TxHash: txidStr}, nil
+		return &lspdrpc.OpenChannelReply{TxHash: txidStr}, nil
 	})
 
 	if err != nil {
 		return nil, err
 	}
-	return r.(*lspd.OpenChannelReply), err
+	return r.(*lspdrpc.OpenChannelReply), err
 }
 
 func getNodeChannels(nodeID string) ([]*lnrpc.Channel, error) {
@@ -136,7 +136,7 @@ func main() {
 	client = lnrpc.NewLightningClient(conn)
 
 	s := grpc.NewServer()
-	lspd.RegisterChannelOpenerServer(s, &server{})
+	lspdrpc.RegisterChannelOpenerServer(s, &server{})
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
