@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "io.grpc.lspd.service";
+option java_outer_classname = "LspdProto";
+
+package lspd;
+
+service ChannelOpener {
+    rpc CanOpenChannel (CanOpenChannelRequest) returns (CanOpenChannelReply) {}
+    rpc OpenChannel (OpenChannelRequest) returns (OpenChannelReply) {}
+}
+
+message CanOpenChannelRequest {
+    /// The identity pubkey of the Lightning node
+    string pubkey = 1 [json_name = "pubkey"];
+}
+
+message LightningAddress {
+    /// The identity pubkey of the Lightning node
+    string pubkey = 1 [json_name = "pubkey"];
+    /// The network location of the lightning node, e.g. `12.34.56.78:9012` or `localhost:10011`
+    string host = 2 [json_name = "host"];
+}
+message CanOpenChannelReply {
+    /// Lightning address of the peer, in the format `<pubkey>@host`
+    LightningAddress addr = 1;
+}
+
+message OpenChannelRequest {
+    /// The identity pubkey of the Lightning node
+    string pubkey = 1 [json_name = "pubkey"];
+}
+
+message OpenChannelReply {
+    /// The transaction hash
+    string tx_hash = 1 [ json_name = "tx_hash" ];
+}
