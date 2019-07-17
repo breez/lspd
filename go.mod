@@ -1,4 +1,4 @@
-module lspd
+module github.com/breez/lspd
 
 go 1.12
 
