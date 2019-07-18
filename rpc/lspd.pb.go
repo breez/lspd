@@ -23,7 +23,7 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-type CanOpenChannelRequest struct {
+type ChannelInformationRequest struct {
 	// / The identity pubkey of the Lightning node
 	Pubkey               string   `protobuf:"bytes,1,opt,name=pubkey,proto3" json:"pubkey,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -31,122 +31,146 @@ type CanOpenChannelRequest struct {
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *CanOpenChannelRequest) Reset()         { *m = CanOpenChannelRequest{} }
-func (m *CanOpenChannelRequest) String() string { return proto.CompactTextString(m) }
-func (*CanOpenChannelRequest) ProtoMessage()    {}
-func (*CanOpenChannelRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_lspd_ebfec18e50d1a22e, []int{0}
+func (m *ChannelInformationRequest) Reset()         { *m = ChannelInformationRequest{} }
+func (m *ChannelInformationRequest) String() string { return proto.CompactTextString(m) }
+func (*ChannelInformationRequest) ProtoMessage()    {}
+func (*ChannelInformationRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_lspd_8942e060a453e94e, []int{0}
 }
-func (m *CanOpenChannelRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_CanOpenChannelRequest.Unmarshal(m, b)
+func (m *ChannelInformationRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ChannelInformationRequest.Unmarshal(m, b)
 }
-func (m *CanOpenChannelRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_CanOpenChannelRequest.Marshal(b, m, deterministic)
+func (m *ChannelInformationRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ChannelInformationRequest.Marshal(b, m, deterministic)
 }
-func (dst *CanOpenChannelRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CanOpenChannelRequest.Merge(dst, src)
+func (dst *ChannelInformationRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ChannelInformationRequest.Merge(dst, src)
 }
-func (m *CanOpenChannelRequest) XXX_Size() int {
-	return xxx_messageInfo_CanOpenChannelRequest.Size(m)
+func (m *ChannelInformationRequest) XXX_Size() int {
+	return xxx_messageInfo_ChannelInformationRequest.Size(m)
 }
-func (m *CanOpenChannelRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_CanOpenChannelRequest.DiscardUnknown(m)
+func (m *ChannelInformationRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ChannelInformationRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_CanOpenChannelRequest proto.InternalMessageInfo
+var xxx_messageInfo_ChannelInformationRequest proto.InternalMessageInfo
 
-func (m *CanOpenChannelRequest) GetPubkey() string {
+func (m *ChannelInformationRequest) GetPubkey() string {
 	if m != nil {
 		return m.Pubkey
 	}
 	return ""
 }
 
-type LightningAddress struct {
+type ChannelInformationReply struct {
+	// / The name of of lsp
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// / The identity pubkey of the Lightning node
-	Pubkey string `protobuf:"bytes,1,opt,name=pubkey,proto3" json:"pubkey,omitempty"`
+	Pubkey string `protobuf:"bytes,2,opt,name=pubkey,proto3" json:"pubkey,omitempty"`
 	// / The network location of the lightning node, e.g. `12.34.56.78:9012` or `localhost:10011`
-	Host                 string   `protobuf:"bytes,2,opt,name=host,proto3" json:"host,omitempty"`
+	Host string `protobuf:"bytes,3,opt,name=host,proto3" json:"host,omitempty"`
+	// / The channel capacity in satoshis
+	ChannelCapacity int64 `protobuf:"varint,4,opt,name=channel_capacity,proto3" json:"channel_capacity,omitempty"`
+	// / The target number of blocks that the funding transaction should be confirmed by.
+	TargetConf int32 `protobuf:"varint,5,opt,name=target_conf,proto3" json:"target_conf,omitempty"`
+	// / The base fee charged regardless of the number of milli-satoshis sent.
+	BaseFeeMsat int64 `protobuf:"varint,6,opt,name=base_fee_msat,proto3" json:"base_fee_msat,omitempty"`
+	// / The effective fee rate in milli-satoshis. The precision of this value goes up to 6 decimal places, so 1e-6.
+	FeeRate float64 `protobuf:"fixed64,7,opt,name=fee_rate,proto3" json:"fee_rate,omitempty"`
+	// / The required timelock delta for HTLCs forwarded over the channel.
+	TimeLockDelta uint32 `protobuf:"varint,8,opt,name=time_lock_delta,proto3" json:"time_lock_delta,omitempty"`
+	// / The minimum value in millisatoshi we will require for incoming HTLCs on the channel.
+	MinHtlcMsat          int64    `protobuf:"varint,9,opt,name=min_htlc_msat,proto3" json:"min_htlc_msat,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *LightningAddress) Reset()         { *m = LightningAddress{} }
-func (m *LightningAddress) String() string { return proto.CompactTextString(m) }
-func (*LightningAddress) ProtoMessage()    {}
-func (*LightningAddress) Descriptor() ([]byte, []int) {
-	return fileDescriptor_lspd_ebfec18e50d1a22e, []int{1}
+func (m *ChannelInformationReply) Reset()         { *m = ChannelInformationReply{} }
+func (m *ChannelInformationReply) String() string { return proto.CompactTextString(m) }
+func (*ChannelInformationReply) ProtoMessage()    {}
+func (*ChannelInformationReply) Descriptor() ([]byte, []int) {
+	return fileDescriptor_lspd_8942e060a453e94e, []int{1}
 }
-func (m *LightningAddress) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_LightningAddress.Unmarshal(m, b)
+func (m *ChannelInformationReply) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ChannelInformationReply.Unmarshal(m, b)
 }
-func (m *LightningAddress) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_LightningAddress.Marshal(b, m, deterministic)
+func (m *ChannelInformationReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ChannelInformationReply.Marshal(b, m, deterministic)
 }
-func (dst *LightningAddress) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_LightningAddress.Merge(dst, src)
+func (dst *ChannelInformationReply) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ChannelInformationReply.Merge(dst, src)
 }
-func (m *LightningAddress) XXX_Size() int {
-	return xxx_messageInfo_LightningAddress.Size(m)
+func (m *ChannelInformationReply) XXX_Size() int {
+	return xxx_messageInfo_ChannelInformationReply.Size(m)
 }
-func (m *LightningAddress) XXX_DiscardUnknown() {
-	xxx_messageInfo_LightningAddress.DiscardUnknown(m)
+func (m *ChannelInformationReply) XXX_DiscardUnknown() {
+	xxx_messageInfo_ChannelInformationReply.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_LightningAddress proto.InternalMessageInfo
+var xxx_messageInfo_ChannelInformationReply proto.InternalMessageInfo
 
-func (m *LightningAddress) GetPubkey() string {
+func (m *ChannelInformationReply) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *ChannelInformationReply) GetPubkey() string {
 	if m != nil {
 		return m.Pubkey
 	}
 	return ""
 }
 
-func (m *LightningAddress) GetHost() string {
+func (m *ChannelInformationReply) GetHost() string {
 	if m != nil {
 		return m.Host
 	}
 	return ""
 }
 
-type CanOpenChannelReply struct {
-	// / Lightning address of the peer, in the format `<pubkey>@host`
-	Addr                 *LightningAddress `protobuf:"bytes,1,opt,name=addr,proto3" json:"addr,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
-}
-
-func (m *CanOpenChannelReply) Reset()         { *m = CanOpenChannelReply{} }
-func (m *CanOpenChannelReply) String() string { return proto.CompactTextString(m) }
-func (*CanOpenChannelReply) ProtoMessage()    {}
-func (*CanOpenChannelReply) Descriptor() ([]byte, []int) {
-	return fileDescriptor_lspd_ebfec18e50d1a22e, []int{2}
-}
-func (m *CanOpenChannelReply) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_CanOpenChannelReply.Unmarshal(m, b)
-}
-func (m *CanOpenChannelReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_CanOpenChannelReply.Marshal(b, m, deterministic)
-}
-func (dst *CanOpenChannelReply) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CanOpenChannelReply.Merge(dst, src)
-}
-func (m *CanOpenChannelReply) XXX_Size() int {
-	return xxx_messageInfo_CanOpenChannelReply.Size(m)
-}
-func (m *CanOpenChannelReply) XXX_DiscardUnknown() {
-	xxx_messageInfo_CanOpenChannelReply.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_CanOpenChannelReply proto.InternalMessageInfo
-
-func (m *CanOpenChannelReply) GetAddr() *LightningAddress {
+func (m *ChannelInformationReply) GetChannelCapacity() int64 {
 	if m != nil {
-		return m.Addr
+		return m.ChannelCapacity
 	}
-	return nil
+	return 0
+}
+
+func (m *ChannelInformationReply) GetTargetConf() int32 {
+	if m != nil {
+		return m.TargetConf
+	}
+	return 0
+}
+
+func (m *ChannelInformationReply) GetBaseFeeMsat() int64 {
+	if m != nil {
+		return m.BaseFeeMsat
+	}
+	return 0
+}
+
+func (m *ChannelInformationReply) GetFeeRate() float64 {
+	if m != nil {
+		return m.FeeRate
+	}
+	return 0
+}
+
+func (m *ChannelInformationReply) GetTimeLockDelta() uint32 {
+	if m != nil {
+		return m.TimeLockDelta
+	}
+	return 0
+}
+
+func (m *ChannelInformationReply) GetMinHtlcMsat() int64 {
+	if m != nil {
+		return m.MinHtlcMsat
+	}
+	return 0
 }
 
 type OpenChannelRequest struct {
@@ -161,7 +185,7 @@ func (m *OpenChannelRequest) Reset()         { *m = OpenChannelRequest{} }
 func (m *OpenChannelRequest) String() string { return proto.CompactTextString(m) }
 func (*OpenChannelRequest) ProtoMessage()    {}
 func (*OpenChannelRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_lspd_ebfec18e50d1a22e, []int{3}
+	return fileDescriptor_lspd_8942e060a453e94e, []int{2}
 }
 func (m *OpenChannelRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_OpenChannelRequest.Unmarshal(m, b)
@@ -200,7 +224,7 @@ func (m *OpenChannelReply) Reset()         { *m = OpenChannelReply{} }
 func (m *OpenChannelReply) String() string { return proto.CompactTextString(m) }
 func (*OpenChannelReply) ProtoMessage()    {}
 func (*OpenChannelReply) Descriptor() ([]byte, []int) {
-	return fileDescriptor_lspd_ebfec18e50d1a22e, []int{4}
+	return fileDescriptor_lspd_8942e060a453e94e, []int{3}
 }
 func (m *OpenChannelReply) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_OpenChannelReply.Unmarshal(m, b)
@@ -228,9 +252,8 @@ func (m *OpenChannelReply) GetTxHash() string {
 }
 
 func init() {
-	proto.RegisterType((*CanOpenChannelRequest)(nil), "lspd.CanOpenChannelRequest")
-	proto.RegisterType((*LightningAddress)(nil), "lspd.LightningAddress")
-	proto.RegisterType((*CanOpenChannelReply)(nil), "lspd.CanOpenChannelReply")
+	proto.RegisterType((*ChannelInformationRequest)(nil), "lspd.ChannelInformationRequest")
+	proto.RegisterType((*ChannelInformationReply)(nil), "lspd.ChannelInformationReply")
 	proto.RegisterType((*OpenChannelRequest)(nil), "lspd.OpenChannelRequest")
 	proto.RegisterType((*OpenChannelReply)(nil), "lspd.OpenChannelReply")
 }
@@ -247,7 +270,7 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type ChannelOpenerClient interface {
-	CanOpenChannel(ctx context.Context, in *CanOpenChannelRequest, opts ...grpc.CallOption) (*CanOpenChannelReply, error)
+	ChannelInformation(ctx context.Context, in *ChannelInformationRequest, opts ...grpc.CallOption) (*ChannelInformationReply, error)
 	OpenChannel(ctx context.Context, in *OpenChannelRequest, opts ...grpc.CallOption) (*OpenChannelReply, error)
 }
 
@@ -259,9 +282,9 @@ func NewChannelOpenerClient(cc *grpc.ClientConn) ChannelOpenerClient {
 	return &channelOpenerClient{cc}
 }
 
-func (c *channelOpenerClient) CanOpenChannel(ctx context.Context, in *CanOpenChannelRequest, opts ...grpc.CallOption) (*CanOpenChannelReply, error) {
-	out := new(CanOpenChannelReply)
-	err := c.cc.Invoke(ctx, "/lspd.ChannelOpener/CanOpenChannel", in, out, opts...)
+func (c *channelOpenerClient) ChannelInformation(ctx context.Context, in *ChannelInformationRequest, opts ...grpc.CallOption) (*ChannelInformationReply, error) {
+	out := new(ChannelInformationReply)
+	err := c.cc.Invoke(ctx, "/lspd.ChannelOpener/ChannelInformation", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +302,7 @@ func (c *channelOpenerClient) OpenChannel(ctx context.Context, in *OpenChannelRe
 
 // ChannelOpenerServer is the server API for ChannelOpener service.
 type ChannelOpenerServer interface {
-	CanOpenChannel(context.Context, *CanOpenChannelRequest) (*CanOpenChannelReply, error)
+	ChannelInformation(context.Context, *ChannelInformationRequest) (*ChannelInformationReply, error)
 	OpenChannel(context.Context, *OpenChannelRequest) (*OpenChannelReply, error)
 }
 
@@ -287,20 +310,20 @@ func RegisterChannelOpenerServer(s *grpc.Server, srv ChannelOpenerServer) {
 	s.RegisterService(&_ChannelOpener_serviceDesc, srv)
 }
 
-func _ChannelOpener_CanOpenChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CanOpenChannelRequest)
+func _ChannelOpener_ChannelInformation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChannelInformationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ChannelOpenerServer).CanOpenChannel(ctx, in)
+		return srv.(ChannelOpenerServer).ChannelInformation(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/lspd.ChannelOpener/CanOpenChannel",
+		FullMethod: "/lspd.ChannelOpener/ChannelInformation",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ChannelOpenerServer).CanOpenChannel(ctx, req.(*CanOpenChannelRequest))
+		return srv.(ChannelOpenerServer).ChannelInformation(ctx, req.(*ChannelInformationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -328,8 +351,8 @@ var _ChannelOpener_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*ChannelOpenerServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "CanOpenChannel",
-			Handler:    _ChannelOpener_CanOpenChannel_Handler,
+			MethodName: "ChannelInformation",
+			Handler:    _ChannelOpener_ChannelInformation_Handler,
 		},
 		{
 			MethodName: "OpenChannel",
@@ -340,25 +363,31 @@ var _ChannelOpener_serviceDesc = grpc.ServiceDesc{
 	Metadata: "lspd.proto",
 }
 
-func init() { proto.RegisterFile("lspd.proto", fileDescriptor_lspd_ebfec18e50d1a22e) }
+func init() { proto.RegisterFile("lspd.proto", fileDescriptor_lspd_8942e060a453e94e) }
 
-var fileDescriptor_lspd_ebfec18e50d1a22e = []byte{
-	// 261 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x91, 0xc1, 0x4a, 0xc3, 0x40,
-	0x10, 0x86, 0x8d, 0x84, 0x4a, 0xa7, 0x28, 0x65, 0xd4, 0x10, 0xf5, 0x22, 0xeb, 0x45, 0xa4, 0x44,
-	0xa8, 0x77, 0x21, 0xed, 0x4d, 0x0a, 0x96, 0xbc, 0x80, 0xa4, 0xdd, 0x21, 0x1b, 0x0c, 0x9b, 0x75,
-	0x77, 0x2b, 0xe6, 0x65, 0x7c, 0x56, 0xc9, 0x26, 0x82, 0xc6, 0xf5, 0xd0, 0xdb, 0xcc, 0xce, 0xb7,
-	0xff, 0xff, 0x33, 0x03, 0x50, 0x19, 0xc5, 0x13, 0xa5, 0x6b, 0x5b, 0x63, 0xd8, 0xd6, 0xec, 0x1e,
-	0xce, 0x97, 0xb9, 0x7c, 0x56, 0x24, 0x97, 0x22, 0x97, 0x92, 0xaa, 0x8c, 0xde, 0x76, 0x64, 0x2c,
-	0x46, 0x30, 0x52, 0xbb, 0xcd, 0x2b, 0x35, 0x71, 0x70, 0x1d, 0xdc, 0x8e, 0xb3, 0xbe, 0x63, 0x8f,
-	0x30, 0x5d, 0x95, 0x85, 0xb0, 0xb2, 0x94, 0x45, 0xca, 0xb9, 0x26, 0x63, 0xfe, 0x63, 0x11, 0x21,
-	0x14, 0xb5, 0xb1, 0xf1, 0xa1, 0x7b, 0x75, 0x35, 0x4b, 0xe1, 0x74, 0x68, 0xa8, 0xaa, 0x06, 0xef,
-	0x20, 0xcc, 0x39, 0xd7, 0x4e, 0x60, 0x32, 0x8f, 0x12, 0x17, 0x74, 0x68, 0x94, 0x39, 0x86, 0xcd,
-	0x00, 0xf7, 0x08, 0x3c, 0x83, 0xe9, 0x1f, 0xb7, 0x18, 0x8e, 0xec, 0xc7, 0x8b, 0xc8, 0x8d, 0xe8,
-	0xe1, 0xef, 0x76, 0xfe, 0x19, 0xc0, 0x71, 0x8f, 0xb6, 0xbf, 0x48, 0xe3, 0x13, 0x9c, 0xfc, 0x0e,
-	0x8c, 0x57, 0x5d, 0x3a, 0xef, 0xde, 0x2e, 0x2f, 0xfc, 0x43, 0x55, 0x35, 0xec, 0x00, 0x53, 0x98,
-	0xfc, 0x14, 0x8a, 0x3b, 0xd6, 0xa3, 0x12, 0x79, 0x26, 0x4e, 0x62, 0x71, 0x03, 0x67, 0x65, 0x9d,
-	0x14, 0x5a, 0x6d, 0x3b, 0xc4, 0x90, 0x7e, 0x2f, 0xb7, 0xb4, 0x18, 0xaf, 0x8c, 0xe2, 0xeb, 0xf6,
-	0xb2, 0xeb, 0x60, 0x33, 0x72, 0x27, 0x7e, 0xf8, 0x0a, 0x00, 0x00, 0xff, 0xff, 0x6b, 0x54, 0x55,
-	0x60, 0xf0, 0x01, 0x00, 0x00,
+var fileDescriptor_lspd_8942e060a453e94e = []byte{
+	// 364 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x92, 0xcf, 0x8a, 0xdb, 0x30,
+	0x10, 0xc6, 0xab, 0xfc, 0xcf, 0x84, 0xd0, 0x20, 0x4a, 0xaa, 0x06, 0x4a, 0x8d, 0xdb, 0x83, 0x29,
+	0x21, 0x87, 0xe6, 0x09, 0x9a, 0x9e, 0x0a, 0x85, 0x06, 0x1f, 0x7a, 0x15, 0x8a, 0x32, 0x89, 0x4d,
+	0x6c, 0x49, 0xb5, 0x94, 0x52, 0xbf, 0x52, 0xdf, 0xa0, 0x6f, 0xb7, 0xc8, 0xf6, 0x2e, 0xce, 0x26,
+	0x61, 0x6f, 0x33, 0x9f, 0x7f, 0xf3, 0x8d, 0x35, 0x33, 0x00, 0x99, 0x35, 0xfb, 0x95, 0x29, 0xb4,
+	0xd3, 0xb4, 0xe7, 0xe3, 0x70, 0x0d, 0xef, 0xbe, 0x25, 0x42, 0x29, 0xcc, 0xbe, 0xab, 0x83, 0x2e,
+	0x72, 0xe1, 0x52, 0xad, 0x62, 0xfc, 0x7d, 0x46, 0xeb, 0xe8, 0x1c, 0x06, 0xe6, 0xbc, 0x3b, 0x61,
+	0xc9, 0x48, 0x40, 0xa2, 0x71, 0xdc, 0x64, 0xe1, 0xff, 0x0e, 0xbc, 0xbd, 0x55, 0x65, 0xb2, 0x92,
+	0x52, 0xe8, 0x29, 0x91, 0x63, 0x53, 0x51, 0xc5, 0x2d, 0x9f, 0x4e, 0xdb, 0xc7, 0xb3, 0x89, 0xb6,
+	0x8e, 0x75, 0x6b, 0xd6, 0xc7, 0xf4, 0x33, 0xcc, 0x64, 0x6d, 0xcd, 0xa5, 0x30, 0x42, 0xa6, 0xae,
+	0x64, 0xbd, 0x80, 0x44, 0xdd, 0xf8, 0x4a, 0xa7, 0x01, 0x4c, 0x9c, 0x28, 0x8e, 0xe8, 0xb8, 0xd4,
+	0xea, 0xc0, 0xfa, 0x01, 0x89, 0xfa, 0x71, 0x5b, 0xa2, 0x9f, 0x60, 0xba, 0x13, 0x16, 0xf9, 0x01,
+	0x91, 0xe7, 0x56, 0x38, 0x36, 0xa8, 0xac, 0x2e, 0x45, 0xba, 0x80, 0x91, 0x8f, 0x0b, 0xe1, 0x90,
+	0x0d, 0x03, 0x12, 0x91, 0xf8, 0x29, 0xa7, 0x11, 0xbc, 0x76, 0x69, 0x8e, 0x3c, 0xd3, 0xf2, 0xc4,
+	0xf7, 0x98, 0x39, 0xc1, 0x46, 0x01, 0x89, 0xa6, 0xf1, 0x73, 0xd9, 0xf7, 0xca, 0x53, 0xc5, 0x13,
+	0x97, 0xc9, 0xba, 0xd7, 0xb8, 0xee, 0x75, 0x21, 0x86, 0x4b, 0xa0, 0x3f, 0x0d, 0xaa, 0x66, 0x7c,
+	0x2f, 0x4d, 0x7a, 0x09, 0xb3, 0x0b, 0xda, 0x4f, 0x98, 0xc1, 0xd0, 0xfd, 0xe5, 0x89, 0xb0, 0x49,
+	0x03, 0x3f, 0xa6, 0x5f, 0xfe, 0x11, 0x98, 0x36, 0xa8, 0xaf, 0xc2, 0x82, 0xfe, 0x02, 0x7a, 0xbd,
+	0x28, 0xfa, 0x61, 0x55, 0xdd, 0xc1, 0xdd, 0xc5, 0x2f, 0xde, 0xdf, 0x07, 0x4c, 0x56, 0x86, 0xaf,
+	0xe8, 0x57, 0x98, 0xb4, 0xfe, 0x8b, 0xb2, 0x9a, 0xbf, 0x7e, 0xd8, 0x62, 0x7e, 0xe3, 0x4b, 0x65,
+	0xb1, 0xf9, 0x08, 0x6f, 0x52, 0xbd, 0x3a, 0x16, 0x46, 0xd6, 0x88, 0xc5, 0xe2, 0x4f, 0x2a, 0x71,
+	0x33, 0xfe, 0x61, 0xcd, 0x7e, 0xeb, 0x4f, 0x74, 0x4b, 0x76, 0x83, 0xea, 0x56, 0xd7, 0x0f, 0x01,
+	0x00, 0x00, 0xff, 0xff, 0xf5, 0x9a, 0xe0, 0xb2, 0xb9, 0x02, 0x00, 0x00,
 }

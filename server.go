@@ -30,12 +30,17 @@ var (
 	openChannelReqGroup singleflight.Group
 )
 
-func (s *server) CanOpenChannel(ctx context.Context, in *lspdrpc.CanOpenChannelRequest) (*lspdrpc.CanOpenChannelReply, error) {
-	return &lspdrpc.CanOpenChannelReply{
-		Addr: &lspdrpc.LightningAddress{
-			Pubkey: os.Getenv("NODE_PUBKEY"),
-			Host:   os.Getenv("NODE_HOST"),
-		},
+func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInformationRequest) (*lspdrpc.ChannelInformationReply, error) {
+	return &lspdrpc.ChannelInformationReply{
+		Name:            os.Getenv("NODE_NAME"),
+		Pubkey:          os.Getenv("NODE_PUBKEY"),
+		Host:            os.Getenv("NODE_HOST"),
+		ChannelCapacity: channelAmount,
+		TargetConf:      1,
+		MinHtlcMsat:     600,
+		BaseFeeMsat:     1000,
+		FeeRate:         0.000001,
+		TimeLockDelta:   144,
 	}, nil
 }
 
