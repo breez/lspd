@@ -35,7 +35,7 @@ func (m *ChannelInformationRequest) Reset()         { *m = ChannelInformationReq
 func (m *ChannelInformationRequest) String() string { return proto.CompactTextString(m) }
 func (*ChannelInformationRequest) ProtoMessage()    {}
 func (*ChannelInformationRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_lspd_8942e060a453e94e, []int{0}
+	return fileDescriptor_lspd_c62fb8bb40946759, []int{0}
 }
 func (m *ChannelInformationRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ChannelInformationRequest.Unmarshal(m, b)
@@ -67,19 +67,23 @@ type ChannelInformationReply struct {
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// / The identity pubkey of the Lightning node
 	Pubkey string `protobuf:"bytes,2,opt,name=pubkey,proto3" json:"pubkey,omitempty"`
-	// / The network location of the lightning node, e.g. `12.34.56.78:9012` or `localhost:10011`
+	// / The network location of the lightning node, e.g. `12.34.56.78:9012` or
+	// / `localhost:10011`
 	Host string `protobuf:"bytes,3,opt,name=host,proto3" json:"host,omitempty"`
 	// / The channel capacity in satoshis
 	ChannelCapacity int64 `protobuf:"varint,4,opt,name=channel_capacity,proto3" json:"channel_capacity,omitempty"`
-	// / The target number of blocks that the funding transaction should be confirmed by.
+	// / The target number of blocks that the funding transaction should be
+	// / confirmed by.
 	TargetConf int32 `protobuf:"varint,5,opt,name=target_conf,proto3" json:"target_conf,omitempty"`
 	// / The base fee charged regardless of the number of milli-satoshis sent.
 	BaseFeeMsat int64 `protobuf:"varint,6,opt,name=base_fee_msat,proto3" json:"base_fee_msat,omitempty"`
-	// / The effective fee rate in milli-satoshis. The precision of this value goes up to 6 decimal places, so 1e-6.
+	// / The effective fee rate in milli-satoshis. The precision of this value goes
+	// / up to 6 decimal places, so 1e-6.
 	FeeRate float64 `protobuf:"fixed64,7,opt,name=fee_rate,proto3" json:"fee_rate,omitempty"`
 	// / The required timelock delta for HTLCs forwarded over the channel.
 	TimeLockDelta uint32 `protobuf:"varint,8,opt,name=time_lock_delta,proto3" json:"time_lock_delta,omitempty"`
-	// / The minimum value in millisatoshi we will require for incoming HTLCs on the channel.
+	// / The minimum value in millisatoshi we will require for incoming HTLCs on
+	// / the channel.
 	MinHtlcMsat          int64    `protobuf:"varint,9,opt,name=min_htlc_msat,proto3" json:"min_htlc_msat,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -90,7 +94,7 @@ func (m *ChannelInformationReply) Reset()         { *m = ChannelInformationReply
 func (m *ChannelInformationReply) String() string { return proto.CompactTextString(m) }
 func (*ChannelInformationReply) ProtoMessage()    {}
 func (*ChannelInformationReply) Descriptor() ([]byte, []int) {
-	return fileDescriptor_lspd_8942e060a453e94e, []int{1}
+	return fileDescriptor_lspd_c62fb8bb40946759, []int{1}
 }
 func (m *ChannelInformationReply) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ChannelInformationReply.Unmarshal(m, b)
@@ -185,7 +189,7 @@ func (m *OpenChannelRequest) Reset()         { *m = OpenChannelRequest{} }
 func (m *OpenChannelRequest) String() string { return proto.CompactTextString(m) }
 func (*OpenChannelRequest) ProtoMessage()    {}
 func (*OpenChannelRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_lspd_8942e060a453e94e, []int{2}
+	return fileDescriptor_lspd_c62fb8bb40946759, []int{2}
 }
 func (m *OpenChannelRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_OpenChannelRequest.Unmarshal(m, b)
@@ -224,7 +228,7 @@ func (m *OpenChannelReply) Reset()         { *m = OpenChannelReply{} }
 func (m *OpenChannelReply) String() string { return proto.CompactTextString(m) }
 func (*OpenChannelReply) ProtoMessage()    {}
 func (*OpenChannelReply) Descriptor() ([]byte, []int) {
-	return fileDescriptor_lspd_8942e060a453e94e, []int{3}
+	return fileDescriptor_lspd_c62fb8bb40946759, []int{3}
 }
 func (m *OpenChannelReply) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_OpenChannelReply.Unmarshal(m, b)
@@ -363,9 +367,9 @@ var _ChannelOpener_serviceDesc = grpc.ServiceDesc{
 	Metadata: "lspd.proto",
 }
 
-func init() { proto.RegisterFile("lspd.proto", fileDescriptor_lspd_8942e060a453e94e) }
+func init() { proto.RegisterFile("lspd.proto", fileDescriptor_lspd_c62fb8bb40946759) }
 
-var fileDescriptor_lspd_8942e060a453e94e = []byte{
+var fileDescriptor_lspd_c62fb8bb40946759 = []byte{
 	// 364 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x92, 0xcf, 0x8a, 0xdb, 0x30,
 	0x10, 0xc6, 0xab, 0xfc, 0xcf, 0x84, 0xd0, 0x20, 0x4a, 0xaa, 0x06, 0x4a, 0x8d, 0xdb, 0x83, 0x29,
