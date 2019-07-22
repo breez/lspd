@@ -12,11 +12,14 @@ import (
 	lspdrpc "github.com/breez/lspd/rpc"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -141,7 +144,18 @@ func main() {
 	defer conn.Close()
 	client = lnrpc.NewLightningClient(conn)
 
-	s := grpc.NewServer()
+	s := grpc.NewServer(
+		grpc_middleware.WithUnaryServerChain(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+			if md, ok := metadata.FromIncomingContext(ctx); ok {
+				for _, auth := range md.Get("authorization") {
+					if auth == "Bearer "+os.Getenv("TOKEN") {
+						return handler(ctx, req)
+					}
+				}
+			}
+			return nil, status.Errorf(codes.PermissionDenied, "Not authorized")
+		}),
+	)
 	lspdrpc.RegisterChannelOpenerServer(s, &server{})
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
