@@ -53,4 +53,6 @@ message OpenChannelRequest {
 message OpenChannelReply {
   /// The transaction hash
   string tx_hash = 1 [ json_name = "tx_hash" ];
+  /// The output index
+  uint32 output_index = 2 [ json_name = "output_index"];
 }

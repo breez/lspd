@@ -56,6 +56,7 @@ func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest
 			return nil, err
 		}
 		var txidStr string
+		var outputIndex uint32
 		if len(nodeChannels) == 0 && len(pendingChannels) == 0 {
 			response, err := client.OpenChannelSync(clientCtx, &lnrpc.OpenChannelRequest{
 				LocalFundingAmount: channelAmount,
@@ -73,14 +74,14 @@ func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest
 			}
 
 			txid, _ := chainhash.NewHash(response.GetFundingTxidBytes())
-
+			outputIndex = response.GetOutputIndex()
 			// don't fail the request in case we can't format the channel id from
 			// some reason...
 			if txid != nil {
 				txidStr = txid.String()
 			}
 		}
-		return &lspdrpc.OpenChannelReply{TxHash: txidStr}, nil
+		return &lspdrpc.OpenChannelReply{TxHash: txidStr, OutputIndex: outputIndex}, nil
 	})
 
 	if err != nil {
