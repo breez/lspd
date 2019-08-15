@@ -15,7 +15,7 @@ This is a simple example of an lspd that works with an [lnd](https://github.com/
 3. Compile lspd using `go build .`
 4. Define the environment variables as described in sample.env:
 5. Run lspd
-6. Share with Breez the TOKEN and the LISTEN_ADDRESS you defined
+6. Share with Breez the TOKEN and the LISTEN_ADDRESS you've defined (send to contact@breez.technology)
 
 ## Implement your own server
 You can create your own server by implementing the grpc methods described [here](https://github.com/breez/lspd/blob/master/rpc/lspd.md).
