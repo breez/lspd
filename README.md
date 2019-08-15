@@ -12,4 +12,4 @@ This server exposes LSP services to the [Breez client](https://github.com/breez/
 1. Share with Breez the TOKEN and the LISTEN_ADDRESS you defined
 
 ## Implement your own server
-The grpc methods are described in https://github.com/breez/lspd/blob/master/rpc/lspd.md
+You can create your own server by implementing the grpc methods described [here](https://github.com/breez/lspd/blob/master/rpc/lspd.md).
