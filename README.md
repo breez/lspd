@@ -1,5 +1,6 @@
 # lspd simple server
 This is a simple example of an lspd server that works with an [lnd](https://github.com/lightningnetwork/lnd) node.
+
 This server exposes LSP services to the [Breez client](https://github.com/breez/breezmobile).   
 
 ## Installation
