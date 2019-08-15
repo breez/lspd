@@ -17,5 +17,5 @@ This is a simple example of an lspd that works with an [lnd](https://github.com/
 5. Run lspd
 6. Share with Breez the TOKEN and the LISTEN_ADDRESS you've defined (send to contact@breez.technology)
 
-## Implement your own server
-You can create your own server by implementing the grpc methods described [here](https://github.com/breez/lspd/blob/master/rpc/lspd.md).
+## Implement your own lspd
+You can create your own lsdp by implementing the grpc methods described [here](https://github.com/breez/lspd/blob/master/rpc/lspd.md).
