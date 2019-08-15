@@ -1,7 +1,7 @@
 # lspd simple server
-This is a simple example of an lspd server that works with an [lnd](https://github.com/lightningnetwork/lnd) node.
+lspd is a simple deamon that provides [LSP](https://medium.com/breez-technology/introducing-lightning-service-providers-fe9fb1665d5f) interface to [Breez clients](https://github.com/breez/breezmobile).   
 
-This server exposes LSP services to the [Breez client](https://github.com/breez/breezmobile).   
+This is a simple example of an lspd that works with an [lnd](https://github.com/lightningnetwork/lnd) node.
 
 ## Installation
 1. git clone https://github.com/breez/lspd (or fork)
