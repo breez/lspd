@@ -13,9 +13,10 @@ This is a simple example of an lspd that works with an [lnd](https://github.com/
   *	**FeeRate**: fee rate (recommended: 0.000001). The total fee charged is BaseFeeMsat + (amount * FeeRate / 1000000)
   * **TimeLockDelta**: the minimum number of blocks this node requires to be added to the expiry of HTLCs (recommended: 144).
 3. Compile lspd using `go build .`
-4. Define the environment variables as described in sample.env:
-5. Run lspd
-6. Share with Breez the TOKEN and the LISTEN_ADDRESS you've defined (send to contact@breez.technology)
+4. Create a random token (for instance using the command `openssl rand -base64 48`)
+5. Define the environment variables as described in sample.env:
+6. Run lspd
+7. Share with Breez the TOKEN and the LISTEN_ADDRESS you've defined (send to contact@breez.technology)
 
 ## Implement your own lspd
 You can create your own lsdp by implementing the grpc methods described [here](https://github.com/breez/lspd/blob/master/rpc/lspd.md).
