@@ -24,6 +24,11 @@ import (
 
 const (
 	channelAmount = 1000000
+	targetConf    = 1
+	minHtlcMsat   = 600
+	baseFeeMsat   = 1000
+	feeRate       = 0.000001
+	timeLockDelta = 144
 )
 
 type server struct{}
@@ -39,11 +44,11 @@ func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInfo
 		Pubkey:          os.Getenv("NODE_PUBKEY"),
 		Host:            os.Getenv("NODE_HOST"),
 		ChannelCapacity: channelAmount,
-		TargetConf:      1,
-		MinHtlcMsat:     600,
-		BaseFeeMsat:     1000,
-		FeeRate:         0.000001,
-		TimeLockDelta:   144,
+		TargetConf:      targetConf,
+		MinHtlcMsat:     minHtlcMsat,
+		BaseFeeMsat:     baseFeeMsat,
+		FeeRate:         feeRate,
+		TimeLockDelta:   timeLockDelta,
 	}, nil
 }
 
@@ -65,8 +70,8 @@ func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest
 				LocalFundingAmount: channelAmount,
 				NodePubkeyString:   in.Pubkey,
 				PushSat:            0,
-				TargetConf:         1,
-				MinHtlcMsat:        600,
+				TargetConf:         targetConf,
+				MinHtlcMsat:        minHtlcMsat,
 				Private:            true,
 			})
 			log.Printf("Response from OpenChannel: %#v (TX: %v)", response, hex.EncodeToString(response.GetFundingTxidBytes()))
