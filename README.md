@@ -10,7 +10,7 @@ This is a simple example of an lspd that works with an [lnd](https://github.com/
   *	**TargetConf**: the number of blocks that the funding transaction *should* confirm in, will be used for fee estimation (recommended: 0).
   *	**MinHtlcMsat**: the channel_reserve value in sats (recommended: 1000000).
   *	**BaseFeeMsat**: base tx fee in msats (recommended: 1000).
-  *	**FeeRate**: fee rate (recommended: 0.000001).
+  *	**FeeRate**: fee rate (recommended: 0.000001). The total fee charged is BaseFeeMsat + (amount * FeeRate / 1000000)
   * **TimeLockDelta**: the minimum number of blocks this node requires to be added to the expiry of HTLCs (recommended: 144).
 3. Compile lspd using `go build .`
 4. Define the environment variables as described in sample.env:
