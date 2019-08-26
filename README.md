@@ -22,5 +22,5 @@ This is a simple example of an lspd that works with an [lnd](https://github.com/
 You can create your own lsdp by implementing the grpc methods described [here](https://github.com/breez/lspd/blob/master/rpc/lspd.md).
 
 ## Use a smaller channel reserve
-You can apply the PR from https://github.com/lightningnetwork/lnd/pull/270 to be able to create channels with a channel reserve smaller than 1% of the channel capacity.
+You can apply the PR from https://github.com/lightningnetwork/lnd/pull/2708 to be able to create channels with a channel reserve smaller than 1% of the channel capacity.
 Then add the field `RemoteChanReserveSat` in the `lnrpc.OpenChannelRequest` struct when opening a channel.
