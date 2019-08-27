@@ -14,7 +14,7 @@ This is a simple example of an lspd that works with an [lnd](https://github.com/
   * **TimeLockDelta**: the minimum number of blocks this node requires to be added to the expiry of HTLCs (recommended: 144).
 3. Compile lspd using `go build .`
 4. Create a random token (for instance using the command `openssl rand -base64 48`)
-5. Define the environment variables as described in sample.env:
+5. Define the environment variables as described in sample.env. If `CERTMAGIC_DOMAIN` is defined, certificate for this domain is automatically obtained and renewed from Let's Encrypt. In this case, the port needs to be 443. If `CERTMAGIC_DOMAIN` is not defined, lspd needs to run behind a reverse proxy like treafik or nginx.
 6. Run lspd
 7. Share with Breez the TOKEN and the LISTEN_ADDRESS you've defined (send to contact@breez.technology)
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"log"
@@ -14,6 +15,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/mholt/certmagic"
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -129,9 +131,24 @@ func getPendingNodeChannels(nodeID string) ([]*lnrpc.PendingChannelsResponse_Pen
 }
 
 func main() {
-	lis, err := net.Listen("tcp", os.Getenv("LISTEN_ADDRESS"))
-	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+	certmagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
+	address := os.Getenv("LISTEN_ADDRESS")
+	var lis net.Listener
+	if certmagicDomain == "" {
+		var err error
+		lis, err = net.Listen("tcp", address)
+		if err != nil {
+			log.Fatalf("failed to listen: %v", err)
+		}
+	} else {
+		tlsConfig, err := certmagic.TLS([]string{certmagicDomain})
+		if err != nil {
+			log.Fatalf("failed to run certmagic: %v", err)
+		}
+		lis, err = tls.Listen("tcp", address, tlsConfig)
+		if err != nil {
+			log.Fatalf("failed to listen: %v", err)
+		}
 	}
 
 	// Creds file to connect to LND gRPC
