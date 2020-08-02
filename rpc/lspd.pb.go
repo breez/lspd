@@ -3,13 +3,14 @@
 
 package lspd
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
-
 import (
-	context "golang.org/x/net/context"
+	context "context"
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
 	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
+	math "math"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -21,10 +22,10 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type ChannelInformationRequest struct {
-	// / The identity pubkey of the Lightning node
+	/// The identity pubkey of the Lightning node
 	Pubkey               string   `protobuf:"bytes,1,opt,name=pubkey,proto3" json:"pubkey,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -35,16 +36,17 @@ func (m *ChannelInformationRequest) Reset()         { *m = ChannelInformationReq
 func (m *ChannelInformationRequest) String() string { return proto.CompactTextString(m) }
 func (*ChannelInformationRequest) ProtoMessage()    {}
 func (*ChannelInformationRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_lspd_f6548acf9d60fb70, []int{0}
+	return fileDescriptor_c69a0f5a734bca26, []int{0}
 }
+
 func (m *ChannelInformationRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ChannelInformationRequest.Unmarshal(m, b)
 }
 func (m *ChannelInformationRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ChannelInformationRequest.Marshal(b, m, deterministic)
 }
-func (dst *ChannelInformationRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ChannelInformationRequest.Merge(dst, src)
+func (m *ChannelInformationRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ChannelInformationRequest.Merge(m, src)
 }
 func (m *ChannelInformationRequest) XXX_Size() int {
 	return xxx_messageInfo_ChannelInformationRequest.Size(m)
@@ -63,47 +65,51 @@ func (m *ChannelInformationRequest) GetPubkey() string {
 }
 
 type ChannelInformationReply struct {
-	// / The name of of lsp
+	/// The name of of lsp
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	// / The identity pubkey of the Lightning node
+	/// The identity pubkey of the Lightning node
 	Pubkey string `protobuf:"bytes,2,opt,name=pubkey,proto3" json:"pubkey,omitempty"`
-	// / The network location of the lightning node, e.g. `12.34.56.78:9012` or
-	// / `localhost:10011`
+	/// The network location of the lightning node, e.g. `12.34.56.78:9012` or
+	/// `localhost:10011`
 	Host string `protobuf:"bytes,3,opt,name=host,proto3" json:"host,omitempty"`
-	// / The channel capacity in satoshis
+	/// The channel capacity in satoshis
 	ChannelCapacity int64 `protobuf:"varint,4,opt,name=channel_capacity,proto3" json:"channel_capacity,omitempty"`
-	// / The target number of blocks that the funding transaction should be
-	// / confirmed by.
+	/// The target number of blocks that the funding transaction should be
+	/// confirmed by.
 	TargetConf int32 `protobuf:"varint,5,opt,name=target_conf,proto3" json:"target_conf,omitempty"`
-	// / The base fee charged regardless of the number of milli-satoshis sent.
+	/// The base fee charged regardless of the number of milli-satoshis sent.
 	BaseFeeMsat int64 `protobuf:"varint,6,opt,name=base_fee_msat,proto3" json:"base_fee_msat,omitempty"`
-	// / The effective fee rate in milli-satoshis. The precision of this value goes
-	// / up to 6 decimal places, so 1e-6.
+	/// The effective fee rate in milli-satoshis. The precision of this value goes
+	/// up to 6 decimal places, so 1e-6.
 	FeeRate float64 `protobuf:"fixed64,7,opt,name=fee_rate,proto3" json:"fee_rate,omitempty"`
-	// / The required timelock delta for HTLCs forwarded over the channel.
+	/// The required timelock delta for HTLCs forwarded over the channel.
 	TimeLockDelta uint32 `protobuf:"varint,8,opt,name=time_lock_delta,proto3" json:"time_lock_delta,omitempty"`
-	// / The minimum value in millisatoshi we will require for incoming HTLCs on
-	// / the channel.
-	MinHtlcMsat          int64    `protobuf:"varint,9,opt,name=min_htlc_msat,proto3" json:"min_htlc_msat,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	/// The minimum value in millisatoshi we will require for incoming HTLCs on
+	/// the channel.
+	MinHtlcMsat           int64    `protobuf:"varint,9,opt,name=min_htlc_msat,proto3" json:"min_htlc_msat,omitempty"`
+	ChannelFeeStartAmount int64    `protobuf:"varint,10,opt,name=channel_fee_start_amount,json=channelFeeStartAmount,proto3" json:"channel_fee_start_amount,omitempty"`
+	ChannelFeeRate        float32  `protobuf:"fixed32,11,opt,name=channel_fee_rate,json=channelFeeRate,proto3" json:"channel_fee_rate,omitempty"`
+	LspPubkey             []byte   `protobuf:"bytes,12,opt,name=lsp_pubkey,json=lspPubkey,proto3" json:"lsp_pubkey,omitempty"`
+	XXX_NoUnkeyedLiteral  struct{} `json:"-"`
+	XXX_unrecognized      []byte   `json:"-"`
+	XXX_sizecache         int32    `json:"-"`
 }
 
 func (m *ChannelInformationReply) Reset()         { *m = ChannelInformationReply{} }
 func (m *ChannelInformationReply) String() string { return proto.CompactTextString(m) }
 func (*ChannelInformationReply) ProtoMessage()    {}
 func (*ChannelInformationReply) Descriptor() ([]byte, []int) {
-	return fileDescriptor_lspd_f6548acf9d60fb70, []int{1}
+	return fileDescriptor_c69a0f5a734bca26, []int{1}
 }
+
 func (m *ChannelInformationReply) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ChannelInformationReply.Unmarshal(m, b)
 }
 func (m *ChannelInformationReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ChannelInformationReply.Marshal(b, m, deterministic)
 }
-func (dst *ChannelInformationReply) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ChannelInformationReply.Merge(dst, src)
+func (m *ChannelInformationReply) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ChannelInformationReply.Merge(m, src)
 }
 func (m *ChannelInformationReply) XXX_Size() int {
 	return xxx_messageInfo_ChannelInformationReply.Size(m)
@@ -177,8 +183,29 @@ func (m *ChannelInformationReply) GetMinHtlcMsat() int64 {
 	return 0
 }
 
+func (m *ChannelInformationReply) GetChannelFeeStartAmount() int64 {
+	if m != nil {
+		return m.ChannelFeeStartAmount
+	}
+	return 0
+}
+
+func (m *ChannelInformationReply) GetChannelFeeRate() float32 {
+	if m != nil {
+		return m.ChannelFeeRate
+	}
+	return 0
+}
+
+func (m *ChannelInformationReply) GetLspPubkey() []byte {
+	if m != nil {
+		return m.LspPubkey
+	}
+	return nil
+}
+
 type OpenChannelRequest struct {
-	// / The identity pubkey of the Lightning node
+	/// The identity pubkey of the Lightning node
 	Pubkey               string   `protobuf:"bytes,1,opt,name=pubkey,proto3" json:"pubkey,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -189,16 +216,17 @@ func (m *OpenChannelRequest) Reset()         { *m = OpenChannelRequest{} }
 func (m *OpenChannelRequest) String() string { return proto.CompactTextString(m) }
 func (*OpenChannelRequest) ProtoMessage()    {}
 func (*OpenChannelRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_lspd_f6548acf9d60fb70, []int{2}
+	return fileDescriptor_c69a0f5a734bca26, []int{2}
 }
+
 func (m *OpenChannelRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_OpenChannelRequest.Unmarshal(m, b)
 }
 func (m *OpenChannelRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_OpenChannelRequest.Marshal(b, m, deterministic)
 }
-func (dst *OpenChannelRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_OpenChannelRequest.Merge(dst, src)
+func (m *OpenChannelRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_OpenChannelRequest.Merge(m, src)
 }
 func (m *OpenChannelRequest) XXX_Size() int {
 	return xxx_messageInfo_OpenChannelRequest.Size(m)
@@ -217,9 +245,9 @@ func (m *OpenChannelRequest) GetPubkey() string {
 }
 
 type OpenChannelReply struct {
-	// / The transaction hash
+	/// The transaction hash
 	TxHash string `protobuf:"bytes,1,opt,name=tx_hash,proto3" json:"tx_hash,omitempty"`
-	// / The output index
+	/// The output index
 	OutputIndex          uint32   `protobuf:"varint,2,opt,name=output_index,proto3" json:"output_index,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -230,16 +258,17 @@ func (m *OpenChannelReply) Reset()         { *m = OpenChannelReply{} }
 func (m *OpenChannelReply) String() string { return proto.CompactTextString(m) }
 func (*OpenChannelReply) ProtoMessage()    {}
 func (*OpenChannelReply) Descriptor() ([]byte, []int) {
-	return fileDescriptor_lspd_f6548acf9d60fb70, []int{3}
+	return fileDescriptor_c69a0f5a734bca26, []int{3}
 }
+
 func (m *OpenChannelReply) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_OpenChannelReply.Unmarshal(m, b)
 }
 func (m *OpenChannelReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_OpenChannelReply.Marshal(b, m, deterministic)
 }
-func (dst *OpenChannelReply) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_OpenChannelReply.Merge(dst, src)
+func (m *OpenChannelReply) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_OpenChannelReply.Merge(m, src)
 }
 func (m *OpenChannelReply) XXX_Size() int {
 	return xxx_messageInfo_OpenChannelReply.Size(m)
@@ -264,20 +293,209 @@ func (m *OpenChannelReply) GetOutputIndex() uint32 {
 	return 0
 }
 
+type RegisterPaymentRequest struct {
+	Blob                 []byte   `protobuf:"bytes,3,opt,name=blob,proto3" json:"blob,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *RegisterPaymentRequest) Reset()         { *m = RegisterPaymentRequest{} }
+func (m *RegisterPaymentRequest) String() string { return proto.CompactTextString(m) }
+func (*RegisterPaymentRequest) ProtoMessage()    {}
+func (*RegisterPaymentRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_c69a0f5a734bca26, []int{4}
+}
+
+func (m *RegisterPaymentRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_RegisterPaymentRequest.Unmarshal(m, b)
+}
+func (m *RegisterPaymentRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_RegisterPaymentRequest.Marshal(b, m, deterministic)
+}
+func (m *RegisterPaymentRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RegisterPaymentRequest.Merge(m, src)
+}
+func (m *RegisterPaymentRequest) XXX_Size() int {
+	return xxx_messageInfo_RegisterPaymentRequest.Size(m)
+}
+func (m *RegisterPaymentRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_RegisterPaymentRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_RegisterPaymentRequest proto.InternalMessageInfo
+
+func (m *RegisterPaymentRequest) GetBlob() []byte {
+	if m != nil {
+		return m.Blob
+	}
+	return nil
+}
+
+type RegisterPaymentReply struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *RegisterPaymentReply) Reset()         { *m = RegisterPaymentReply{} }
+func (m *RegisterPaymentReply) String() string { return proto.CompactTextString(m) }
+func (*RegisterPaymentReply) ProtoMessage()    {}
+func (*RegisterPaymentReply) Descriptor() ([]byte, []int) {
+	return fileDescriptor_c69a0f5a734bca26, []int{5}
+}
+
+func (m *RegisterPaymentReply) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_RegisterPaymentReply.Unmarshal(m, b)
+}
+func (m *RegisterPaymentReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_RegisterPaymentReply.Marshal(b, m, deterministic)
+}
+func (m *RegisterPaymentReply) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RegisterPaymentReply.Merge(m, src)
+}
+func (m *RegisterPaymentReply) XXX_Size() int {
+	return xxx_messageInfo_RegisterPaymentReply.Size(m)
+}
+func (m *RegisterPaymentReply) XXX_DiscardUnknown() {
+	xxx_messageInfo_RegisterPaymentReply.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_RegisterPaymentReply proto.InternalMessageInfo
+
+type PaymentInformation struct {
+	PaymentHash          []byte   `protobuf:"bytes,1,opt,name=payment_hash,json=paymentHash,proto3" json:"payment_hash,omitempty"`
+	PaymentSecret        []byte   `protobuf:"bytes,2,opt,name=payment_secret,json=paymentSecret,proto3" json:"payment_secret,omitempty"`
+	Destination          []byte   `protobuf:"bytes,3,opt,name=destination,proto3" json:"destination,omitempty"`
+	IncomingAmountMsat   int64    `protobuf:"varint,4,opt,name=incoming_amount_msat,json=incomingAmountMsat,proto3" json:"incoming_amount_msat,omitempty"`
+	OutgoingAmountMsat   int64    `protobuf:"varint,5,opt,name=outgoing_amount_msat,json=outgoingAmountMsat,proto3" json:"outgoing_amount_msat,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *PaymentInformation) Reset()         { *m = PaymentInformation{} }
+func (m *PaymentInformation) String() string { return proto.CompactTextString(m) }
+func (*PaymentInformation) ProtoMessage()    {}
+func (*PaymentInformation) Descriptor() ([]byte, []int) {
+	return fileDescriptor_c69a0f5a734bca26, []int{6}
+}
+
+func (m *PaymentInformation) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_PaymentInformation.Unmarshal(m, b)
+}
+func (m *PaymentInformation) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_PaymentInformation.Marshal(b, m, deterministic)
+}
+func (m *PaymentInformation) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PaymentInformation.Merge(m, src)
+}
+func (m *PaymentInformation) XXX_Size() int {
+	return xxx_messageInfo_PaymentInformation.Size(m)
+}
+func (m *PaymentInformation) XXX_DiscardUnknown() {
+	xxx_messageInfo_PaymentInformation.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PaymentInformation proto.InternalMessageInfo
+
+func (m *PaymentInformation) GetPaymentHash() []byte {
+	if m != nil {
+		return m.PaymentHash
+	}
+	return nil
+}
+
+func (m *PaymentInformation) GetPaymentSecret() []byte {
+	if m != nil {
+		return m.PaymentSecret
+	}
+	return nil
+}
+
+func (m *PaymentInformation) GetDestination() []byte {
+	if m != nil {
+		return m.Destination
+	}
+	return nil
+}
+
+func (m *PaymentInformation) GetIncomingAmountMsat() int64 {
+	if m != nil {
+		return m.IncomingAmountMsat
+	}
+	return 0
+}
+
+func (m *PaymentInformation) GetOutgoingAmountMsat() int64 {
+	if m != nil {
+		return m.OutgoingAmountMsat
+	}
+	return 0
+}
+
 func init() {
 	proto.RegisterType((*ChannelInformationRequest)(nil), "lspd.ChannelInformationRequest")
 	proto.RegisterType((*ChannelInformationReply)(nil), "lspd.ChannelInformationReply")
 	proto.RegisterType((*OpenChannelRequest)(nil), "lspd.OpenChannelRequest")
 	proto.RegisterType((*OpenChannelReply)(nil), "lspd.OpenChannelReply")
+	proto.RegisterType((*RegisterPaymentRequest)(nil), "lspd.RegisterPaymentRequest")
+	proto.RegisterType((*RegisterPaymentReply)(nil), "lspd.RegisterPaymentReply")
+	proto.RegisterType((*PaymentInformation)(nil), "lspd.PaymentInformation")
+}
+
+func init() {
+	proto.RegisterFile("lspd.proto", fileDescriptor_c69a0f5a734bca26)
+}
+
+var fileDescriptor_c69a0f5a734bca26 = []byte{
+	// 586 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x54, 0xdd, 0x6e, 0xd3, 0x4c,
+	0x10, 0xfd, 0xdc, 0xa6, 0x3f, 0x99, 0x38, 0x6d, 0x35, 0xca, 0x17, 0x4c, 0x44, 0x85, 0x09, 0x20,
+	0x59, 0xa8, 0xaa, 0x2a, 0x7a, 0xc1, 0x75, 0x8b, 0x84, 0x40, 0xa2, 0x22, 0xda, 0x4a, 0xdc, 0x5a,
+	0x1b, 0x67, 0x9a, 0x58, 0xb5, 0x77, 0x8d, 0x77, 0x83, 0x9a, 0x67, 0xe3, 0x75, 0x78, 0x09, 0xee,
+	0xd0, 0xfe, 0xa4, 0x71, 0x9a, 0x56, 0xdc, 0xcd, 0x9e, 0x39, 0x33, 0x7b, 0x3c, 0x67, 0xd6, 0x00,
+	0x85, 0xaa, 0x26, 0xa7, 0x55, 0x2d, 0xb5, 0xc4, 0x96, 0x89, 0x87, 0xe7, 0xf0, 0xfc, 0xe3, 0x8c,
+	0x0b, 0x41, 0xc5, 0x17, 0x71, 0x23, 0xeb, 0x92, 0xeb, 0x5c, 0x0a, 0x46, 0x3f, 0xe6, 0xa4, 0x34,
+	0xf6, 0x61, 0xb7, 0x9a, 0x8f, 0x6f, 0x69, 0x11, 0x05, 0x71, 0x90, 0xb4, 0x99, 0x3f, 0x0d, 0x7f,
+	0x6d, 0xc3, 0xb3, 0xc7, 0xaa, 0xaa, 0x62, 0x81, 0x08, 0x2d, 0xc1, 0x4b, 0xf2, 0x15, 0x36, 0x6e,
+	0xf4, 0xd9, 0x6a, 0xf6, 0x31, 0xdc, 0x99, 0x54, 0x3a, 0xda, 0x76, 0x5c, 0x13, 0xe3, 0x3b, 0x38,
+	0xca, 0x5c, 0xeb, 0x34, 0xe3, 0x15, 0xcf, 0x72, 0xbd, 0x88, 0x5a, 0x71, 0x90, 0x6c, 0xb3, 0x0d,
+	0x1c, 0x63, 0xe8, 0x68, 0x5e, 0x4f, 0x49, 0xa7, 0x99, 0x14, 0x37, 0xd1, 0x4e, 0x1c, 0x24, 0x3b,
+	0xac, 0x09, 0xe1, 0x1b, 0xe8, 0x8e, 0xb9, 0xa2, 0xf4, 0x86, 0x28, 0x2d, 0x15, 0xd7, 0xd1, 0xae,
+	0x6d, 0xb5, 0x0e, 0xe2, 0x00, 0xf6, 0x4d, 0x5c, 0x73, 0x4d, 0xd1, 0x5e, 0x1c, 0x24, 0x01, 0xbb,
+	0x3f, 0x63, 0x02, 0x87, 0x3a, 0x2f, 0x29, 0x2d, 0x64, 0x76, 0x9b, 0x4e, 0xa8, 0xd0, 0x3c, 0xda,
+	0x8f, 0x83, 0xa4, 0xcb, 0x1e, 0xc2, 0xe6, 0xae, 0x32, 0x17, 0xe9, 0x4c, 0x17, 0x99, 0xbb, 0xab,
+	0xed, 0xee, 0x5a, 0x03, 0xf1, 0x03, 0x44, 0xcb, 0xef, 0x30, 0x77, 0x28, 0xcd, 0x6b, 0x9d, 0xf2,
+	0x52, 0xce, 0x85, 0x8e, 0xc0, 0x16, 0xfc, 0xef, 0xf3, 0x9f, 0x88, 0xae, 0x4d, 0xf6, 0xc2, 0x26,
+	0x31, 0x59, 0x0d, 0xe6, 0x5e, 0x6c, 0x27, 0x0e, 0x92, 0x2d, 0x76, 0xb0, 0x2a, 0x60, 0x46, 0xf2,
+	0xb1, 0xf5, 0x39, 0xf5, 0x23, 0x0f, 0xe3, 0x20, 0x09, 0x59, 0xbb, 0x50, 0xd5, 0xc8, 0xb9, 0x77,
+	0x02, 0xf8, 0xad, 0x22, 0xe1, 0x0d, 0xfc, 0x97, 0xd7, 0x23, 0x38, 0x5a, 0x63, 0x1b, 0x8f, 0x23,
+	0xd8, 0xd3, 0x77, 0xe9, 0x8c, 0xab, 0x99, 0x27, 0x2f, 0x8f, 0x38, 0x84, 0x50, 0xce, 0x75, 0x35,
+	0xd7, 0x69, 0x2e, 0x26, 0x74, 0x67, 0xfd, 0xee, 0xb2, 0x35, 0x6c, 0x78, 0x02, 0x7d, 0x46, 0xd3,
+	0x5c, 0x69, 0xaa, 0x47, 0x7c, 0x51, 0x92, 0xd0, 0x4b, 0x0d, 0x08, 0xad, 0x71, 0x21, 0xc7, 0x76,
+	0x1f, 0x42, 0x66, 0xe3, 0x61, 0x1f, 0x7a, 0x1b, 0xec, 0xaa, 0x58, 0x0c, 0x7f, 0x07, 0x80, 0x1e,
+	0x68, 0xec, 0x20, 0xbe, 0x82, 0xb0, 0x72, 0xe8, 0x4a, 0x5f, 0xc8, 0x3a, 0x1e, 0xfb, 0x6c, 0x34,
+	0xbe, 0x85, 0x83, 0x25, 0x45, 0x51, 0x56, 0x93, 0xb6, 0x2a, 0x43, 0xd6, 0xf5, 0xe8, 0xb5, 0x05,
+	0xcd, 0x72, 0x4d, 0x48, 0xe9, 0x5c, 0xd8, 0xc6, 0x5e, 0x53, 0x13, 0xc2, 0x33, 0xe8, 0xe5, 0x22,
+	0x93, 0x65, 0x2e, 0xa6, 0xde, 0x41, 0xe7, 0xbb, 0x5b, 0x57, 0x5c, 0xe6, 0x9c, 0x7f, 0x57, 0xc6,
+	0xfc, 0x33, 0xe8, 0xc9, 0xb9, 0x9e, 0xca, 0x87, 0x15, 0x3b, 0xae, 0x62, 0x99, 0x5b, 0x55, 0xbc,
+	0xff, 0x13, 0x40, 0xd7, 0xcf, 0xde, 0xd8, 0x40, 0x35, 0x7e, 0x07, 0xdc, 0x7c, 0x7b, 0xf8, 0xf2,
+	0xd4, 0x3e, 0xed, 0x27, 0xdf, 0xf2, 0xe0, 0xf8, 0x69, 0x82, 0x19, 0xe7, 0x7f, 0x78, 0x01, 0x9d,
+	0x86, 0xd1, 0x18, 0x39, 0xfe, 0xe6, 0xa6, 0x0c, 0xfa, 0x8f, 0x64, 0x5c, 0x8b, 0x2b, 0x38, 0x7c,
+	0xe0, 0x15, 0xbe, 0x70, 0xe4, 0xc7, 0x0d, 0x1f, 0x0c, 0x9e, 0xc8, 0xda, 0x76, 0x97, 0xaf, 0xa1,
+	0x97, 0xcb, 0xd3, 0x69, 0x5d, 0x65, 0x8e, 0xa6, 0xa8, 0xfe, 0x99, 0x67, 0x74, 0xd9, 0xfe, 0xaa,
+	0xaa, 0xc9, 0xc8, 0xfc, 0xc4, 0x46, 0xc1, 0x78, 0xd7, 0xfe, 0xcd, 0xce, 0xff, 0x06, 0x00, 0x00,
+	0xff, 0xff, 0xd7, 0x15, 0xf2, 0x09, 0xdb, 0x04, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
-var _ grpc.ClientConn
+var _ grpc.ClientConnInterface
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion4
+const _ = grpc.SupportPackageIsVersion6
 
 // ChannelOpenerClient is the client API for ChannelOpener service.
 //
@@ -285,13 +503,14 @@ const _ = grpc.SupportPackageIsVersion4
 type ChannelOpenerClient interface {
 	ChannelInformation(ctx context.Context, in *ChannelInformationRequest, opts ...grpc.CallOption) (*ChannelInformationReply, error)
 	OpenChannel(ctx context.Context, in *OpenChannelRequest, opts ...grpc.CallOption) (*OpenChannelReply, error)
+	RegisterPayment(ctx context.Context, in *RegisterPaymentRequest, opts ...grpc.CallOption) (*RegisterPaymentReply, error)
 }
 
 type channelOpenerClient struct {
-	cc *grpc.ClientConn
+	cc grpc.ClientConnInterface
 }
 
-func NewChannelOpenerClient(cc *grpc.ClientConn) ChannelOpenerClient {
+func NewChannelOpenerClient(cc grpc.ClientConnInterface) ChannelOpenerClient {
 	return &channelOpenerClient{cc}
 }
 
@@ -313,10 +532,34 @@ func (c *channelOpenerClient) OpenChannel(ctx context.Context, in *OpenChannelRe
 	return out, nil
 }
 
+func (c *channelOpenerClient) RegisterPayment(ctx context.Context, in *RegisterPaymentRequest, opts ...grpc.CallOption) (*RegisterPaymentReply, error) {
+	out := new(RegisterPaymentReply)
+	err := c.cc.Invoke(ctx, "/lspd.ChannelOpener/RegisterPayment", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ChannelOpenerServer is the server API for ChannelOpener service.
 type ChannelOpenerServer interface {
 	ChannelInformation(context.Context, *ChannelInformationRequest) (*ChannelInformationReply, error)
 	OpenChannel(context.Context, *OpenChannelRequest) (*OpenChannelReply, error)
+	RegisterPayment(context.Context, *RegisterPaymentRequest) (*RegisterPaymentReply, error)
+}
+
+// UnimplementedChannelOpenerServer can be embedded to have forward compatible implementations.
+type UnimplementedChannelOpenerServer struct {
+}
+
+func (*UnimplementedChannelOpenerServer) ChannelInformation(ctx context.Context, req *ChannelInformationRequest) (*ChannelInformationReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ChannelInformation not implemented")
+}
+func (*UnimplementedChannelOpenerServer) OpenChannel(ctx context.Context, req *OpenChannelRequest) (*OpenChannelReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OpenChannel not implemented")
+}
+func (*UnimplementedChannelOpenerServer) RegisterPayment(ctx context.Context, req *RegisterPaymentRequest) (*RegisterPaymentReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RegisterPayment not implemented")
 }
 
 func RegisterChannelOpenerServer(s *grpc.Server, srv ChannelOpenerServer) {
@@ -359,6 +602,24 @@ func _ChannelOpener_OpenChannel_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ChannelOpener_RegisterPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterPaymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChannelOpenerServer).RegisterPayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/lspd.ChannelOpener/RegisterPayment",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChannelOpenerServer).RegisterPayment(ctx, req.(*RegisterPaymentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _ChannelOpener_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "lspd.ChannelOpener",
 	HandlerType: (*ChannelOpenerServer)(nil),
@@ -371,37 +632,11 @@ var _ChannelOpener_serviceDesc = grpc.ServiceDesc{
 			MethodName: "OpenChannel",
 			Handler:    _ChannelOpener_OpenChannel_Handler,
 		},
+		{
+			MethodName: "RegisterPayment",
+			Handler:    _ChannelOpener_RegisterPayment_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "lspd.proto",
-}
-
-func init() { proto.RegisterFile("lspd.proto", fileDescriptor_lspd_f6548acf9d60fb70) }
-
-var fileDescriptor_lspd_f6548acf9d60fb70 = []byte{
-	// 381 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x52, 0xc1, 0x6e, 0xd4, 0x30,
-	0x10, 0xc5, 0xed, 0x76, 0xdb, 0x9d, 0x12, 0x51, 0x8d, 0x50, 0x31, 0x2b, 0x21, 0xa2, 0xc0, 0x21,
-	0x42, 0x68, 0x0f, 0xf4, 0x0b, 0x28, 0x27, 0x24, 0x24, 0x56, 0x39, 0x70, 0xb5, 0xbc, 0xce, 0x6c,
-	0x13, 0x35, 0xb1, 0x4d, 0xec, 0xa0, 0xe6, 0x97, 0xf8, 0x03, 0xfe, 0x0e, 0x39, 0x09, 0x28, 0x61,
-	0xbb, 0xe2, 0xf6, 0xe6, 0xe5, 0xcd, 0x9b, 0xe4, 0xe5, 0x01, 0x54, 0xce, 0xe6, 0x1b, 0xdb, 0x18,
-	0x6f, 0x70, 0x11, 0x70, 0x72, 0x03, 0x2f, 0x3f, 0x15, 0x52, 0x6b, 0xaa, 0x3e, 0xeb, 0xbd, 0x69,
-	0x6a, 0xe9, 0x4b, 0xa3, 0x33, 0xfa, 0xde, 0x92, 0xf3, 0x78, 0x0d, 0x4b, 0xdb, 0xee, 0xee, 0xa9,
-	0xe3, 0x2c, 0x66, 0xe9, 0x2a, 0x1b, 0xa7, 0xe4, 0xd7, 0x09, 0xbc, 0x78, 0x6c, 0xcb, 0x56, 0x1d,
-	0x22, 0x2c, 0xb4, 0xac, 0x69, 0xdc, 0xe8, 0xf1, 0xc4, 0xe7, 0x64, 0xea, 0x13, 0xb4, 0x85, 0x71,
-	0x9e, 0x9f, 0x0e, 0xda, 0x80, 0xf1, 0x1d, 0x5c, 0xa9, 0xc1, 0x5a, 0x28, 0x69, 0xa5, 0x2a, 0x7d,
-	0xc7, 0x17, 0x31, 0x4b, 0x4f, 0xb3, 0x03, 0x1e, 0x63, 0xb8, 0xf4, 0xb2, 0xb9, 0x23, 0x2f, 0x94,
-	0xd1, 0x7b, 0x7e, 0x16, 0xb3, 0xf4, 0x2c, 0x9b, 0x52, 0xf8, 0x16, 0xa2, 0x9d, 0x74, 0x24, 0xf6,
-	0x44, 0xa2, 0x76, 0xd2, 0xf3, 0x65, 0x6f, 0x35, 0x27, 0x71, 0x0d, 0x17, 0x01, 0x37, 0xd2, 0x13,
-	0x3f, 0x8f, 0x59, 0xca, 0xb2, 0xbf, 0x33, 0xa6, 0xf0, 0xcc, 0x97, 0x35, 0x89, 0xca, 0xa8, 0x7b,
-	0x91, 0x53, 0xe5, 0x25, 0xbf, 0x88, 0x59, 0x1a, 0x65, 0xff, 0xd2, 0xe1, 0x56, 0x5d, 0x6a, 0x51,
-	0xf8, 0x4a, 0x0d, 0xb7, 0x56, 0xc3, 0xad, 0x19, 0x99, 0xbc, 0x07, 0xfc, 0x6a, 0x49, 0x8f, 0xf1,
-	0xfd, 0x2f, 0xe9, 0x2d, 0x5c, 0xcd, 0xd4, 0x21, 0x61, 0x0e, 0xe7, 0xfe, 0x41, 0x14, 0xd2, 0x15,
-	0xa3, 0xf8, 0xcf, 0x88, 0x09, 0x3c, 0x35, 0xad, 0xb7, 0xad, 0x17, 0xa5, 0xce, 0xe9, 0xa1, 0x4f,
-	0x3b, 0xca, 0x66, 0xdc, 0x87, 0x9f, 0x0c, 0xa2, 0xd1, 0x2e, 0x38, 0x53, 0x83, 0xdf, 0x00, 0x0f,
-	0x7f, 0x26, 0xbe, 0xde, 0xf4, 0x5d, 0x39, 0x5a, 0x8e, 0xf5, 0xab, 0xe3, 0x02, 0x5b, 0x75, 0xc9,
-	0x13, 0xfc, 0x08, 0x97, 0x93, 0x77, 0x47, 0x3e, 0xe8, 0x0f, 0x3f, 0x7e, 0x7d, 0xfd, 0xc8, 0x93,
-	0xde, 0xe2, 0xf6, 0x0d, 0x3c, 0x2f, 0xcd, 0xe6, 0xae, 0xb1, 0x6a, 0x90, 0x38, 0x6a, 0x7e, 0x94,
-	0x8a, 0x6e, 0x57, 0x5f, 0x9c, 0xcd, 0xb7, 0xa1, 0xc6, 0x5b, 0xb6, 0x5b, 0xf6, 0x7d, 0xbe, 0xf9,
-	0x1d, 0x00, 0x00, 0xff, 0xff, 0x47, 0xd9, 0x92, 0x62, 0xdd, 0x02, 0x00, 0x00,
 }

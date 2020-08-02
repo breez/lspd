@@ -10,6 +10,7 @@ service ChannelOpener {
   rpc ChannelInformation(ChannelInformationRequest)
       returns (ChannelInformationReply) {}
   rpc OpenChannel(OpenChannelRequest) returns (OpenChannelReply) {}
+  rpc RegisterPayment (RegisterPaymentRequest) returns (RegisterPaymentReply) {}
 }
 
 message ChannelInformationRequest {
@@ -43,6 +44,11 @@ message ChannelInformationReply {
   /// The minimum value in millisatoshi we will require for incoming HTLCs on
   /// the channel.
   int64 min_htlc_msat = 9 [ json_name = "min_htlc_msat" ];
+
+  int64 channel_fee_start_amount = 10;
+  float channel_fee_rate = 11;
+
+  bytes lsp_pubkey = 12;
 }
 
 message OpenChannelRequest {
@@ -55,4 +61,16 @@ message OpenChannelReply {
   string tx_hash = 1 [ json_name = "tx_hash" ];
   /// The output index
   uint32 output_index = 2 [ json_name = "output_index"];
+}
+
+message RegisterPaymentRequest {
+  bytes blob = 3;
+}
+message RegisterPaymentReply {}
+message PaymentInformation {
+  bytes payment_hash = 1;
+  bytes payment_secret = 2;
+  bytes destination = 3;
+  int64 incoming_amount_msat = 4;
+  int64 outgoing_amount_msat = 5;
 }

@@ -5,13 +5,16 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"strings"
 
 	lspdrpc "github.com/breez/lspd/rpc"
+	"github.com/golang/protobuf/proto"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -25,12 +28,14 @@ import (
 )
 
 const (
-	channelAmount = 1000000
-	targetConf    = 1
-	minHtlcMsat   = 600
-	baseFeeMsat   = 1000
-	feeRate       = 0.000001
-	timeLockDelta = 144
+	channelAmount         = 1_000_000
+	targetConf            = 1
+	minHtlcMsat           = 600
+	baseFeeMsat           = 1000
+	feeRate               = 0.000001
+	timeLockDelta         = 144
+	channelFeeStartAmount = 100_000
+	channelFeeAmount      = 0.001
 )
 
 type server struct{}
@@ -38,20 +43,42 @@ type server struct{}
 var (
 	client              lnrpc.LightningClient
 	openChannelReqGroup singleflight.Group
+	privateKey          *btcec.PrivateKey
+	publicKey           *btcec.PublicKey
 )
 
 func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInformationRequest) (*lspdrpc.ChannelInformationReply, error) {
 	return &lspdrpc.ChannelInformationReply{
-		Name:            os.Getenv("NODE_NAME"),
-		Pubkey:          os.Getenv("NODE_PUBKEY"),
-		Host:            os.Getenv("NODE_HOST"),
-		ChannelCapacity: channelAmount,
-		TargetConf:      targetConf,
-		MinHtlcMsat:     minHtlcMsat,
-		BaseFeeMsat:     baseFeeMsat,
-		FeeRate:         feeRate,
-		TimeLockDelta:   timeLockDelta,
+		Name:                  os.Getenv("NODE_NAME"),
+		Pubkey:                os.Getenv("NODE_PUBKEY"),
+		Host:                  os.Getenv("NODE_HOST"),
+		ChannelCapacity:       channelAmount,
+		TargetConf:            targetConf,
+		MinHtlcMsat:           minHtlcMsat,
+		BaseFeeMsat:           baseFeeMsat,
+		FeeRate:               feeRate,
+		TimeLockDelta:         timeLockDelta,
+		ChannelFeeStartAmount: channelFeeStartAmount,
+		ChannelFeeRate:        channelFeeAmount,
+		LspPubkey:             publicKey.SerializeCompressed(),
 	}, nil
+}
+
+func (s *server) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymentRequest) (*lspdrpc.RegisterPaymentReply, error) {
+	data, err := btcec.Decrypt(privateKey, in.Blob)
+	if err != nil {
+		log.Printf("btcec.Decrypt(%x) error: %v", in.Blob, err)
+		return nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Blob, err)
+	}
+	var pi lspdrpc.PaymentInformation
+	err = proto.Unmarshal(data, &pi)
+	if err != nil {
+		log.Printf("proto.Unmarshal(%x) error: %v", data, err)
+		return nil, fmt.Errorf("proto.Unmarshal(%x) error: %w", data, err)
+	}
+	log.Printf("RegisterPayment - Destination: %x, pi.PaymentHash: %x, pi.PaymentSecret: %x, pi.IncomingAmountMsat: %v, pi.OutgoingAmountMsat: %v", pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat)
+	//TODO put in the db
+	return &lspdrpc.RegisterPaymentReply{}, nil
 }
 
 func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest) (*lspdrpc.OpenChannelReply, error) {
@@ -131,6 +158,21 @@ func getPendingNodeChannels(nodeID string) ([]*lnrpc.PendingChannelsResponse_Pen
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "genkey" {
+		p, err := btcec.NewPrivateKey(btcec.S256())
+		if err != nil {
+			log.Fatalf("btcec.NewPrivateKey() error: %v", err)
+		}
+		fmt.Printf("LSPD_PRIVATE_KEY=\"%x\"\n", p.Serialize())
+		return
+	}
+
+	privateKeyBytes, err := hex.DecodeString(os.Getenv("LSPD_PRIVATE_KEY"))
+	if err != nil {
+		log.Fatalf("hex.DecodeString(os.Getenv(\"LSPD_PRIVATE_KEY\")=%v) error: %v", os.Getenv("LSPD_PRIVATE_KEY"), err)
+	}
+	privateKey, publicKey = btcec.PrivKeyFromBytes(btcec.S256(), privateKeyBytes)
+
 	certmagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
 	address := os.Getenv("LISTEN_ADDRESS")
 	var lis net.Listener
