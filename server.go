@@ -19,6 +19,7 @@ import (
 	"github.com/caddyserver/certmagic"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -42,6 +43,7 @@ type server struct{}
 
 var (
 	client              lnrpc.LightningClient
+	routerClient        routerrpc.RouterClient
 	openChannelReqGroup singleflight.Group
 	privateKey          *btcec.PrivateKey
 	publicKey           *btcec.PublicKey
@@ -76,8 +78,13 @@ func (s *server) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymen
 		log.Printf("proto.Unmarshal(%x) error: %v", data, err)
 		return nil, fmt.Errorf("proto.Unmarshal(%x) error: %w", data, err)
 	}
-	log.Printf("RegisterPayment - Destination: %x, pi.PaymentHash: %x, pi.PaymentSecret: %x, pi.IncomingAmountMsat: %v, pi.OutgoingAmountMsat: %v", pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat)
-	//TODO put in the db
+	log.Printf("RegisterPayment - Destination: %x, pi.PaymentHash: %x, pi.PaymentSecret: %x, pi.IncomingAmountMsat: %v, pi.OutgoingAmountMsat: %v",
+		pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat)
+	err = registerPayment(pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat)
+	if err != nil {
+		log.Printf("RegisterPayment() error: %v", err)
+		return nil, fmt.Errorf("RegisterPayment() error: %w", err)
+	}
 	return &lspdrpc.RegisterPaymentReply{}, nil
 }
 
@@ -167,6 +174,11 @@ func main() {
 		return
 	}
 
+	err := pgConnect()
+	if err != nil {
+		log.Fatalf("pgConnect() error: %v", err)
+	}
+
 	privateKeyBytes, err := hex.DecodeString(os.Getenv("LSPD_PRIVATE_KEY"))
 	if err != nil {
 		log.Fatalf("hex.DecodeString(os.Getenv(\"LSPD_PRIVATE_KEY\")=%v) error: %v", os.Getenv("LSPD_PRIVATE_KEY"), err)
@@ -207,6 +219,8 @@ func main() {
 	}
 	defer conn.Close()
 	client = lnrpc.NewLightningClient(conn)
+	routerClient = routerrpc.NewRouterClient(conn)
+	go intercept()
 
 	s := grpc.NewServer(
 		grpc_middleware.WithUnaryServerChain(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
