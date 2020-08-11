@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -21,7 +22,7 @@ import (
 	sphinx "github.com/lightningnetwork/lightning-onion"
 )
 
-func openChannel(ctx context.Context, client lnrpc.LightningClient, paymentHash, destination []byte, incomingAmountMsat int64) error {
+func openChannel(ctx context.Context, client lnrpc.LightningClient, paymentHash, destination []byte, incomingAmountMsat int64) ([]byte, uint32, error) {
 	capacity := incomingAmountMsat/1000 + channelFeeStartAmount
 	channelPoint, err := client.OpenChannelSync(ctx, &lnrpc.OpenChannelRequest{
 		NodePubkey:         destination,
@@ -30,13 +31,13 @@ func openChannel(ctx context.Context, client lnrpc.LightningClient, paymentHash,
 		Private:            true,
 	})
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
 	err = setFundingTx(paymentHash, channelPoint.GetFundingTxidBytes(), int(channelPoint.OutputIndex))
-	return err
+	return channelPoint.GetFundingTxidBytes(), channelPoint.OutputIndex, err
 }
 
-func getChannel(ctx context.Context, client lnrpc.LightningClient, node []byte) uint64 {
+func getChannel(ctx context.Context, client lnrpc.LightningClient, node []byte, channelPoint string) uint64 {
 	r, err := client.ListChannels(ctx, &lnrpc.ListChannelsRequest{Peer: node})
 	if err != nil {
 		log.Printf("client.ListChannels(%x) error: %v", node, err)
@@ -44,7 +45,9 @@ func getChannel(ctx context.Context, client lnrpc.LightningClient, node []byte) 
 	}
 	for _, c := range r.Channels {
 		log.Printf("getChannel(%x): %v", node, c.ChanId)
-		return c.ChanId
+		if c.ChannelPoint == channelPoint && c.Active {
+			return c.ChanId
+		}
 	}
 	log.Printf("No channel found: getChannel(%x)", node)
 	return 0
@@ -82,7 +85,7 @@ func intercept() {
 			request.OnionBlob,
 		)
 
-		paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, _, err := paymentInfo(request.PaymentHash)
+		paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, fundingTxOutnum, err := paymentInfo(request.PaymentHash)
 		if err != nil {
 			log.Printf("paymentInfo(%x) error: %v", request.PaymentHash, err)
 		}
@@ -91,9 +94,14 @@ func intercept() {
 		if paymentSecret != nil {
 
 			if fundingTxID == nil {
-				err = openChannel(clientCtx, client, request.PaymentHash, destination, incomingAmountMsat)
+				fundingTxID, fundingTxOutnum, err = openChannel(clientCtx, client, request.PaymentHash, destination, incomingAmountMsat)
 				log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
-				//TODO: wait for the channel to be active
+				if err != nil {
+					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
+						IncomingCircuitKey: request.IncomingCircuitKey,
+						Action:             routerrpc.ResolveHoldForwardAction_FAIL,
+					})
+				}
 			}
 
 			pubKey, err := btcec.ParsePubKey(destination, btcec.S256())
@@ -133,13 +141,11 @@ func intercept() {
 			var onionBlob bytes.Buffer
 			err = sphinxPacket.Encode(&onionBlob)
 			log.Printf("sphinxPacket.Encode(): %v", err)
-			interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
-				IncomingCircuitKey:      request.IncomingCircuitKey,
-				Action:                  routerrpc.ResolveHoldForwardAction_RESUME,
-				OutgoingAmountMsat:      uint64(amt),
-				OutgoingRequestedChanId: getChannel(clientCtx, client, destination),
-				OnionBlob:               onionBlob.Bytes(),
-			})
+			channelPoint := fmt.Sprintf("%x:%v", fundingTxID, fundingTxOutnum)
+			go resumeOrCancel(
+				clientCtx, interceptorClient, request.IncomingCircuitKey, destination,
+				channelPoint, uint64(amt), onionBlob.Bytes(),
+			)
 
 		} else {
 			interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
@@ -151,4 +157,39 @@ func intercept() {
 			})
 		}
 	}
+}
+
+func resumeOrCancel(
+	ctx context.Context,
+	interceptorClient routerrpc.Router_HtlcInterceptorClient,
+	incomingCircuitKey *routerrpc.CircuitKey,
+	destination []byte,
+	channelPoint string,
+	outgoingAmountMsat uint64,
+	onionBlob []byte,
+) {
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		chanID := getChannel(ctx, client, destination, channelPoint)
+		if chanID != 0 {
+			interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
+				IncomingCircuitKey:      incomingCircuitKey,
+				Action:                  routerrpc.ResolveHoldForwardAction_RESUME,
+				OutgoingAmountMsat:      outgoingAmountMsat,
+				OutgoingRequestedChanId: chanID,
+				OnionBlob:               onionBlob,
+			})
+			return
+		}
+		log.Printf("getChannel(%x, %v) returns 0", destination, channelPoint)
+		if time.Now().After(deadline) {
+			log.Printf("Stop retrying getChannel(%x, %v)", destination, channelPoint)
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+	interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
+		IncomingCircuitKey: incomingCircuitKey,
+		Action:             routerrpc.ResolveHoldForwardAction_FAIL,
+	})
 }

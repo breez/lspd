@@ -24,7 +24,7 @@ func pgConnect() error {
 	return nil
 }
 
-func paymentInfo(paymentHash []byte) ([]byte, []byte, int64, int64, []byte, int32, error) {
+func paymentInfo(paymentHash []byte) ([]byte, []byte, int64, int64, []byte, uint32, error) {
 	var (
 		paymentSecret, destination             []byte
 		incomingAmountMsat, outgoingAmountMsat int64
@@ -42,7 +42,7 @@ func paymentInfo(paymentHash []byte) ([]byte, []byte, int64, int64, []byte, int3
 		}
 		return nil, nil, 0, 0, nil, 0, err
 	}
-	return paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, fundingTxOutnum.Int, nil
+	return paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, uint32(fundingTxOutnum.Int), nil
 }
 
 func setFundingTx(paymentHash, fundingTxID []byte, fundingTxOutnum int) error {
