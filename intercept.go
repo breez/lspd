@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
 	"github.com/lightningnetwork/lnd/lnwire"
@@ -101,6 +103,7 @@ func intercept() {
 						IncomingCircuitKey: request.IncomingCircuitKey,
 						Action:             routerrpc.ResolveHoldForwardAction_FAIL,
 					})
+					continue
 				}
 			}
 
@@ -141,7 +144,17 @@ func intercept() {
 			var onionBlob bytes.Buffer
 			err = sphinxPacket.Encode(&onionBlob)
 			log.Printf("sphinxPacket.Encode(): %v", err)
-			channelPoint := fmt.Sprintf("%x:%v", fundingTxID, fundingTxOutnum)
+			var h chainhash.Hash
+			err = h.SetBytes(fundingTxID)
+			if err != nil {
+				log.Printf("h.SetBytes(%x) error: %v", fundingTxID, err)
+				interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
+					IncomingCircuitKey: request.IncomingCircuitKey,
+					Action:             routerrpc.ResolveHoldForwardAction_FAIL,
+				})
+				continue
+			}
+			channelPoint := wire.NewOutPoint(&h, fundingTxOutnum).String()
 			go resumeOrCancel(
 				clientCtx, interceptorClient, request.IncomingCircuitKey, destination,
 				channelPoint, uint64(amt), onionBlob.Bytes(),
