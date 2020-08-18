@@ -47,12 +47,14 @@ var (
 	openChannelReqGroup singleflight.Group
 	privateKey          *btcec.PrivateKey
 	publicKey           *btcec.PublicKey
+	nodeName            = os.Getenv("NODE_NAME")
+	nodePubkey          = os.Getenv("NODE_PUBKEY")
 )
 
 func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInformationRequest) (*lspdrpc.ChannelInformationReply, error) {
 	return &lspdrpc.ChannelInformationReply{
-		Name:                  os.Getenv("NODE_NAME"),
-		Pubkey:                os.Getenv("NODE_PUBKEY"),
+		Name:                  nodeName,
+		Pubkey:                nodePubkey,
 		Host:                  os.Getenv("NODE_HOST"),
 		ChannelCapacity:       channelAmount,
 		TargetConf:            targetConf,
@@ -220,6 +222,19 @@ func main() {
 	defer conn.Close()
 	client = lnrpc.NewLightningClient(conn)
 	routerClient = routerrpc.NewRouterClient(conn)
+
+	clientCtx := metadata.AppendToOutgoingContext(context.Background(), "macaroon", os.Getenv("LND_MACAROON_HEX"))
+	info, err := client.GetInfo(clientCtx, &lnrpc.GetInfoRequest{})
+	if err != nil {
+		log.Fatalf("client.GetInfo() error: %v", err)
+	}
+	if nodeName == "" {
+		nodeName = info.Alias
+	}
+	if nodePubkey == "" {
+		nodePubkey = info.IdentityPubkey
+	}
+
 	go intercept()
 
 	s := grpc.NewServer(
