@@ -3,6 +3,7 @@ module github.com/breez/lspd
 go 1.14
 
 require (
+	github.com/aws/aws-sdk-go v1.30.20
 	github.com/btcsuite/btcd v0.20.1-beta
 	github.com/caddyserver/certmagic v0.11.2
 	github.com/golang/protobuf v1.4.2

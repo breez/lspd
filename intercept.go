@@ -33,8 +33,17 @@ func openChannel(ctx context.Context, client lnrpc.LightningClient, paymentHash,
 		Private:            true,
 	})
 	if err != nil {
+		log.Printf("client.OpenChannelSync(%x, %v) error: %v", destination, capacity, err)
 		return nil, 0, err
 	}
+	sendOpenChannelEmailNotification(
+		paymentHash,
+		incomingAmountMsat,
+		destination,
+		capacity,
+		channelPoint.GetFundingTxidBytes(),
+		channelPoint.OutputIndex,
+	)
 	err = setFundingTx(paymentHash, channelPoint.GetFundingTxidBytes(), int(channelPoint.OutputIndex))
 	return channelPoint.GetFundingTxidBytes(), channelPoint.OutputIndex, err
 }
