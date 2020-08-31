@@ -29,14 +29,15 @@ import (
 )
 
 const (
-	channelAmount         = 1_000_000
-	targetConf            = 1
-	minHtlcMsat           = 600
-	baseFeeMsat           = 1000
-	feeRate               = 0.000001
-	timeLockDelta         = 144
-	channelFeeStartAmount = 100_000
-	channelFeeAmount      = 0.001
+	channelAmount               = 1_000_000
+	targetConf                  = 1
+	minHtlcMsat                 = 600
+	baseFeeMsat                 = 1000
+	feeRate                     = 0.000001
+	timeLockDelta               = 144
+	channelFeeStartAmount       = 100_000
+	channelFeeAmountNumerator   = 1
+	channelFeeAmountDenominator = 1000
 )
 
 type server struct{}
@@ -63,7 +64,7 @@ func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInfo
 		FeeRate:               feeRate,
 		TimeLockDelta:         timeLockDelta,
 		ChannelFeeStartAmount: channelFeeStartAmount,
-		ChannelFeeRate:        channelFeeAmount,
+		ChannelFeeRate:        1.0 * channelFeeAmountNumerator / channelFeeAmountDenominator,
 		LspPubkey:             publicKey.SerializeCompressed(),
 	}, nil
 }
@@ -82,6 +83,11 @@ func (s *server) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymen
 	}
 	log.Printf("RegisterPayment - Destination: %x, pi.PaymentHash: %x, pi.PaymentSecret: %x, pi.IncomingAmountMsat: %v, pi.OutgoingAmountMsat: %v",
 		pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat)
+	err = checkPayment(pi.IncomingAmountMsat, pi.OutgoingAmountMsat)
+	if err != nil {
+		log.Printf("checkPayment(%v, %v) error: %v", pi.IncomingAmountMsat, pi.OutgoingAmountMsat, err)
+		return nil, fmt.Errorf("checkPayment(%v, %v) error: %v", pi.IncomingAmountMsat, pi.OutgoingAmountMsat, err)
+	}
 	err = registerPayment(pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat)
 	if err != nil {
 		log.Printf("RegisterPayment() error: %v", err)

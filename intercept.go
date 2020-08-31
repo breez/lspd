@@ -24,6 +24,17 @@ import (
 	sphinx "github.com/lightningnetwork/lightning-onion"
 )
 
+func checkPayment(incomingAmountMsat, outgoingAmountMsat int64) error {
+	var fees int64 = 0
+	if incomingAmountMsat > channelFeeStartAmount {
+		fees += (incomingAmountMsat - channelFeeStartAmount) * channelFeeAmountNumerator / channelFeeAmountDenominator
+	}
+	if incomingAmountMsat-outgoingAmountMsat < fees {
+		return fmt.Errorf("not enough fees")
+	}
+	return nil
+}
+
 func openChannel(ctx context.Context, client lnrpc.LightningClient, paymentHash, destination []byte, incomingAmountMsat int64) ([]byte, uint32, error) {
 	capacity := incomingAmountMsat/1000 + channelFeeStartAmount
 	channelPoint, err := client.OpenChannelSync(ctx, &lnrpc.OpenChannelRequest{
