@@ -25,10 +25,7 @@ import (
 )
 
 func checkPayment(incomingAmountMsat, outgoingAmountMsat int64) error {
-	var fees int64 = 0
-	if incomingAmountMsat > channelFeeStartAmount {
-		fees += (incomingAmountMsat - channelFeeStartAmount) * channelFeeAmountNumerator / channelFeeAmountDenominator
-	}
+	fees := incomingAmountMsat * channelFeePermyriad / 10_000 / 1_000 * 1_000
 	if incomingAmountMsat-outgoingAmountMsat < fees {
 		return fmt.Errorf("not enough fees")
 	}
@@ -36,7 +33,7 @@ func checkPayment(incomingAmountMsat, outgoingAmountMsat int64) error {
 }
 
 func openChannel(ctx context.Context, client lnrpc.LightningClient, paymentHash, destination []byte, incomingAmountMsat int64) ([]byte, uint32, error) {
-	capacity := incomingAmountMsat/1000 + channelFeeStartAmount
+	capacity := incomingAmountMsat/1000 + additionalChannelCapacity
 	channelPoint, err := client.OpenChannelSync(ctx, &lnrpc.OpenChannelRequest{
 		NodePubkey:         destination,
 		LocalFundingAmount: capacity,

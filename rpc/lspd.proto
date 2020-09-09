@@ -45,10 +45,9 @@ message ChannelInformationReply {
   /// the channel.
   int64 min_htlc_msat = 9 [ json_name = "min_htlc_msat" ];
 
-  int64 channel_fee_start_amount = 10;
-  float channel_fee_rate = 11;
+  int64 channel_fee_permyriad = 10;
 
-  bytes lsp_pubkey = 12;
+  bytes lsp_pubkey = 11;
 }
 
 message OpenChannelRequest {

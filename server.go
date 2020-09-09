@@ -29,15 +29,14 @@ import (
 )
 
 const (
-	channelAmount               = 1_000_000
-	targetConf                  = 1
-	minHtlcMsat                 = 600
-	baseFeeMsat                 = 1000
-	feeRate                     = 0.000001
-	timeLockDelta               = 144
-	channelFeeStartAmount       = 100_000
-	channelFeeAmountNumerator   = 1
-	channelFeeAmountDenominator = 1000
+	channelAmount             = 1_000_000
+	targetConf                = 1
+	minHtlcMsat               = 600
+	baseFeeMsat               = 1000
+	feeRate                   = 0.000001
+	timeLockDelta             = 144
+	channelFeePermyriad       = 10
+	additionalChannelCapacity = 100_000
 )
 
 type server struct{}
@@ -54,18 +53,17 @@ var (
 
 func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInformationRequest) (*lspdrpc.ChannelInformationReply, error) {
 	return &lspdrpc.ChannelInformationReply{
-		Name:                  nodeName,
-		Pubkey:                nodePubkey,
-		Host:                  os.Getenv("NODE_HOST"),
-		ChannelCapacity:       channelAmount,
-		TargetConf:            targetConf,
-		MinHtlcMsat:           minHtlcMsat,
-		BaseFeeMsat:           baseFeeMsat,
-		FeeRate:               feeRate,
-		TimeLockDelta:         timeLockDelta,
-		ChannelFeeStartAmount: channelFeeStartAmount,
-		ChannelFeeRate:        1.0 * channelFeeAmountNumerator / channelFeeAmountDenominator,
-		LspPubkey:             publicKey.SerializeCompressed(),
+		Name:                nodeName,
+		Pubkey:              nodePubkey,
+		Host:                os.Getenv("NODE_HOST"),
+		ChannelCapacity:     channelAmount,
+		TargetConf:          targetConf,
+		MinHtlcMsat:         minHtlcMsat,
+		BaseFeeMsat:         baseFeeMsat,
+		FeeRate:             feeRate,
+		TimeLockDelta:       timeLockDelta,
+		ChannelFeePermyriad: channelFeePermyriad,
+		LspPubkey:           publicKey.SerializeCompressed(),
 	}, nil
 }
 
