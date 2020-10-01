@@ -37,7 +37,7 @@ func openChannel(ctx context.Context, client lnrpc.LightningClient, paymentHash,
 	channelPoint, err := client.OpenChannelSync(ctx, &lnrpc.OpenChannelRequest{
 		NodePubkey:         destination,
 		LocalFundingAmount: capacity,
-		TargetConf:         20,
+		TargetConf:         6,
 		Private:            true,
 	})
 	if err != nil {
