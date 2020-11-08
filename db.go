@@ -24,25 +24,25 @@ func pgConnect() error {
 	return nil
 }
 
-func paymentInfo(paymentHash []byte) ([]byte, []byte, int64, int64, []byte, uint32, error) {
+func paymentInfo(htlcPaymentHash []byte) ([]byte, []byte, []byte, int64, int64, []byte, uint32, error) {
 	var (
-		paymentSecret, destination             []byte
-		incomingAmountMsat, outgoingAmountMsat int64
-		fundingTxID                            []byte
-		fundingTxOutnum                        pgtype.Int4
+		paymentHash, paymentSecret, destination []byte
+		incomingAmountMsat, outgoingAmountMsat  int64
+		fundingTxID                             []byte
+		fundingTxOutnum                         pgtype.Int4
 	)
 	err := pgxPool.QueryRow(context.Background(),
-		`SELECT payment_secret, destination, incoming_amount_msat, outgoing_amount_msat, funding_tx_id, funding_tx_outnum
+		`SELECT payment_hash, payment_secret, destination, incoming_amount_msat, outgoing_amount_msat, funding_tx_id, funding_tx_outnum
 			FROM payments
-			WHERE payment_hash=$1`,
-		paymentHash).Scan(&paymentSecret, &destination, &incomingAmountMsat, &outgoingAmountMsat, &fundingTxID, &fundingTxOutnum)
+			WHERE payment_hash=$1 OR sha256('probing-01:' || payment_hash)=$1`,
+		htlcPaymentHash).Scan(&paymentHash, &paymentSecret, &destination, &incomingAmountMsat, &outgoingAmountMsat, &fundingTxID, &fundingTxOutnum)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			err = nil
 		}
-		return nil, nil, 0, 0, nil, 0, err
+		return nil, nil, nil, 0, 0, nil, 0, err
 	}
-	return paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, uint32(fundingTxOutnum.Int), nil
+	return paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, uint32(fundingTxOutnum.Int), nil
 }
 
 func setFundingTx(paymentHash, fundingTxID []byte, fundingTxOutnum int) error {

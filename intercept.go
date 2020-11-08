@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"math/big"
@@ -30,6 +31,23 @@ func checkPayment(incomingAmountMsat, outgoingAmountMsat int64) error {
 		return fmt.Errorf("not enough fees")
 	}
 	return nil
+}
+
+func isConnected(ctx context.Context, client lnrpc.LightningClient, destination []byte) error {
+	pubKey := hex.EncodeToString(destination)
+	r, err := client.ListPeers(ctx, &lnrpc.ListPeersRequest{LatestError: true})
+	if err != nil {
+		log.Printf("client.ListPeers() error: %v", err)
+		return fmt.Errorf("client.ListPeers() error: %w", err)
+	}
+	for _, peer := range r.Peers {
+		if pubKey == peer.PubKey {
+			log.Printf("destination online: %x", destination)
+			return nil
+		}
+	}
+	log.Printf("destination offline: %x", destination)
+	return fmt.Errorf("destination offline")
 }
 
 func openChannel(ctx context.Context, client lnrpc.LightningClient, paymentHash, destination []byte, incomingAmountMsat int64) ([]byte, uint32, error) {
@@ -104,21 +122,34 @@ func intercept() {
 			request.OnionBlob,
 		)
 
-		paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, fundingTxOutnum, err := paymentInfo(request.PaymentHash)
+		paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, fundingTxOutnum, err := paymentInfo(request.PaymentHash)
 		if err != nil {
 			log.Printf("paymentInfo(%x) error: %v", request.PaymentHash, err)
 		}
-		log.Printf("paymentSecret: %x\ndestination:%x\nincomingAmountMsat:%v\noutgoingAmountMsat:%v\n\n",
-			paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat)
+		log.Printf("paymentHash:%x\npaymentSecret:%x\ndestination:%x\nincomingAmountMsat:%v\noutgoingAmountMsat:%v\n\n",
+			paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat)
 		if paymentSecret != nil {
 
 			if fundingTxID == nil {
-				fundingTxID, fundingTxOutnum, err = openChannel(clientCtx, client, request.PaymentHash, destination, incomingAmountMsat)
-				log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
-				if err != nil {
+				if bytes.Compare(paymentHash, request.PaymentHash) == 0 {
+					fundingTxID, fundingTxOutnum, err = openChannel(clientCtx, client, request.PaymentHash, destination, incomingAmountMsat)
+					log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
+					if err != nil {
+						interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
+							IncomingCircuitKey: request.IncomingCircuitKey,
+							Action:             routerrpc.ResolveHoldForwardAction_FAIL,
+						})
+						continue
+					}
+				} else { //probing
+					failureCode := routerrpc.ForwardHtlcInterceptResponse_TEMPORARY_CHANNEL_FAILURE
+					if err := isConnected(clientCtx, client, destination); err == nil {
+						failureCode = routerrpc.ForwardHtlcInterceptResponse_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
+					}
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
 						IncomingCircuitKey: request.IncomingCircuitKey,
 						Action:             routerrpc.ResolveHoldForwardAction_FAIL,
+						FailureCode:        failureCode,
 					})
 					continue
 				}
