@@ -8,6 +8,9 @@
     - [ChannelInformationRequest](#lspd.ChannelInformationRequest)
     - [OpenChannelReply](#lspd.OpenChannelReply)
     - [OpenChannelRequest](#lspd.OpenChannelRequest)
+    - [PaymentInformation](#lspd.PaymentInformation)
+    - [RegisterPaymentReply](#lspd.RegisterPaymentReply)
+    - [RegisterPaymentRequest](#lspd.RegisterPaymentRequest)
   
   
   
@@ -42,6 +45,8 @@
 | fee_rate | [double](#double) |  | The effective fee rate in milli-satoshis. The precision of this value goes / up to 6 decimal places, so 1e-6. |
 | time_lock_delta | [uint32](#uint32) |  | The required timelock delta for HTLCs forwarded over the channel. |
 | min_htlc_msat | [int64](#int64) |  | The minimum value in millisatoshi we will require for incoming HTLCs on / the channel. |
+| channel_fee_permyriad | [int64](#int64) |  |  |
+| lsp_pubkey | [bytes](#bytes) |  |  |
 
 
 
@@ -93,6 +98,50 @@
 
 
 
+
+<a name="lspd.PaymentInformation"></a>
+
+### PaymentInformation
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| payment_hash | [bytes](#bytes) |  |  |
+| payment_secret | [bytes](#bytes) |  |  |
+| destination | [bytes](#bytes) |  |  |
+| incoming_amount_msat | [int64](#int64) |  |  |
+| outgoing_amount_msat | [int64](#int64) |  |  |
+
+
+
+
+
+
+<a name="lspd.RegisterPaymentReply"></a>
+
+### RegisterPaymentReply
+
+
+
+
+
+
+
+<a name="lspd.RegisterPaymentRequest"></a>
+
+### RegisterPaymentRequest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| blob | [bytes](#bytes) |  |  |
+
+
+
+
+
  
 
  
@@ -109,6 +158,7 @@
 | ----------- | ------------ | ------------- | ------------|
 | ChannelInformation | [ChannelInformationRequest](#lspd.ChannelInformationRequest) | [ChannelInformationReply](#lspd.ChannelInformationReply) |  |
 | OpenChannel | [OpenChannelRequest](#lspd.OpenChannelRequest) | [OpenChannelReply](#lspd.OpenChannelReply) |  |
+| RegisterPayment | [RegisterPaymentRequest](#lspd.RegisterPaymentRequest) | [RegisterPaymentReply](#lspd.RegisterPaymentReply) |  |
 
  
 
