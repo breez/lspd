@@ -11,6 +11,7 @@ service ChannelOpener {
       returns (ChannelInformationReply) {}
   rpc OpenChannel(OpenChannelRequest) returns (OpenChannelReply) {}
   rpc RegisterPayment (RegisterPaymentRequest) returns (RegisterPaymentReply) {}
+  rpc CheckChannels(Encrypted) returns (Encrypted) {}
 }
 
 message ChannelInformationRequest {
@@ -72,4 +73,25 @@ message PaymentInformation {
   bytes destination = 3;
   int64 incoming_amount_msat = 4;
   int64 outgoing_amount_msat = 5;
+}
+
+message Encrypted {
+  bytes data = 1;
+}
+
+message Signed {
+  bytes data = 1;
+  bytes pubkey = 2;
+  bytes signature = 3;
+}
+
+message CheckChannelsRequest {
+  bytes encrypt_pubkey = 1;
+  map<string, uint64> fake_channels = 2;
+  map<string, uint64> waiting_close_channels = 3;
+}
+
+message CheckChannelsReply {
+  map<string, uint64> not_fake_channels = 1;
+  map<string, uint64> closed_channels = 2;
 }

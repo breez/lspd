@@ -20,6 +20,7 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
+	"github.com/lightningnetwork/lnd/lnwire"
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -138,6 +139,140 @@ func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest
 		return nil, err
 	}
 	return r.(*lspdrpc.OpenChannelReply), err
+}
+
+func getSignedEncryptedData(in *lspdrpc.Encrypted) (string, []byte, error) {
+	signedBlob, err := btcec.Decrypt(privateKey, in.Data)
+	if err != nil {
+		log.Printf("btcec.Decrypt(%x) error: %v", in.Data, err)
+		return "", nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Data, err)
+	}
+	var signed lspdrpc.Signed
+	err = proto.Unmarshal(signedBlob, &signed)
+	if err != nil {
+		log.Printf("proto.Unmarshal(%x) error: %v", signedBlob, err)
+		return "", nil, fmt.Errorf("proto.Unmarshal(%x) error: %w", signedBlob, err)
+	}
+	pubkey, err := btcec.ParsePubKey(signed.Pubkey, btcec.S256())
+	if err != nil {
+		log.Printf("unable to parse pubkey: %w", err)
+		return "", nil, fmt.Errorf("unable to parse pubkey: %w", err)
+	}
+	wireSig, err := lnwire.NewSigFromRawSignature(signed.Signature)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to decode signature: %v", err)
+	}
+	sig, err := wireSig.ToSignature()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to convert from wire format: %v",
+			err)
+	}
+	// The signature is over the sha256 hash of the message.
+	digest := chainhash.HashB(signed.Data)
+	if !sig.Verify(digest, pubkey) {
+		return "", nil, fmt.Errorf("invalid signature")
+	}
+	return hex.EncodeToString(signed.Pubkey), signed.Data, nil
+}
+
+func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lspdrpc.Encrypted, error) {
+	nodeID, data, err := getSignedEncryptedData(in)
+	if err != nil {
+		log.Printf("getSignedEncryptedData error: %v", err)
+		return nil, fmt.Errorf("getSignedEncryptedData error: %v", err)
+	}
+	var checkChannelsRequest lspdrpc.CheckChannelsRequest
+	err = proto.Unmarshal(data, &checkChannelsRequest)
+	if err != nil {
+		log.Printf("proto.Unmarshal(%x) error: %v", data, err)
+		return nil, fmt.Errorf("proto.Unmarshal(%x) error: %w", data, err)
+	}
+	notFakeChannels, err := getNotFakeChannels(nodeID, checkChannelsRequest.FakeChannels)
+	if err != nil {
+		log.Printf("getNotFakeChannels(%v) error: %v", checkChannelsRequest.FakeChannels, err)
+		return nil, fmt.Errorf("getNotFakeChannels(%v) error: %w", checkChannelsRequest.FakeChannels, err)
+	}
+	closedChannels, err := getClosedChannels(nodeID, checkChannelsRequest.WaitingCloseChannels)
+	if err != nil {
+		log.Printf("getNotFakeChannels(%v) error: %v", checkChannelsRequest.FakeChannels, err)
+		return nil, fmt.Errorf("getNotFakeChannels(%v) error: %w", checkChannelsRequest.FakeChannels, err)
+	}
+	if len(notFakeChannels) != 0 || len(closedChannels) != 0 {
+		err = sendChannelMismatchNotification(nodeID, notFakeChannels, closedChannels)
+		if err != nil {
+			log.Printf("sendChannelMismatchNotification() error: %v", err)
+		}
+	}
+	checkChannelsReply := lspdrpc.CheckChannelsReply{
+		NotFakeChannels: notFakeChannels,
+		ClosedChannels:  closedChannels,
+	}
+	dataReply, err := proto.Marshal(&checkChannelsReply)
+	if err != nil {
+		log.Printf("proto.Marshall() error: %v", err)
+		return nil, fmt.Errorf("proto.Marshal() error: %w", err)
+	}
+	pubkey, err := btcec.ParsePubKey(checkChannelsRequest.EncryptPubkey, btcec.S256())
+	if err != nil {
+		log.Printf("unable to parse pubkey: %v", err)
+		return nil, fmt.Errorf("unable to parse pubkey: %w", err)
+	}
+	encrypted, err := btcec.Encrypt(pubkey, dataReply)
+	if err != nil {
+		log.Printf("btcec.Encrypt() error: %v", err)
+		return nil, fmt.Errorf("btcec.Encrypt() error: %w", err)
+	}
+	return &lspdrpc.Encrypted{Data: encrypted}, nil
+}
+
+func getNotFakeChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error) {
+	var r map[string]uint64
+	channels, err := getNodeChannels(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range channels {
+		if h, ok := channelPoints[c.ChannelPoint]; ok {
+			sid := lnwire.NewShortChanIDFromInt(c.ChanId)
+			if !sid.IsFake() {
+				r[c.ChannelPoint] = h
+			}
+		}
+	}
+	return r, nil
+}
+
+func getClosedChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error) {
+	var r map[string]uint64
+	waitingCloseChannels, err := getWaitingCloseChannels(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	wcc := make(map[string]struct{})
+	for _, c := range waitingCloseChannels {
+		wcc[c.Channel.ChannelPoint] = struct{}{}
+	}
+	for c, h := range channelPoints {
+		if _, ok := wcc[c]; !ok {
+			r[c] = h
+		}
+	}
+	return r, nil
+}
+
+func getWaitingCloseChannels(nodeID string) ([]*lnrpc.PendingChannelsResponse_WaitingCloseChannel, error) {
+	clientCtx := metadata.AppendToOutgoingContext(context.Background(), "macaroon", os.Getenv("LND_MACAROON_HEX"))
+	pendingResponse, err := client.PendingChannels(clientCtx, &lnrpc.PendingChannelsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	var waitingCloseChannels []*lnrpc.PendingChannelsResponse_WaitingCloseChannel
+	for _, p := range pendingResponse.WaitingCloseChannels {
+		if p.Channel.RemoteNodePub == nodeID {
+			waitingCloseChannels = append(waitingCloseChannels, p)
+		}
+	}
+	return waitingCloseChannels, nil
 }
 
 func getNodeChannels(nodeID string) ([]*lnrpc.Channel, error) {
