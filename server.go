@@ -155,7 +155,7 @@ func getSignedEncryptedData(in *lspdrpc.Encrypted) (string, []byte, error) {
 	}
 	pubkey, err := btcec.ParsePubKey(signed.Pubkey, btcec.S256())
 	if err != nil {
-		log.Printf("unable to parse pubkey: %w", err)
+		log.Printf("unable to parse pubkey: %v", err)
 		return "", nil, fmt.Errorf("unable to parse pubkey: %w", err)
 	}
 	wireSig, err := lnwire.NewSigFromRawSignature(signed.Signature)
