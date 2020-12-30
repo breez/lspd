@@ -226,7 +226,7 @@ func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lsp
 }
 
 func getNotFakeChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error) {
-	var r map[string]uint64
+	r := make(map[string]uint64)
 	channels, err := getNodeChannels(nodeID)
 	if err != nil {
 		return nil, err
@@ -243,7 +243,7 @@ func getNotFakeChannels(nodeID string, channelPoints map[string]uint64) (map[str
 }
 
 func getClosedChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error) {
-	var r map[string]uint64
+	r := make(map[string]uint64)
 	waitingCloseChannels, err := getWaitingCloseChannels(nodeID)
 	if err != nil {
 		return nil, err
