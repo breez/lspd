@@ -232,10 +232,10 @@ func getNotFakeChannels(nodeID string, channelPoints map[string]uint64) (map[str
 		return nil, err
 	}
 	for _, c := range channels {
-		if h, ok := channelPoints[c.ChannelPoint]; ok {
+		if _, ok := channelPoints[c.ChannelPoint]; ok {
 			sid := lnwire.NewShortChanIDFromInt(c.ChanId)
 			if !sid.IsFake() {
-				r[c.ChannelPoint] = h
+				r[c.ChannelPoint] = c.ChanId
 			}
 		}
 	}
