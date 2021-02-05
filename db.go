@@ -73,7 +73,7 @@ func registerPayment(destination, paymentHash, paymentSecret []byte, incomingAmo
 func insertChannel(chanID uint64, channelPoint string, nodeID []byte) error {
 	_, err := pgxPool.Exec(context.Background(),
 		`INSERT INTO
-	channels (chanis, channel_point, nodeid)
+	channels (chanid, channel_point, nodeid)
 	VALUES ($1, $2, $3)`,
 		chanID, channelPoint, nodeID)
 	if err != nil {
