@@ -376,6 +376,8 @@ func main() {
 
 	go intercept()
 
+	go forwardingHistorySynchronize()
+
 	s := grpc.NewServer(
 		grpc_middleware.WithUnaryServerChain(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 			if md, ok := metadata.FromIncomingContext(ctx); ok {

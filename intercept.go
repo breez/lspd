@@ -240,6 +240,10 @@ func resumeOrCancel(
 				OutgoingRequestedChanId: chanID,
 				OnionBlob:               onionBlob,
 			})
+			err := insertChannel(chanID, channelPoint, destination)
+			if err != nil {
+				log.Printf("insertChannel error: %v", err)
+			}
 			return
 		}
 		log.Printf("getChannel(%x, %v) returns 0", destination, channelPoint)

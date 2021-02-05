@@ -16,4 +16,4 @@ require (
 	google.golang.org/grpc v1.31.0
 )
 
-replace github.com/lightningnetwork/lnd v0.11.0-beta => github.com/breez/lnd v0.11.0-beta.rc4.0.20201101122458-227226f00b18
+replace github.com/lightningnetwork/lnd v0.11.0-beta => github.com/breez/lnd v0.11.0-beta.rc4.0.20210125150416-0c10146b223c
