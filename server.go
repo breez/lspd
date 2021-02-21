@@ -38,6 +38,7 @@ const (
 	timeLockDelta             = 144
 	channelFeePermyriad       = 10
 	additionalChannelCapacity = 100_000
+	maxInactiveDuration       = 45 * 24 * 3600
 )
 
 type server struct{}
@@ -65,6 +66,7 @@ func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInfo
 		TimeLockDelta:       timeLockDelta,
 		ChannelFeePermyriad: channelFeePermyriad,
 		LspPubkey:           publicKey.SerializeCompressed(),
+		MaxInactiveDuration: maxInactiveDuration,
 	}, nil
 }
 

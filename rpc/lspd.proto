@@ -49,6 +49,9 @@ message ChannelInformationReply {
   int64 channel_fee_permyriad = 10;
 
   bytes lsp_pubkey = 11;
+
+  // The channel can be closed if not used this duration in seconds.
+  int64 max_inactive_duration = 12;
 }
 
 message OpenChannelRequest {
