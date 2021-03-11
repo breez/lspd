@@ -117,7 +117,7 @@ func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest
 				PushSat:            0,
 				TargetConf:         targetConf,
 				MinHtlcMsat:        minHtlcMsat,
-				Private:            true,
+				Private:            false,
 			})
 			log.Printf("Response from OpenChannel: %#v (TX: %v)", response, hex.EncodeToString(response.GetFundingTxidBytes()))
 
