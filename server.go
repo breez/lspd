@@ -31,7 +31,7 @@ import (
 
 const (
 	channelAmount             = 1_000_000
-	targetConf                = 1
+	targetConf                = 6
 	minHtlcMsat               = 600
 	baseFeeMsat               = 1000
 	feeRate                   = 0.000001
