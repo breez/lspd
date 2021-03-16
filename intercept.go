@@ -52,6 +52,9 @@ func isConnected(ctx context.Context, client lnrpc.LightningClient, destination 
 
 func openChannel(ctx context.Context, client lnrpc.LightningClient, paymentHash, destination []byte, incomingAmountMsat int64) ([]byte, uint32, error) {
 	capacity := incomingAmountMsat/1000 + additionalChannelCapacity
+	if capacity == publicChannelAmount {
+		capacity++
+	}
 	channelPoint, err := client.OpenChannelSync(ctx, &lnrpc.OpenChannelRequest{
 		NodePubkey:         destination,
 		LocalFundingAmount: capacity,

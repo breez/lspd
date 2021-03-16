@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	channelAmount             = 1_000_183
+	publicChannelAmount       = 1_000_183
 	targetConf                = 6
 	minHtlcMsat               = 600
 	baseFeeMsat               = 1000
@@ -58,7 +58,7 @@ func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInfo
 		Name:                nodeName,
 		Pubkey:              nodePubkey,
 		Host:                os.Getenv("NODE_HOST"),
-		ChannelCapacity:     channelAmount,
+		ChannelCapacity:     publicChannelAmount,
 		TargetConf:          targetConf,
 		MinHtlcMsat:         minHtlcMsat,
 		BaseFeeMsat:         baseFeeMsat,
@@ -112,7 +112,7 @@ func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest
 		var outputIndex uint32
 		if len(nodeChannels) == 0 && len(pendingChannels) == 0 {
 			response, err := client.OpenChannelSync(clientCtx, &lnrpc.OpenChannelRequest{
-				LocalFundingAmount: channelAmount,
+				LocalFundingAmount: publicChannelAmount,
 				NodePubkeyString:   in.Pubkey,
 				PushSat:            0,
 				TargetConf:         targetConf,
