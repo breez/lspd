@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -33,6 +34,40 @@ func (cfe *copyFromEvents) Values() ([]interface{}, error) {
 
 func (cfe *copyFromEvents) Err() error {
 	return cfe.err
+}
+
+func channelsSynchronize() {
+	for {
+		err := channelsSynchronizeOnce()
+		log.Printf("channelsSynchronizeOnce() err: %v", err)
+		time.Sleep(1 * time.Hour)
+	}
+}
+
+func channelsSynchronizeOnce() error {
+	log.Printf("channelsSynchronizeOnce - begin")
+	clientCtx := metadata.AppendToOutgoingContext(context.Background(), "macaroon", os.Getenv("LND_MACAROON_HEX"))
+	channels, err := client.ListChannels(clientCtx, &lnrpc.ListChannelsRequest{PrivateOnly: true})
+	if err != nil {
+		log.Printf("ListChannels error: %v", err)
+		return fmt.Errorf("client.ListChannels() error: %w", err)
+	}
+	log.Printf("channelsSynchronizeOnce - received channels")
+	for _, c := range channels.Channels {
+		nodeID, err := hex.DecodeString(c.RemotePubkey)
+		if err != nil {
+			log.Printf("hex.DecodeString in channelsSynchronizeOnce error: %v", err)
+			continue
+		}
+		err = insertChannel(c.ChanId, c.ChannelPoint, nodeID)
+		if err != nil {
+			log.Printf("insertChannel(%v, %v, %x) in channelsSynchronizeOnce error: %v", c.ChanId, c.ChannelPoint, nodeID, err)
+			continue
+		}
+	}
+	log.Printf("channelsSynchronizeOnce - done")
+
+	return nil
 }
 
 func forwardingHistorySynchronize() {

@@ -379,6 +379,7 @@ func main() {
 	go intercept()
 
 	go forwardingHistorySynchronize()
+	go channelsSynchronize()
 
 	s := grpc.NewServer(
 		grpc_middleware.WithUnaryServerChain(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {

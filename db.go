@@ -74,7 +74,8 @@ func insertChannel(chanID uint64, channelPoint string, nodeID []byte) error {
 	_, err := pgxPool.Exec(context.Background(),
 		`INSERT INTO
 	channels (chanid, channel_point, nodeid)
-	VALUES ($1, $2, $3)`,
+	VALUES ($1, $2, $3)
+	ON CONFLICT (chanid) DO NOTHING`,
 		chanID, channelPoint, nodeID)
 	if err != nil {
 		return fmt.Errorf("insertChannel(%v, %s, %x) error: %w",
