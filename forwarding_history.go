@@ -53,13 +53,14 @@ func channelsSynchronizeOnce() error {
 		return fmt.Errorf("client.ListChannels() error: %w", err)
 	}
 	log.Printf("channelsSynchronizeOnce - received channels")
+	lastUpdate := time.Now()
 	for _, c := range channels.Channels {
 		nodeID, err := hex.DecodeString(c.RemotePubkey)
 		if err != nil {
 			log.Printf("hex.DecodeString in channelsSynchronizeOnce error: %v", err)
 			continue
 		}
-		err = insertChannel(c.ChanId, c.ChannelPoint, nodeID)
+		err = insertChannel(c.ChanId, c.ChannelPoint, nodeID, lastUpdate)
 		if err != nil {
 			log.Printf("insertChannel(%v, %v, %x) in channelsSynchronizeOnce error: %v", c.ChanId, c.ChannelPoint, nodeID, err)
 			continue

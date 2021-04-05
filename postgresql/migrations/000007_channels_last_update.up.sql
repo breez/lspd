@@ -1,0 +1,1 @@
+ALTER TABLE public.channels ADD COLUMN last_update TIMESTAMP;

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
@@ -70,13 +71,13 @@ func registerPayment(destination, paymentHash, paymentSecret []byte, incomingAmo
 	return nil
 }
 
-func insertChannel(chanID uint64, channelPoint string, nodeID []byte) error {
+func insertChannel(chanID uint64, channelPoint string, nodeID []byte, lastUpdate time.Time) error {
 	_, err := pgxPool.Exec(context.Background(),
 		`INSERT INTO
-	channels (chanid, channel_point, nodeid)
-	VALUES ($1, $2, $3)
-	ON CONFLICT (chanid) DO NOTHING`,
-		chanID, channelPoint, nodeID)
+	channels (chanid, channel_point, nodeid, last_update)
+	VALUES ($1, $2, $3, $4)
+	ON CONFLICT (chanid) DO UPDATE SET last_update=$4`,
+		chanID, channelPoint, nodeID, lastUpdate)
 	if err != nil {
 		return fmt.Errorf("insertChannel(%v, %s, %x) error: %w",
 			chanID, channelPoint, nodeID, err)
