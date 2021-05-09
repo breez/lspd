@@ -60,7 +60,8 @@ func registerPayment(destination, paymentHash, paymentSecret []byte, incomingAmo
 	commandTag, err := pgxPool.Exec(context.Background(),
 		`INSERT INTO
 		payments (destination, payment_hash, payment_secret, incoming_amount_msat, outgoing_amount_msat)
-		VALUES ($1, $2, $3, $4, $5)`,
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT DO NOTHING`,
 		destination, paymentHash, paymentSecret, incomingAmountMsat, outgoingAmountMsat)
 	log.Printf("registerPayment(%x, %x, %x, %v, %v) rows: %v err: %v",
 		destination, paymentHash, paymentSecret, incomingAmountMsat, outgoingAmountMsat, commandTag.RowsAffected(), err)
