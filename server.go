@@ -19,6 +19,7 @@ import (
 	"github.com/caddyserver/certmagic"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/lightningnetwork/lnd/lnrpc/chainrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"golang.org/x/sync/singleflight"
@@ -46,6 +47,7 @@ type server struct{}
 var (
 	client              lnrpc.LightningClient
 	routerClient        routerrpc.RouterClient
+	chainNotifierClient chainrpc.ChainNotifierClient
 	openChannelReqGroup singleflight.Group
 	privateKey          *btcec.PrivateKey
 	publicKey           *btcec.PublicKey
@@ -229,16 +231,16 @@ func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lsp
 
 func getNotFakeChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error) {
 	r := make(map[string]uint64)
-	channels, err := getNodeChannels(nodeID)
+	if len(channelPoints) == 0 {
+		return r, nil
+	}
+	channels, err := confirmedChannels(nodeID)
 	if err != nil {
 		return nil, err
 	}
-	for _, c := range channels {
-		if _, ok := channelPoints[c.ChannelPoint]; ok {
-			sid := lnwire.NewShortChanIDFromInt(c.ChanId)
-			if !sid.IsFake() {
-				r[c.ChannelPoint] = c.ChanId
-			}
+	for channelPoint, chanID := range channels {
+		if _, ok := channelPoints[channelPoint]; ok {
+			r[channelPoint] = chanID
 		}
 	}
 	return r, nil
@@ -246,6 +248,9 @@ func getNotFakeChannels(nodeID string, channelPoints map[string]uint64) (map[str
 
 func getClosedChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error) {
 	r := make(map[string]uint64)
+	if len(channelPoints) == 0 {
+		return r, nil
+	}
 	waitingCloseChannels, err := getWaitingCloseChannels(nodeID)
 	if err != nil {
 		return nil, err
@@ -363,6 +368,7 @@ func main() {
 	defer conn.Close()
 	client = lnrpc.NewLightningClient(conn)
 	routerClient = routerrpc.NewRouterClient(conn)
+	chainNotifierClient = chainrpc.NewChainNotifierClient(conn)
 
 	clientCtx := metadata.AppendToOutgoingContext(context.Background(), "macaroon", os.Getenv("LND_MACAROON_HEX"))
 	info, err := client.GetInfo(clientCtx, &lnrpc.GetInfoRequest{})
@@ -379,7 +385,7 @@ func main() {
 	go intercept()
 
 	go forwardingHistorySynchronize()
-	go channelsSynchronize()
+	go channelsSynchronize(chainNotifierClient)
 
 	s := grpc.NewServer(
 		grpc_middleware.WithUnaryServerChain(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/lightningnetwork/lnd/lnwire"
 )
 
 var (
@@ -84,6 +86,38 @@ func insertChannel(chanID uint64, channelPoint string, nodeID []byte, lastUpdate
 			chanID, channelPoint, nodeID, err)
 	}
 	return nil
+}
+
+func confirmedChannels(sNodeID string) (map[string]uint64, error) {
+	nodeID, err := hex.DecodeString(sNodeID)
+	if err != nil {
+		return nil, fmt.Errorf("hex.DecodeString(%v) error: %w", sNodeID, err)
+	}
+	rows, err := pgxPool.Query(context.Background(),
+		`SELECT chanid, channel_point
+	  FROM channels
+	  WHERE nodeid=$1`,
+		nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("channels(%x) error: %w", nodeID, err)
+	}
+	defer rows.Close()
+	chans := make(map[string]uint64)
+	for rows.Next() {
+		var (
+			chanID       uint64
+			channelPoint string
+		)
+		err = rows.Scan(&chanID, &channelPoint)
+		if err != nil {
+			return nil, fmt.Errorf("channels(%x) rows.Scan error: %w", nodeID, err)
+		}
+		sid := lnwire.NewShortChanIDFromInt(chanID)
+		if !sid.IsFake() {
+			chans[channelPoint] = chanID
+		}
+	}
+	return chans, rows.Err()
 }
 
 func lastForwardingEvent() (int64, error) {

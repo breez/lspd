@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/lightningnetwork/lnd/lnrpc/chainrpc"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -36,11 +37,31 @@ func (cfe *copyFromEvents) Err() error {
 	return cfe.err
 }
 
-func channelsSynchronize() {
+func channelsSynchronize(client chainrpc.ChainNotifierClient) {
+	lastSync := time.Now().Add(-6 * time.Minute)
 	for {
-		err := channelsSynchronizeOnce()
-		log.Printf("channelsSynchronizeOnce() err: %v", err)
-		time.Sleep(1 * time.Hour)
+		cancellableCtx, cancel := context.WithCancel(context.Background())
+		clientCtx := metadata.AppendToOutgoingContext(cancellableCtx, "macaroon", os.Getenv("LND_MACAROON_HEX"))
+		stream, err := client.RegisterBlockEpochNtfn(clientCtx, &chainrpc.BlockEpoch{})
+		if err != nil {
+			log.Printf("chainNotifierClient.RegisterBlockEpochNtfn(): %v", err)
+			cancel()
+		}
+
+		for {
+			_, err := stream.Recv()
+			if err != nil {
+				log.Printf("stream.Recv: %v", err)
+				break
+			}
+			if lastSync.Add(5 * time.Minute).Before(time.Now()) {
+				time.Sleep(30 * time.Second)
+				err = channelsSynchronizeOnce()
+				lastSync = time.Now()
+				log.Printf("channelsSynchronizeOnce() err: %v", err)
+			}
+		}
+		cancel()
 	}
 }
 
