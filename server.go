@@ -201,12 +201,6 @@ func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lsp
 		log.Printf("getNotFakeChannels(%v) error: %v", checkChannelsRequest.FakeChannels, err)
 		return nil, fmt.Errorf("getNotFakeChannels(%v) error: %w", checkChannelsRequest.FakeChannels, err)
 	}
-	if len(notFakeChannels) != 0 || len(closedChannels) != 0 {
-		err = sendChannelMismatchNotification(nodeID, notFakeChannels, closedChannels)
-		if err != nil {
-			log.Printf("sendChannelMismatchNotification() error: %v", err)
-		}
-	}
 	checkChannelsReply := lspdrpc.CheckChannelsReply{
 		NotFakeChannels: notFakeChannels,
 		ClosedChannels:  closedChannels,
