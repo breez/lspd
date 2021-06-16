@@ -27,6 +27,9 @@ import (
 
 func checkPayment(incomingAmountMsat, outgoingAmountMsat int64) error {
 	fees := incomingAmountMsat * channelFeePermyriad / 10_000 / 1_000 * 1_000
+	if fees < channelMinimumFeeMsat {
+		fees = channelMinimumFeeMsat
+	}
 	if incomingAmountMsat-outgoingAmountMsat < fees {
 		return fmt.Errorf("not enough fees")
 	}

@@ -52,6 +52,8 @@ message ChannelInformationReply {
 
   // The channel can be closed if not used this duration in seconds.
   int64 max_inactive_duration = 12;
+
+  int64 channel_minimum_fee_msat = 13;
 }
 
 message OpenChannelRequest {

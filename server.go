@@ -38,6 +38,7 @@ const (
 	feeRate                   = 0.000001
 	timeLockDelta             = 144
 	channelFeePermyriad       = 10
+	channelMinimumFeeMsat     = 0_000_000
 	additionalChannelCapacity = 100_000
 	maxInactiveDuration       = 45 * 24 * 3600
 )
@@ -57,18 +58,19 @@ var (
 
 func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInformationRequest) (*lspdrpc.ChannelInformationReply, error) {
 	return &lspdrpc.ChannelInformationReply{
-		Name:                nodeName,
-		Pubkey:              nodePubkey,
-		Host:                os.Getenv("NODE_HOST"),
-		ChannelCapacity:     publicChannelAmount,
-		TargetConf:          targetConf,
-		MinHtlcMsat:         minHtlcMsat,
-		BaseFeeMsat:         baseFeeMsat,
-		FeeRate:             feeRate,
-		TimeLockDelta:       timeLockDelta,
-		ChannelFeePermyriad: channelFeePermyriad,
-		LspPubkey:           publicKey.SerializeCompressed(),
-		MaxInactiveDuration: maxInactiveDuration,
+		Name:                  nodeName,
+		Pubkey:                nodePubkey,
+		Host:                  os.Getenv("NODE_HOST"),
+		ChannelCapacity:       publicChannelAmount,
+		TargetConf:            targetConf,
+		MinHtlcMsat:           minHtlcMsat,
+		BaseFeeMsat:           baseFeeMsat,
+		FeeRate:               feeRate,
+		TimeLockDelta:         timeLockDelta,
+		ChannelFeePermyriad:   channelFeePermyriad,
+		ChannelMinimumFeeMsat: channelMinimumFeeMsat,
+		LspPubkey:             publicKey.SerializeCompressed(),
+		MaxInactiveDuration:   maxInactiveDuration,
 	}, nil
 }
 
