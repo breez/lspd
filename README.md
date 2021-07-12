@@ -18,6 +18,9 @@ You can create your own lsdp by implementing the grpc methods described [here](h
 You can apply the PR from https://github.com/lightningnetwork/lnd/pull/2708 to be able to create channels with a channel reserve smaller than 1% of the channel capacity.
 Then add the field `RemoteChanReserveSat` in the `lnrpc.OpenChannelRequest` struct when opening a channel.
 
+In order to be able to let clients have a zero channel reserve, you can apply the
+commit from https://github.com/breez/lnd/commit/03a7a0b6b4c8fa92ad94e9f449135e0738702643
+
 ## Flow for creating channels
 When Alice wants Bob to pay her an amount and Alice doesn't have a channel with sufficient capacity, she calls the lspd function RegisterPayment() and sending the paymentHash, paymentSecret (for mpp payments), destination (Alice pubkey), and two amounts.
 The first amount (incoming from the lsp point of view) is the amount BOB will pay. The second amount (outgoing from the lsp point of view) is the amount Alice will receive. The difference between these two amounts is the fees for the lsp.
