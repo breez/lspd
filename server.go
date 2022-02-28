@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 
 	lspdrpc "github.com/breez/lspd/rpc"
@@ -115,13 +116,21 @@ func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest
 		var txidStr string
 		var outputIndex uint32
 		if len(nodeChannels) == 0 && len(pendingChannels) == 0 {
+			channelAmount, err := strconv.ParseInt(os.Getenv("CHANNEL_AMOUNT"), 0, 64)
+			if err != nil || channelAmount <= 0 {
+				channelAmount = publicChannelAmount
+			}
+			isPrivate, err := strconv.ParseBool(os.Getenv("CHANNEL_PRIVATE"))
+			if err != nil {
+				isPrivate = false
+			}
 			response, err := client.OpenChannelSync(clientCtx, &lnrpc.OpenChannelRequest{
-				LocalFundingAmount: publicChannelAmount,
+				LocalFundingAmount: channelAmount,
 				NodePubkeyString:   in.Pubkey,
 				PushSat:            0,
 				TargetConf:         targetConf,
 				MinHtlcMsat:        minHtlcMsat,
-				Private:            false,
+				Private:            isPrivate,
 			})
 			log.Printf("Response from OpenChannel: %#v (TX: %v)", response, hex.EncodeToString(response.GetFundingTxidBytes()))
 
