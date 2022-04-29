@@ -113,17 +113,21 @@ func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest
 		if err != nil {
 			return nil, err
 		}
+		channelAmount, err := strconv.ParseInt(os.Getenv("CHANNEL_AMOUNT"), 0, 64)
+		if err != nil || channelAmount <= 0 {
+			channelAmount = publicChannelAmount
+		}
+		log.Printf("os.Getenv(\"CHANNEL_AMOUNT\"): %v, channelAmount: %v, publicChannelAmount: %v, err: %v",
+			os.Getenv("CHANNEL_AMOUNT"), channelAmount, publicChannelAmount, err)
+		isPrivate, err := strconv.ParseBool(os.Getenv("CHANNEL_PRIVATE"))
+		if err != nil {
+			isPrivate = false
+		}
+		log.Printf("os.Getenv(\"CHANNEL_PRIVATE\"): %v, isPrivate: %v, err: %v",
+			os.Getenv("CHANNEL_PRIVATE"), isPrivate, err)
 		var txidStr string
 		var outputIndex uint32
 		if len(nodeChannels) == 0 && len(pendingChannels) == 0 {
-			channelAmount, err := strconv.ParseInt(os.Getenv("CHANNEL_AMOUNT"), 0, 64)
-			if err != nil || channelAmount <= 0 {
-				channelAmount = publicChannelAmount
-			}
-			isPrivate, err := strconv.ParseBool(os.Getenv("CHANNEL_PRIVATE"))
-			if err != nil {
-				isPrivate = false
-			}
 			response, err := client.OpenChannelSync(clientCtx, &lnrpc.OpenChannelRequest{
 				LocalFundingAmount: channelAmount,
 				NodePubkeyString:   in.Pubkey,
