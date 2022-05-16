@@ -46,6 +46,8 @@ func channelsSynchronize(client chainrpc.ChainNotifierClient) {
 		if err != nil {
 			log.Printf("chainNotifierClient.RegisterBlockEpochNtfn(): %v", err)
 			cancel()
+			time.Sleep(1 * time.Second)
+			continue
 		}
 
 		for {

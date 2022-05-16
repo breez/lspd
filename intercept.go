@@ -97,131 +97,137 @@ func getChannel(ctx context.Context, client lnrpc.LightningClient, node []byte, 
 }
 
 func intercept() {
-
-	clientCtx := metadata.AppendToOutgoingContext(context.Background(), "macaroon", os.Getenv("LND_MACAROON_HEX"))
-	interceptorClient, err := routerClient.HtlcInterceptor(clientCtx)
-	if err != nil {
-		log.Fatalf("routerClient.HtlcInterceptor(): %v", err)
-	}
-
 	for {
-		request, err := interceptorClient.Recv()
+		cancellableCtx, cancel := context.WithCancel(context.Background())
+		clientCtx := metadata.AppendToOutgoingContext(cancellableCtx, "macaroon", os.Getenv("LND_MACAROON_HEX"))
+		interceptorClient, err := routerClient.HtlcInterceptor(clientCtx)
 		if err != nil {
-			// If it is  just the error result of the context cancellation
-			// the we exit silently.
-			status, ok := status.FromError(err)
-			if ok && status.Code() == codes.Canceled {
+			log.Printf("routerClient.HtlcInterceptor(): %v", err)
+			cancel()
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		for {
+			request, err := interceptorClient.Recv()
+			if err != nil {
+				// If it is  just the error result of the context cancellation
+				// the we exit silently.
+				status, ok := status.FromError(err)
+				if ok && status.Code() == codes.Canceled {
+					break
+				}
+				// Otherwise it an unexpected error, we fail the test.
+				log.Printf("unexpected error in interceptor.Recv() %v", err)
+				cancel()
 				break
 			}
-			// Otherwise it an unexpected error, we fail the test.
-			log.Fatalf("unexpected error in interceptor.Recv() %v", err)
-			break
-		}
-		fmt.Printf("htlc: %v\nchanID: %v\nincoming amount: %v\noutgoing amount: %v\nincomin expiry: %v\noutgoing expiry: %v\npaymentHash: %x\nonionBlob: %x\n\n",
-			request.IncomingCircuitKey.HtlcId,
-			request.IncomingCircuitKey.ChanId,
-			request.IncomingAmountMsat,
-			request.OutgoingAmountMsat,
-			request.IncomingExpiry,
-			request.OutgoingExpiry,
-			request.PaymentHash,
-			request.OnionBlob,
-		)
+			fmt.Printf("htlc: %v\nchanID: %v\nincoming amount: %v\noutgoing amount: %v\nincomin expiry: %v\noutgoing expiry: %v\npaymentHash: %x\nonionBlob: %x\n\n",
+				request.IncomingCircuitKey.HtlcId,
+				request.IncomingCircuitKey.ChanId,
+				request.IncomingAmountMsat,
+				request.OutgoingAmountMsat,
+				request.IncomingExpiry,
+				request.OutgoingExpiry,
+				request.PaymentHash,
+				request.OnionBlob,
+			)
 
-		paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, fundingTxOutnum, err := paymentInfo(request.PaymentHash)
-		if err != nil {
-			log.Printf("paymentInfo(%x) error: %v", request.PaymentHash, err)
-		}
-		log.Printf("paymentHash:%x\npaymentSecret:%x\ndestination:%x\nincomingAmountMsat:%v\noutgoingAmountMsat:%v\n\n",
-			paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat)
-		if paymentSecret != nil {
+			paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, fundingTxOutnum, err := paymentInfo(request.PaymentHash)
+			if err != nil {
+				log.Printf("paymentInfo(%x) error: %v", request.PaymentHash, err)
+			}
+			log.Printf("paymentHash:%x\npaymentSecret:%x\ndestination:%x\nincomingAmountMsat:%v\noutgoingAmountMsat:%v\n\n",
+				paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat)
+			if paymentSecret != nil {
 
-			if fundingTxID == nil {
-				if bytes.Compare(paymentHash, request.PaymentHash) == 0 {
-					fundingTxID, fundingTxOutnum, err = openChannel(clientCtx, client, request.PaymentHash, destination, incomingAmountMsat)
-					log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
-					if err != nil {
+				if fundingTxID == nil {
+					if bytes.Compare(paymentHash, request.PaymentHash) == 0 {
+						fundingTxID, fundingTxOutnum, err = openChannel(clientCtx, client, request.PaymentHash, destination, incomingAmountMsat)
+						log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
+						if err != nil {
+							interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
+								IncomingCircuitKey: request.IncomingCircuitKey,
+								Action:             routerrpc.ResolveHoldForwardAction_FAIL,
+							})
+							continue
+						}
+					} else { //probing
+						failureCode := routerrpc.ForwardHtlcInterceptResponse_TEMPORARY_CHANNEL_FAILURE
+						if err := isConnected(clientCtx, client, destination); err == nil {
+							failureCode = routerrpc.ForwardHtlcInterceptResponse_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
+						}
 						interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
 							IncomingCircuitKey: request.IncomingCircuitKey,
 							Action:             routerrpc.ResolveHoldForwardAction_FAIL,
+							FailureCode:        failureCode,
 						})
 						continue
 					}
-				} else { //probing
-					failureCode := routerrpc.ForwardHtlcInterceptResponse_TEMPORARY_CHANNEL_FAILURE
-					if err := isConnected(clientCtx, client, destination); err == nil {
-						failureCode = routerrpc.ForwardHtlcInterceptResponse_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
-					}
+				}
+
+				pubKey, err := btcec.ParsePubKey(destination, btcec.S256())
+				log.Printf("btcec.ParsePubKey(%x): %v", destination, err)
+
+				sessionKey, err := btcec.NewPrivateKey(btcec.S256())
+				log.Printf("btcec.NewPrivateKey(): %v", err)
+
+				var bigProd, bigAmt big.Int
+				amt := (bigAmt.Div(bigProd.Mul(big.NewInt(outgoingAmountMsat), big.NewInt(int64(request.OutgoingAmountMsat))), big.NewInt(incomingAmountMsat))).Int64()
+
+				var addr [32]byte
+				copy(addr[:], paymentSecret)
+				hop := route.Hop{
+					AmtToForward:     lnwire.MilliSatoshi(amt),
+					OutgoingTimeLock: request.OutgoingExpiry,
+					MPP:              record.NewMPP(lnwire.MilliSatoshi(outgoingAmountMsat), addr),
+					CustomRecords:    make(record.CustomSet),
+				}
+
+				var b bytes.Buffer
+				err = hop.PackHopPayload(&b, uint64(0))
+				log.Printf("hop.PackHopPayload(): %v", err)
+
+				payload, err := sphinx.NewHopPayload(nil, b.Bytes())
+				log.Printf("sphinx.NewHopPayload(): %v", err)
+
+				var sphinxPath sphinx.PaymentPath
+				sphinxPath[0] = sphinx.OnionHop{
+					NodePub:    *pubKey,
+					HopPayload: payload,
+				}
+				sphinxPacket, err := sphinx.NewOnionPacket(
+					&sphinxPath, sessionKey, request.PaymentHash,
+					sphinx.DeterministicPacketFiller,
+				)
+				var onionBlob bytes.Buffer
+				err = sphinxPacket.Encode(&onionBlob)
+				log.Printf("sphinxPacket.Encode(): %v", err)
+				var h chainhash.Hash
+				err = h.SetBytes(fundingTxID)
+				if err != nil {
+					log.Printf("h.SetBytes(%x) error: %v", fundingTxID, err)
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
 						IncomingCircuitKey: request.IncomingCircuitKey,
 						Action:             routerrpc.ResolveHoldForwardAction_FAIL,
-						FailureCode:        failureCode,
 					})
 					continue
 				}
-			}
+				channelPoint := wire.NewOutPoint(&h, fundingTxOutnum).String()
+				go resumeOrCancel(
+					clientCtx, interceptorClient, request.IncomingCircuitKey, destination,
+					channelPoint, uint64(amt), onionBlob.Bytes(),
+				)
 
-			pubKey, err := btcec.ParsePubKey(destination, btcec.S256())
-			log.Printf("btcec.ParsePubKey(%x): %v", destination, err)
-
-			sessionKey, err := btcec.NewPrivateKey(btcec.S256())
-			log.Printf("btcec.NewPrivateKey(): %v", err)
-
-			var bigProd, bigAmt big.Int
-			amt := (bigAmt.Div(bigProd.Mul(big.NewInt(outgoingAmountMsat), big.NewInt(int64(request.OutgoingAmountMsat))), big.NewInt(incomingAmountMsat))).Int64()
-
-			var addr [32]byte
-			copy(addr[:], paymentSecret)
-			hop := route.Hop{
-				AmtToForward:     lnwire.MilliSatoshi(amt),
-				OutgoingTimeLock: request.OutgoingExpiry,
-				MPP:              record.NewMPP(lnwire.MilliSatoshi(outgoingAmountMsat), addr),
-				CustomRecords:    make(record.CustomSet),
-			}
-
-			var b bytes.Buffer
-			err = hop.PackHopPayload(&b, uint64(0))
-			log.Printf("hop.PackHopPayload(): %v", err)
-
-			payload, err := sphinx.NewHopPayload(nil, b.Bytes())
-			log.Printf("sphinx.NewHopPayload(): %v", err)
-
-			var sphinxPath sphinx.PaymentPath
-			sphinxPath[0] = sphinx.OnionHop{
-				NodePub:    *pubKey,
-				HopPayload: payload,
-			}
-			sphinxPacket, err := sphinx.NewOnionPacket(
-				&sphinxPath, sessionKey, request.PaymentHash,
-				sphinx.DeterministicPacketFiller,
-			)
-			var onionBlob bytes.Buffer
-			err = sphinxPacket.Encode(&onionBlob)
-			log.Printf("sphinxPacket.Encode(): %v", err)
-			var h chainhash.Hash
-			err = h.SetBytes(fundingTxID)
-			if err != nil {
-				log.Printf("h.SetBytes(%x) error: %v", fundingTxID, err)
+			} else {
 				interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
-					IncomingCircuitKey: request.IncomingCircuitKey,
-					Action:             routerrpc.ResolveHoldForwardAction_FAIL,
+					IncomingCircuitKey:      request.IncomingCircuitKey,
+					Action:                  routerrpc.ResolveHoldForwardAction_RESUME,
+					OutgoingAmountMsat:      request.OutgoingAmountMsat,
+					OutgoingRequestedChanId: request.OutgoingRequestedChanId,
+					OnionBlob:               request.OnionBlob,
 				})
-				continue
 			}
-			channelPoint := wire.NewOutPoint(&h, fundingTxOutnum).String()
-			go resumeOrCancel(
-				clientCtx, interceptorClient, request.IncomingCircuitKey, destination,
-				channelPoint, uint64(amt), onionBlob.Bytes(),
-			)
-
-		} else {
-			interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
-				IncomingCircuitKey:      request.IncomingCircuitKey,
-				Action:                  routerrpc.ResolveHoldForwardAction_RESUME,
-				OutgoingAmountMsat:      request.OutgoingAmountMsat,
-				OutgoingRequestedChanId: request.OutgoingRequestedChanId,
-				OnionBlob:               request.OnionBlob,
-			})
 		}
 	}
 }
