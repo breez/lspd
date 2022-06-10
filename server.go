@@ -329,6 +329,7 @@ func getPendingNodeChannels(nodeID string) ([]*lnrpc.PendingChannelsResponse_Pen
 func StartPlugin() {
 	//c-lightning plugin initiate
 	plugin := glightning.NewPlugin(onInit)
+
 	plugin.RegisterHooks(&glightning.Hooks{
 		HtlcAccepted: OnHtlcAccepted,
 	})
@@ -337,7 +338,6 @@ func StartPlugin() {
 	if err != nil {
 		log.Printf("start plugin error: %v", err)
 	}
-	//return nil
 }
 func onInit(plugin *glightning.Plugin, options map[string]glightning.Option, config *glightning.Config) {
 	log.Printf("successfully init'd! %s\n", config.RpcFile)
@@ -376,7 +376,6 @@ func initLspd() string {
 		fmt.Printf("LSPD_PRIVATE_KEY=\"%x\"\n", p.Serialize())
 		return "Keys generated"
 	} else {
-
 		err := pgConnect()
 		if err != nil {
 			return "pgConnect() error: " + err.Error()
@@ -436,7 +435,6 @@ func initLspd() string {
 		if nodePubkey == "" {
 			nodePubkey = info.IdentityPubkey
 		}
-
 	}
 	return "nill"
 }
@@ -446,10 +444,8 @@ func main() {
 	//c-lightning plugin started
 	wg.Add(1)
 	go StartPlugin()
-	//if err != nil {
-	//	log.Fatalf("failed to serve: %v", err)
-	//}
 
+	//lnd lspd initiated
 	state := initLspd()
 
 	if state == "Keys generated" {
@@ -481,5 +477,5 @@ func main() {
 		}
 	}
 	log.Printf("failed to serve lnd instance: %v", state)
-	wg.Wait()
+	wg.Wait() //wait for greenlight intercept
 }
