@@ -23,6 +23,7 @@ import (
 	"github.com/lightningnetwork/lnd/lnrpc/chainrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
 	"github.com/lightningnetwork/lnd/lnwire"
+	"github.com/niftynei/glightning/glightning"
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -321,7 +322,38 @@ func getPendingNodeChannels(nodeID string) ([]*lnrpc.PendingChannelsResponse_Pen
 	return pendingChannels, nil
 }
 
+//C-lightning plugin functions
+func onInit(plugin *glightning.Plugin, options map[string]glightning.Option, config *glightning.Config) {
+	log.Printf("successfully init'd! %s\n", config.RpcFile)
+}
+
+func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAcceptedResponse, error) {
+	log.Printf("htlc_accepted called\n")
+
+	onion := event.Onion
+	log.Printf("has perhop? %t", onion.PerHop != nil)
+	log.Printf("type is %s", onion.Type)
+
+	var on string
+	if onion.PaymentSecret == "" {
+		on = ""
+	} else {
+		on = "not "
+	}
+	log.Printf("payment secret is %sempty", on)
+
+	if onion.TotalMilliSatoshi == "" {
+		on = "empty"
+	} else {
+		on = onion.TotalMilliSatoshi
+	}
+	log.Printf("amount is %s", on)
+
+	return event.Continue(), nil
+}
+
 func main() {
+
 	if len(os.Args) > 1 && os.Args[1] == "genkey" {
 		p, err := btcec.NewPrivateKey(btcec.S256())
 		if err != nil {
@@ -411,5 +443,15 @@ func main() {
 	lspdrpc.RegisterChannelOpenerServer(s, &server{})
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
+	}
+	//c-lightning plugin initiate
+	plugin := glightning.NewPlugin(onInit)
+	plugin.RegisterHooks(&glightning.Hooks{
+		HtlcAccepted: OnHtlcAccepted,
+	})
+
+	err = plugin.Start(os.Stdin, os.Stdout)
+	if err != nil {
+		log.Fatal(err)
 	}
 }
