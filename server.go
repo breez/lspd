@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	lspdrpc "github.com/breez/lspd/rpc"
 	"github.com/golang/protobuf/proto"
@@ -56,6 +57,8 @@ var (
 	publicKey           *btcec.PublicKey
 	nodeName            = os.Getenv("NODE_NAME")
 	nodePubkey          = os.Getenv("NODE_PUBKEY")
+	lis                 net.Listener
+	conn                *grpc.ClientConn
 )
 
 func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInformationRequest) (*lspdrpc.ChannelInformationReply, error) {
@@ -323,6 +326,19 @@ func getPendingNodeChannels(nodeID string) ([]*lnrpc.PendingChannelsResponse_Pen
 }
 
 //C-lightning plugin functions
+func StartPlugin() {
+	//c-lightning plugin initiate
+	plugin := glightning.NewPlugin(onInit)
+	plugin.RegisterHooks(&glightning.Hooks{
+		HtlcAccepted: OnHtlcAccepted,
+	})
+
+	err := plugin.Start(os.Stdin, os.Stdout)
+	if err != nil {
+		log.Printf("start plugin error: %v", err)
+	}
+	//return nil
+}
 func onInit(plugin *glightning.Plugin, options map[string]glightning.Option, config *glightning.Config) {
 	log.Printf("successfully init'd! %s\n", config.RpcFile)
 }
@@ -351,107 +367,119 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 
 	return event.Continue(), nil
 }
-
-func main() {
-
+func initLspd() string {
 	if len(os.Args) > 1 && os.Args[1] == "genkey" {
 		p, err := btcec.NewPrivateKey(btcec.S256())
 		if err != nil {
-			log.Fatalf("btcec.NewPrivateKey() error: %v", err)
+			return "btcec.NewPrivateKey() error:" + err.Error()
 		}
 		fmt.Printf("LSPD_PRIVATE_KEY=\"%x\"\n", p.Serialize())
-		return
-	}
-
-	err := pgConnect()
-	if err != nil {
-		log.Fatalf("pgConnect() error: %v", err)
-	}
-
-	privateKeyBytes, err := hex.DecodeString(os.Getenv("LSPD_PRIVATE_KEY"))
-	if err != nil {
-		log.Fatalf("hex.DecodeString(os.Getenv(\"LSPD_PRIVATE_KEY\")=%v) error: %v", os.Getenv("LSPD_PRIVATE_KEY"), err)
-	}
-	privateKey, publicKey = btcec.PrivKeyFromBytes(btcec.S256(), privateKeyBytes)
-
-	certmagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
-	address := os.Getenv("LISTEN_ADDRESS")
-	var lis net.Listener
-	if certmagicDomain == "" {
-		var err error
-		lis, err = net.Listen("tcp", address)
-		if err != nil {
-			log.Fatalf("failed to listen: %v", err)
-		}
+		return "Keys generated"
 	} else {
-		tlsConfig, err := certmagic.TLS([]string{certmagicDomain})
+
+		err := pgConnect()
 		if err != nil {
-			log.Fatalf("failed to run certmagic: %v", err)
+			return "pgConnect() error: " + err.Error()
 		}
-		lis, err = tls.Listen("tcp", address, tlsConfig)
+
+		privateKeyBytes, err := hex.DecodeString(os.Getenv("LSPD_PRIVATE_KEY"))
 		if err != nil {
-			log.Fatalf("failed to listen: %v", err)
+			return "hex.DecodeString(os.Getenv(LSPD_PRIVATE_KEY)= " + os.Getenv("LSPD_PRIVATE_KEY") + "error: " + err.Error()
 		}
-	}
+		privateKey, publicKey = btcec.PrivKeyFromBytes(btcec.S256(), privateKeyBytes)
 
-	// Creds file to connect to LND gRPC
-	cp := x509.NewCertPool()
-	if !cp.AppendCertsFromPEM([]byte(strings.Replace(os.Getenv("LND_CERT"), "\\n", "\n", -1))) {
-		log.Fatalf("credentials: failed to append certificates")
-	}
-	creds := credentials.NewClientTLSFromCert(cp, "")
+		certmagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
+		address := os.Getenv("LISTEN_ADDRESS")
 
-	// Address of an LND instance
-	conn, err := grpc.Dial(os.Getenv("LND_ADDRESS"), grpc.WithTransportCredentials(creds))
-	if err != nil {
-		log.Fatalf("Failed to connect to LND gRPC: %v", err)
-	}
-	defer conn.Close()
-	client = lnrpc.NewLightningClient(conn)
-	routerClient = routerrpc.NewRouterClient(conn)
-	chainNotifierClient = chainrpc.NewChainNotifierClient(conn)
+		if certmagicDomain == "" {
+			var err error
+			lis, err = net.Listen("tcp", address)
+			if err != nil {
+				return "failed to listen: " + err.Error()
+			}
+		} else {
+			tlsConfig, err := certmagic.TLS([]string{certmagicDomain})
+			if err != nil {
+				return "failed to run certmagic: " + err.Error()
+			}
+			lis, err = tls.Listen("tcp", address, tlsConfig)
+			if err != nil {
+				return "failed to listen: " + err.Error()
+			}
+		}
 
-	clientCtx := metadata.AppendToOutgoingContext(context.Background(), "macaroon", os.Getenv("LND_MACAROON_HEX"))
-	info, err := client.GetInfo(clientCtx, &lnrpc.GetInfoRequest{})
-	if err != nil {
-		log.Fatalf("client.GetInfo() error: %v", err)
-	}
-	if nodeName == "" {
-		nodeName = info.Alias
-	}
-	if nodePubkey == "" {
-		nodePubkey = info.IdentityPubkey
-	}
+		// Creds file to connect to LND gRPC
+		cp := x509.NewCertPool()
+		if !cp.AppendCertsFromPEM([]byte(strings.Replace(os.Getenv("LND_CERT"), "\\n", "\n", -1))) {
+			return "credentials: failed to append certificates"
+		}
+		creds := credentials.NewClientTLSFromCert(cp, "")
 
-	go intercept()
+		// Address of an LND instance
+		conn, err = grpc.Dial(os.Getenv("LND_ADDRESS"), grpc.WithTransportCredentials(creds))
+		if err != nil {
+			return "Failed to connect to LND gRPC: " + err.Error()
+		}
 
-	go forwardingHistorySynchronize()
-	go channelsSynchronize(chainNotifierClient)
+		client = lnrpc.NewLightningClient(conn)
+		routerClient = routerrpc.NewRouterClient(conn)
+		chainNotifierClient = chainrpc.NewChainNotifierClient(conn)
 
-	s := grpc.NewServer(
-		grpc_middleware.WithUnaryServerChain(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-			if md, ok := metadata.FromIncomingContext(ctx); ok {
-				for _, auth := range md.Get("authorization") {
-					if auth == "Bearer "+os.Getenv("TOKEN") {
-						return handler(ctx, req)
+		clientCtx := metadata.AppendToOutgoingContext(context.Background(), "macaroon", os.Getenv("LND_MACAROON_HEX"))
+		info, err := client.GetInfo(clientCtx, &lnrpc.GetInfoRequest{})
+		if err != nil {
+			return "client.GetInfo() error: " + err.Error()
+		}
+		if nodeName == "" {
+			nodeName = info.Alias
+		}
+		if nodePubkey == "" {
+			nodePubkey = info.IdentityPubkey
+		}
+
+	}
+	return "nill"
+}
+
+func main() {
+	var wg sync.WaitGroup
+	//c-lightning plugin started
+	wg.Add(1)
+	go StartPlugin()
+	//if err != nil {
+	//	log.Fatalf("failed to serve: %v", err)
+	//}
+
+	state := initLspd()
+
+	if state == "Keys generated" {
+		log.Printf("Keys generated")
+		os.Exit(0)
+	}
+	if state == "nill" {
+		defer conn.Close()
+		go intercept()
+
+		go forwardingHistorySynchronize()
+		go channelsSynchronize(chainNotifierClient)
+
+		s := grpc.NewServer(
+			grpc_middleware.WithUnaryServerChain(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+				if md, ok := metadata.FromIncomingContext(ctx); ok {
+					for _, auth := range md.Get("authorization") {
+						if auth == "Bearer "+os.Getenv("TOKEN") {
+							return handler(ctx, req)
+						}
 					}
 				}
-			}
-			return nil, status.Errorf(codes.PermissionDenied, "Not authorized")
-		}),
-	)
-	lspdrpc.RegisterChannelOpenerServer(s, &server{})
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+				return nil, status.Errorf(codes.PermissionDenied, "Not authorized")
+			}),
+		)
+		lspdrpc.RegisterChannelOpenerServer(s, &server{})
+		if err := s.Serve(lis); err != nil {
+			log.Printf("failed to serve: %v", err)
+		}
 	}
-	//c-lightning plugin initiate
-	plugin := glightning.NewPlugin(onInit)
-	plugin.RegisterHooks(&glightning.Hooks{
-		HtlcAccepted: OnHtlcAccepted,
-	})
-
-	err = plugin.Start(os.Stdin, os.Stdout)
-	if err != nil {
-		log.Fatal(err)
-	}
+	log.Printf("failed to serve lnd instance: %v", state)
+	wg.Wait()
 }
