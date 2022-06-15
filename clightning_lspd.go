@@ -75,12 +75,12 @@ func (s *server_c) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaym
 }
 
 func (s *server_c) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest) (*lspdrpc.OpenChannelReply, error) {
-	return nil, nil
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (s *server_c) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lspdrpc.Encrypted, error) {
 
-	return nil, nil
+	return nil, fmt.Errorf("not implemented")
 }
 
 //C-lightning plugin functions
