@@ -31,19 +31,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const (
-	publicChannelAmount       = 1_000_183
-	targetConf                = 6
-	minHtlcMsat               = 600
-	baseFeeMsat               = 1000
-	feeRate                   = 0.000001
-	timeLockDelta             = 144
-	channelFeePermyriad       = 40
-	channelMinimumFeeMsat     = 2_000_000
-	additionalChannelCapacity = 100_000
-	maxInactiveDuration       = 45 * 24 * 3600
-)
-
 type server struct{}
 
 var (
@@ -160,40 +147,6 @@ func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest
 	return r.(*lspdrpc.OpenChannelReply), err
 }
 
-func getSignedEncryptedData(in *lspdrpc.Encrypted) (string, []byte, error) {
-	signedBlob, err := btcec.Decrypt(privateKey, in.Data)
-	if err != nil {
-		log.Printf("btcec.Decrypt(%x) error: %v", in.Data, err)
-		return "", nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Data, err)
-	}
-	var signed lspdrpc.Signed
-	err = proto.Unmarshal(signedBlob, &signed)
-	if err != nil {
-		log.Printf("proto.Unmarshal(%x) error: %v", signedBlob, err)
-		return "", nil, fmt.Errorf("proto.Unmarshal(%x) error: %w", signedBlob, err)
-	}
-	pubkey, err := btcec.ParsePubKey(signed.Pubkey, btcec.S256())
-	if err != nil {
-		log.Printf("unable to parse pubkey: %v", err)
-		return "", nil, fmt.Errorf("unable to parse pubkey: %w", err)
-	}
-	wireSig, err := lnwire.NewSigFromRawSignature(signed.Signature)
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to decode signature: %v", err)
-	}
-	sig, err := wireSig.ToSignature()
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to convert from wire format: %v",
-			err)
-	}
-	// The signature is over the sha256 hash of the message.
-	digest := chainhash.HashB(signed.Data)
-	if !sig.Verify(digest, pubkey) {
-		return "", nil, fmt.Errorf("invalid signature")
-	}
-	return hex.EncodeToString(signed.Pubkey), signed.Data, nil
-}
-
 func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lspdrpc.Encrypted, error) {
 	nodeID, data, err := getSignedEncryptedData(in)
 	if err != nil {
@@ -237,7 +190,39 @@ func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lsp
 	}
 	return &lspdrpc.Encrypted{Data: encrypted}, nil
 }
-
+func getSignedEncryptedData(in *lspdrpc.Encrypted) (string, []byte, error) {
+	signedBlob, err := btcec.Decrypt(privateKey, in.Data)
+	if err != nil {
+		log.Printf("btcec.Decrypt(%x) error: %v", in.Data, err)
+		return "", nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Data, err)
+	}
+	var signed lspdrpc.Signed
+	err = proto.Unmarshal(signedBlob, &signed)
+	if err != nil {
+		log.Printf("proto.Unmarshal(%x) error: %v", signedBlob, err)
+		return "", nil, fmt.Errorf("proto.Unmarshal(%x) error: %w", signedBlob, err)
+	}
+	pubkey, err := btcec.ParsePubKey(signed.Pubkey, btcec.S256())
+	if err != nil {
+		log.Printf("unable to parse pubkey: %v", err)
+		return "", nil, fmt.Errorf("unable to parse pubkey: %w", err)
+	}
+	wireSig, err := lnwire.NewSigFromRawSignature(signed.Signature)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to decode signature: %v", err)
+	}
+	sig, err := wireSig.ToSignature()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to convert from wire format: %v",
+			err)
+	}
+	// The signature is over the sha256 hash of the message.
+	digest := chainhash.HashB(signed.Data)
+	if !sig.Verify(digest, pubkey) {
+		return "", nil, fmt.Errorf("invalid signature")
+	}
+	return hex.EncodeToString(signed.Pubkey), signed.Data, nil
+}
 func getNotFakeChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error) {
 	r := make(map[string]uint64)
 	if len(channelPoints) == 0 {

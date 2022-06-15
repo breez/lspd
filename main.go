@@ -8,7 +8,18 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 )
 
-var ()
+const (
+	publicChannelAmount       = 1_000_183
+	targetConf                = 6
+	minHtlcMsat               = 600
+	baseFeeMsat               = 1000
+	feeRate                   = 0.000001
+	timeLockDelta             = 144
+	channelFeePermyriad       = 40
+	channelMinimumFeeMsat     = 2_000_000
+	additionalChannelCapacity = 100_000
+	maxInactiveDuration       = 45 * 24 * 3600
+)
 
 func main() {
 
