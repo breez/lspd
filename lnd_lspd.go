@@ -40,15 +40,15 @@ var (
 	openChannelReqGroup singleflight.Group
 	privateKey          *btcec.PrivateKey
 	publicKey           *btcec.PublicKey
-	nodeName            = os.Getenv("NODE_NAME")
-	nodePubkey          = os.Getenv("NODE_PUBKEY")
+	nodeName            = os.Getenv("LND_NODE_NAME")
+	nodePubkey          = os.Getenv("LND_NODE_PUBKEY")
 )
 
 func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInformationRequest) (*lspdrpc.ChannelInformationReply, error) {
 	return &lspdrpc.ChannelInformationReply{
 		Name:                  nodeName,
 		Pubkey:                nodePubkey,
-		Host:                  os.Getenv("NODE_HOST"),
+		Host:                  os.Getenv("LND_NODE_HOST"),
 		ChannelCapacity:       publicChannelAmount,
 		TargetConf:            targetConf,
 		MinHtlcMsat:           minHtlcMsat,
@@ -313,14 +313,14 @@ func run_lnd() {
 		log.Fatalf("pgConnect() error: %v", err)
 	}
 
-	privateKeyBytes, err := hex.DecodeString(os.Getenv("LSPD_PRIVATE_KEY"))
+	privateKeyBytes, err := hex.DecodeString(os.Getenv("LSPD_PRIVATE_KEY_LND"))
 	if err != nil {
-		log.Fatalf("hex.DecodeString(os.Getenv(\"LSPD_PRIVATE_KEY\")=%v) error: %v", os.Getenv("LSPD_PRIVATE_KEY"), err)
+		log.Fatalf("hex.DecodeString(os.Getenv(\"LSPD_PRIVATE_KEY_LND\")=%v) error: %v", os.Getenv("LSPD_PRIVATE_KEY_LND"), err)
 	}
 	privateKey, publicKey = btcec.PrivKeyFromBytes(btcec.S256(), privateKeyBytes)
 
 	certmagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
-	address := os.Getenv("LISTEN_ADDRESS")
+	address := os.Getenv("LISTEN_ADDRESS_LND")
 	var lis net.Listener
 	if certmagicDomain == "" {
 		var err error
@@ -377,7 +377,7 @@ func run_lnd() {
 		grpc_middleware.WithUnaryServerChain(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 			if md, ok := metadata.FromIncomingContext(ctx); ok {
 				for _, auth := range md.Get("authorization") {
-					if auth == "Bearer "+os.Getenv("TOKEN") {
+					if auth == "Bearer "+os.Getenv("LND_TOKEN") {
 						return handler(ctx, req)
 					}
 				}

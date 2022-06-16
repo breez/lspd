@@ -32,7 +32,7 @@ func main() {
 		return
 	}
 
-	if os.Getenv("RUN_CLIGHTNING") == "true" {
+	if os.Getenv("RUN_CLN") == "true" {
 		run_clightning()
 	} else if os.Getenv("RUN_LND") == "true" {
 		run_lnd()

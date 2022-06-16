@@ -31,9 +31,9 @@ var (
 
 func (s *server_c) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInformationRequest) (*lspdrpc.ChannelInformationReply, error) {
 	return &lspdrpc.ChannelInformationReply{
-		Name:                  os.Getenv("C_NODE_NAME"),
-		Pubkey:                os.Getenv("C_NODE_PUBKEY"),
-		Host:                  os.Getenv("C_NODE_HOST"),
+		Name:                  os.Getenv("CLN_NODE_NAME"),
+		Pubkey:                os.Getenv("CLN_NODE_PUBKEY"),
+		Host:                  os.Getenv("CLN_NODE_HOST"),
 		ChannelCapacity:       publicChannelAmount,
 		TargetConf:            targetConf,
 		MinHtlcMsat:           minHtlcMsat,
@@ -135,14 +135,14 @@ func run_clightning() {
 	if err != nil {
 		log.Fatalf("pgConnect() error: %v", err)
 	}
-	privateKeyBytes, err := hex.DecodeString(os.Getenv("C_LSPD_PRIVATE_KEY"))
+	privateKeyBytes, err := hex.DecodeString(os.Getenv("LSPD_PRIVATE_KEY_CLN"))
 	if err != nil {
-		log.Fatalf("hex.DecodeString(os.Getenv(\"C_LSPD_PRIVATE_KEY\")=%v) error: %v", os.Getenv("C_LSPD_PRIVATE_KEY"), err)
+		log.Fatalf("hex.DecodeString(os.Getenv(\"LSPD_PRIVATE_KEY_CLN\")=%v) error: %v", os.Getenv("LSPD_PRIVATE_KEY_CLN"), err)
 	}
 	c_privateKey, c_publicKey = btcec.PrivKeyFromBytes(btcec.S256(), privateKeyBytes)
 
 	//grpc server for clightning
-	address := os.Getenv("C_LISTEN_ADDRESS")
+	address := os.Getenv("LISTEN_ADDRESS_CLN")
 	var lis net.Listener
 
 	lis, err = net.Listen("tcp", address)
@@ -154,7 +154,7 @@ func run_clightning() {
 		grpc_middleware.WithUnaryServerChain(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 			if md, ok := metadata.FromIncomingContext(ctx); ok {
 				for _, auth := range md.Get("authorization") {
-					if auth == "Bearer "+os.Getenv("TOKEN") {
+					if auth == "Bearer "+os.Getenv("CLN_TOKEN") {
 						return handler(ctx, req)
 					}
 				}
