@@ -23,8 +23,8 @@ import (
 type server_c struct{}
 
 var (
-	c_privateKey *btcec.PrivateKey
-	c_publicKey  *btcec.PublicKey
+	cln_privateKey *btcec.PrivateKey
+	cln_publicKey  *btcec.PublicKey
 )
 
 //grpc clightning server
@@ -42,13 +42,13 @@ func (s *server_c) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelIn
 		TimeLockDelta:         timeLockDelta,
 		ChannelFeePermyriad:   channelFeePermyriad,
 		ChannelMinimumFeeMsat: channelMinimumFeeMsat,
-		LspPubkey:             c_publicKey.SerializeCompressed(),
+		LspPubkey:             cln_publicKey.SerializeCompressed(),
 		MaxInactiveDuration:   maxInactiveDuration,
 	}, nil
 }
 
 func (s *server_c) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymentRequest) (*lspdrpc.RegisterPaymentReply, error) {
-	data, err := btcec.Decrypt(c_privateKey, in.Blob)
+	data, err := btcec.Decrypt(cln_privateKey, in.Blob)
 	if err != nil {
 		log.Printf("btcec.Decrypt(%x) error: %v", in.Blob, err)
 		return nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Blob, err)
@@ -125,7 +125,7 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 	return event.Continue(), nil
 }
 
-func run_clightning() {
+func run_cln() {
 	var wg sync.WaitGroup
 	//c-lightning plugin started
 	wg.Add(1)
@@ -139,7 +139,7 @@ func run_clightning() {
 	if err != nil {
 		log.Fatalf("hex.DecodeString(os.Getenv(\"LSPD_PRIVATE_KEY_CLN\")=%v) error: %v", os.Getenv("LSPD_PRIVATE_KEY_CLN"), err)
 	}
-	c_privateKey, c_publicKey = btcec.PrivKeyFromBytes(btcec.S256(), privateKeyBytes)
+	cln_privateKey, cln_publicKey = btcec.PrivKeyFromBytes(btcec.S256(), privateKeyBytes)
 
 	//grpc server for clightning
 	address := os.Getenv("LISTEN_ADDRESS_CLN")
