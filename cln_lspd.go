@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 
 	lspdrpc "github.com/breez/lspd/rpc"
@@ -100,6 +102,24 @@ func onInit(plugin *glightning.Plugin, options map[string]glightning.Option, con
 	log.Printf("successfully init'd! %s\n", config.RpcFile)
 }
 
+func clnOpenChannel(client *glightning.Lightning, paymentHash, destination []byte, incomingAmountMsat int64) ([]byte, uint32, error) {
+	capacity := incomingAmountMsat/1000 + additionalChannelCapacity
+	if capacity == publicChannelAmount {
+		capacity++
+	}
+	channelPoint, err := client.FundChannel(hex.EncodeToString(destination), glightning.NewSat(int(capacity)))
+
+	if err != nil {
+		log.Printf("client.OpenChannelSync(%x, %v) error: %v", destination, capacity, err)
+		return nil, 0, err
+	}
+	outputin, err := strconv.Atoi(channelPoint.FundingTxId)
+	if err != nil {
+		log.Printf("strconv.Atoi(channelPoint.FundingTxId) error: %v", err)
+	}
+	err = setFundingTx(paymentHash, []byte(channelPoint.FundingTx), outputin)
+	return []byte(channelPoint.FundingTx), uint32(outputin), err
+}
 func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAcceptedResponse, error) {
 	log.Printf("htlc_accepted called\n")
 
@@ -121,6 +141,42 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 		on = onion.TotalMilliSatoshi
 	}
 	log.Printf("amount is %s", on)
+	//cancellableCtx, _ := context.WithCancel(context.Background())
+	//clientCtx := metadata.AppendToOutgoingContext(cancellableCtx)
+	client := glightning.NewLightning()
+	fmt.Printf("htlc: %v\nchanID: %v\nincoming amount: %v\noutgoing amount: %v\nincomin expiry: %v\noutgoing expiry: %v\npaymentHash: %x\nonionBlob: %x\n\n",
+		event.Htlc,
+		onion.ShortChannelId,
+		onion.TotalMilliSatoshi,
+		onion.ForwardAmount,
+		event.Htlc.CltvExpiryRelative,
+		event.Htlc.CltvExpiry,
+		event.Htlc.PaymentHash,
+		onion,
+	)
+
+	paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, fundingTxOutnum, err := paymentInfo([]byte(event.Htlc.PaymentHash))
+	if err != nil {
+		log.Printf("paymentInfo(%x) error: %v", event.Htlc.PaymentHash, err)
+	}
+	log.Printf("paymentHash:%x\npaymentSecret:%x\ndestination:%x\nincomingAmountMsat:%v\noutgoingAmountMsat:%v\n\n",
+		paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat)
+	if paymentSecret != nil {
+
+		if fundingTxID == nil {
+			if bytes.Compare(paymentHash, []byte(event.Htlc.PaymentHash)) == 0 {
+				//need to implement open channel with openchannel hook
+
+				fundingTxID, fundingTxOutnum, err = clnOpenChannel(client, []byte(event.Htlc.PaymentHash), destination, incomingAmountMsat)
+				log.Printf("openclnOpenChannelChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
+				if err != nil {
+					log.Printf(" clnOpenChannel error: %v", err)
+				}
+			}
+
+		}
+
+	}
 
 	return event.Continue(), nil
 }
