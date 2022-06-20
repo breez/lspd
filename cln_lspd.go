@@ -10,9 +10,12 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	lspdrpc "github.com/breez/lspd/rpc"
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/golang/protobuf/proto"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/niftynei/glightning/glightning"
@@ -120,6 +123,23 @@ func clnOpenChannel(client *glightning.Lightning, paymentHash, destination []byt
 	err = setFundingTx(paymentHash, []byte(channelPoint.FundingTx), outputin)
 	return []byte(channelPoint.FundingTx), uint32(outputin), err
 }
+
+func clnIsConnected(client *glightning.Lightning, destination []byte) error {
+	pubKey := hex.EncodeToString(destination)
+	peers, err := client.ListPeers()
+	if err != nil {
+		log.Printf("client.ListPeers() error: %v", err)
+		return fmt.Errorf("client.ListPeers() error: %w", err)
+	}
+	for _, peer := range peers {
+		if pubKey == peer.Id {
+			log.Printf("destination online: %x", destination)
+			return nil
+		}
+	}
+	log.Printf("destination offline: %x", destination)
+	return fmt.Errorf("destination offline")
+}
 func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAcceptedResponse, error) {
 	log.Printf("htlc_accepted called\n")
 
@@ -144,7 +164,7 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 	//cancellableCtx, _ := context.WithCancel(context.Background())
 	//clientCtx := metadata.AppendToOutgoingContext(cancellableCtx)
 	client := glightning.NewLightning()
-	fmt.Printf("htlc: %v\nchanID: %v\nincoming amount: %v\noutgoing amount: %v\nincomin expiry: %v\noutgoing expiry: %v\npaymentHash: %x\nonionBlob: %x\n\n",
+	fmt.Printf("htlc: %v\nchanID: %v\nincoming amount: %v\noutgoing amount: %v\nincoming expiry: %v\noutgoing expiry: %v\npaymentHash: %v\nonionBlob: %v\n\n",
 		event.Htlc,
 		onion.ShortChannelId,
 		onion.TotalMilliSatoshi,
@@ -172,7 +192,23 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 				if err != nil {
 					log.Printf(" clnOpenChannel error: %v", err)
 				}
+			} else { //probing
+				failureCode := "TEMPORARY_CHANNEL_FAILURE"
+				if err := clnIsConnected(client, destination); err == nil {
+					failureCode = "INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS"
+				}
+				log.Printf(" failureCode %v , Error %v", failureCode, err)
 			}
+
+			var h chainhash.Hash
+			err = h.SetBytes(fundingTxID)
+			if err != nil {
+				log.Printf("h.SetBytes(%x) error: %v", fundingTxID, err)
+
+			}
+			channelPoint := wire.NewOutPoint(&h, fundingTxOutnum).String()
+
+			go clnResumeOrCancel(client, destination, channelPoint)
 
 		}
 
@@ -181,6 +217,47 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 	return event.Continue(), nil
 }
 
+func clnGetChannel(client *glightning.Lightning, destination []byte) uint64 {
+	Channels, err := client.ListChannels()
+	if err != nil {
+		log.Printf("client.ListChannels(%x) error: %v", destination, err)
+		return 0
+	}
+	for _, c := range Channels {
+		log.Printf("getChannel(%x): %v", destination, c.ShortChannelId)
+		// need better logic don't have channelpoint in response.
+		if c.Destination == hex.EncodeToString(destination) && c.IsActive {
+			chanid, err := strconv.ParseUint(c.ShortChannelId, 10, 64)
+			if err != nil {
+				log.Printf("strconv.ParseUint(c.ShortChannelId, 10, 64) error: %v", err)
+			}
+			return chanid
+		}
+	}
+	log.Printf("No channel found: getChannel(%x)", destination)
+	return 0
+}
+func clnResumeOrCancel(client *glightning.Lightning, destination []byte, channelPoint string) {
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		chanID := clnGetChannel(client, destination)
+		if chanID != 0 {
+			log.Printf("channel opended successfully chanID: %v)", chanID)
+			err := insertChannel(chanID, channelPoint, destination, time.Now())
+			if err != nil {
+				log.Printf("insertChannel error: %v", err)
+			}
+			return
+		}
+		log.Printf("getChannel(%x, %v) returns 0", destination, channelPoint)
+		if time.Now().After(deadline) {
+			log.Printf("Stop retrying getChannel(%x, %v)", destination, channelPoint)
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+}
 func run_cln() {
 	var wg sync.WaitGroup
 	//c-lightning plugin started
