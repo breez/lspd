@@ -15,7 +15,6 @@ import (
 	lspdrpc "github.com/breez/lspd/rpc"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/wire"
 	"github.com/golang/protobuf/proto"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/niftynei/glightning/glightning"
@@ -30,6 +29,7 @@ type server_c struct{}
 var (
 	cln_privateKey *btcec.PrivateKey
 	cln_publicKey  *btcec.PublicKey
+	minConf        uint16
 )
 
 //grpc clightning server
@@ -110,7 +110,8 @@ func clnOpenChannel(client *glightning.Lightning, paymentHash, destination []byt
 	if capacity == publicChannelAmount {
 		capacity++
 	}
-	channelPoint, err := client.FundChannel(hex.EncodeToString(destination), glightning.NewSat(int(capacity)))
+	minConf = 0
+	channelPoint, err := client.FundChannelExt(hex.EncodeToString(destination), glightning.NewSat(int(capacity)), nil, false, &minConf, nil)
 
 	if err != nil {
 		log.Printf("client.OpenChannelSync(%x, %v) error: %v", destination, capacity, err)
@@ -161,8 +162,7 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 		on = onion.TotalMilliSatoshi
 	}
 	log.Printf("amount is %s", on)
-	//cancellableCtx, _ := context.WithCancel(context.Background())
-	//clientCtx := metadata.AppendToOutgoingContext(cancellableCtx)
+
 	client := glightning.NewLightning()
 	fmt.Printf("htlc: %v\nchanID: %v\nincoming amount: %v\noutgoing amount: %v\nincoming expiry: %v\noutgoing expiry: %v\npaymentHash: %v\nonionBlob: %v\n\n",
 		event.Htlc,
@@ -177,7 +177,7 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 
 	paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, fundingTxOutnum, err := paymentInfo([]byte(event.Htlc.PaymentHash))
 	if err != nil {
-		log.Printf("paymentInfo(%x) error: %v", event.Htlc.PaymentHash, err)
+		log.Printf("paymentInfo(%x)\nfundingTxOutnum: %v\n error: %v", event.Htlc.PaymentHash, fundingTxOutnum, err)
 	}
 	log.Printf("paymentHash:%x\npaymentSecret:%x\ndestination:%x\nincomingAmountMsat:%v\noutgoingAmountMsat:%v\n\n",
 		paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat)
@@ -185,7 +185,6 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 
 		if fundingTxID == nil {
 			if bytes.Compare(paymentHash, []byte(event.Htlc.PaymentHash)) == 0 {
-				//need to implement open channel with openchannel hook
 
 				fundingTxID, fundingTxOutnum, err = clnOpenChannel(client, []byte(event.Htlc.PaymentHash), destination, incomingAmountMsat)
 				log.Printf("openclnOpenChannelChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
@@ -206,9 +205,9 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 				log.Printf("h.SetBytes(%x) error: %v", fundingTxID, err)
 
 			}
-			channelPoint := wire.NewOutPoint(&h, fundingTxOutnum).String()
+			//channelPoint := wire.NewOutPoint(&h, fundingTxOutnum).String()
 
-			go clnResumeOrCancel(client, destination, channelPoint)
+			go clnResumeOrCancel(client, destination, fundingTxID)
 
 		}
 
@@ -217,16 +216,15 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 	return event.Continue(), nil
 }
 
-func clnGetChannel(client *glightning.Lightning, destination []byte) uint64 {
-	Channels, err := client.ListChannels()
+func clnGetChannel(client *glightning.Lightning, destination []byte, fundingTxID []byte) uint64 {
+	obj, err := client.ListFunds()
 	if err != nil {
 		log.Printf("client.ListChannels(%x) error: %v", destination, err)
 		return 0
 	}
-	for _, c := range Channels {
+	for _, c := range obj.Channels {
 		log.Printf("getChannel(%x): %v", destination, c.ShortChannelId)
-		// need better logic don't have channelpoint in response.
-		if c.Destination == hex.EncodeToString(destination) && c.IsActive {
+		if c.FundingTxId == hex.EncodeToString(fundingTxID) && c.Connected {
 			chanid, err := strconv.ParseUint(c.ShortChannelId, 10, 64)
 			if err != nil {
 				log.Printf("strconv.ParseUint(c.ShortChannelId, 10, 64) error: %v", err)
@@ -237,21 +235,21 @@ func clnGetChannel(client *glightning.Lightning, destination []byte) uint64 {
 	log.Printf("No channel found: getChannel(%x)", destination)
 	return 0
 }
-func clnResumeOrCancel(client *glightning.Lightning, destination []byte, channelPoint string) {
+func clnResumeOrCancel(client *glightning.Lightning, destination []byte, fundingTxID []byte) {
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		chanID := clnGetChannel(client, destination)
+		chanID := clnGetChannel(client, destination, fundingTxID)
 		if chanID != 0 {
 			log.Printf("channel opended successfully chanID: %v)", chanID)
-			err := insertChannel(chanID, channelPoint, destination, time.Now())
+			err := insertChannel(chanID, hex.EncodeToString(fundingTxID), destination, time.Now())
 			if err != nil {
 				log.Printf("insertChannel error: %v", err)
 			}
 			return
 		}
-		log.Printf("getChannel(%x, %v) returns 0", destination, channelPoint)
+		log.Printf("getChannel(%x, %v) returns 0", destination, fundingTxID)
 		if time.Now().After(deadline) {
-			log.Printf("Stop retrying getChannel(%x, %v)", destination, channelPoint)
+			log.Printf("Stop retrying getChannel(%x, %v)", destination, fundingTxID)
 			break
 		}
 		time.Sleep(1 * time.Second)
