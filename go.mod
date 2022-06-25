@@ -17,7 +17,6 @@ require (
 	github.com/lightningnetwork/lnd v0.11.0-beta
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	google.golang.org/grpc v1.29.1
-	google.golang.org/protobuf v1.23.0
 )
 
 replace github.com/lightningnetwork/lnd v0.11.0-beta => github.com/breez/lnd v0.11.0-beta.rc4.0.20210125150416-0c10146b223c
