@@ -96,6 +96,13 @@ func getChannel(ctx context.Context, client lnrpc.LightningClient, node []byte, 
 	return 0
 }
 
+func failForwardSend(interceptorClient routerrpc.Router_HtlcInterceptorClient, incomingCircuitKey *routerrpc.CircuitKey) {
+	interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
+		IncomingCircuitKey: incomingCircuitKey,
+		Action:             routerrpc.ResolveHoldForwardAction_FAIL,
+	})
+}
+
 func intercept() {
 	for {
 		cancellableCtx, cancel := context.WithCancel(context.Background())
@@ -136,6 +143,8 @@ func intercept() {
 			paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, fundingTxOutnum, err := paymentInfo(request.PaymentHash)
 			if err != nil {
 				log.Printf("paymentInfo(%x) error: %v", request.PaymentHash, err)
+				failForwardSend(interceptorClient, request.IncomingCircuitKey)
+				continue
 			}
 			log.Printf("paymentHash:%x\npaymentSecret:%x\ndestination:%x\nincomingAmountMsat:%v\noutgoingAmountMsat:%v\n\n",
 				paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat)
@@ -146,10 +155,7 @@ func intercept() {
 						fundingTxID, fundingTxOutnum, err = openChannel(clientCtx, client, request.PaymentHash, destination, incomingAmountMsat)
 						log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
 						if err != nil {
-							interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
-								IncomingCircuitKey: request.IncomingCircuitKey,
-								Action:             routerrpc.ResolveHoldForwardAction_FAIL,
-							})
+							failForwardSend(interceptorClient, request.IncomingCircuitKey)
 							continue
 						}
 					} else { //probing
@@ -167,10 +173,18 @@ func intercept() {
 				}
 
 				pubKey, err := btcec.ParsePubKey(destination, btcec.S256())
-				log.Printf("btcec.ParsePubKey(%x): %v", destination, err)
+				if err != nil {
+					log.Printf("btcec.ParsePubKey(%x): %v", destination, err)
+					failForwardSend(interceptorClient, request.IncomingCircuitKey)
+					continue
+				}
 
 				sessionKey, err := btcec.NewPrivateKey(btcec.S256())
-				log.Printf("btcec.NewPrivateKey(): %v", err)
+				if err != nil {
+					log.Printf("btcec.NewPrivateKey(): %v", err)
+					failForwardSend(interceptorClient, request.IncomingCircuitKey)
+					continue
+				}
 
 				var bigProd, bigAmt big.Int
 				amt := (bigAmt.Div(bigProd.Mul(big.NewInt(outgoingAmountMsat), big.NewInt(int64(request.OutgoingAmountMsat))), big.NewInt(incomingAmountMsat))).Int64()
@@ -186,10 +200,18 @@ func intercept() {
 
 				var b bytes.Buffer
 				err = hop.PackHopPayload(&b, uint64(0))
-				log.Printf("hop.PackHopPayload(): %v", err)
+				if err != nil {
+					log.Printf("hop.PackHopPayload(): %v", err)
+					failForwardSend(interceptorClient, request.IncomingCircuitKey)
+					continue
+				}
 
 				payload, err := sphinx.NewHopPayload(nil, b.Bytes())
-				log.Printf("sphinx.NewHopPayload(): %v", err)
+				if err != nil {
+					log.Printf("sphinx.NewHopPayload(): %v", err)
+					failForwardSend(interceptorClient, request.IncomingCircuitKey)
+					continue
+				}
 
 				var sphinxPath sphinx.PaymentPath
 				sphinxPath[0] = sphinx.OnionHop{
@@ -200,17 +222,23 @@ func intercept() {
 					&sphinxPath, sessionKey, request.PaymentHash,
 					sphinx.DeterministicPacketFiller,
 				)
+				if err != nil {
+					log.Printf("sphinx.NewOnionPacket(): %v", err)
+					failForwardSend(interceptorClient, request.IncomingCircuitKey)
+					continue
+				}
 				var onionBlob bytes.Buffer
 				err = sphinxPacket.Encode(&onionBlob)
-				log.Printf("sphinxPacket.Encode(): %v", err)
+				if err != nil {
+					log.Printf("sphinxPacket.Encode(): %v", err)
+					failForwardSend(interceptorClient, request.IncomingCircuitKey)
+					continue
+				}
 				var h chainhash.Hash
 				err = h.SetBytes(fundingTxID)
 				if err != nil {
 					log.Printf("h.SetBytes(%x) error: %v", fundingTxID, err)
-					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
-						IncomingCircuitKey: request.IncomingCircuitKey,
-						Action:             routerrpc.ResolveHoldForwardAction_FAIL,
-					})
+					failForwardSend(interceptorClient, request.IncomingCircuitKey)
 					continue
 				}
 				channelPoint := wire.NewOutPoint(&h, fundingTxOutnum).String()
@@ -265,8 +293,5 @@ func resumeOrCancel(
 		}
 		time.Sleep(1 * time.Second)
 	}
-	interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
-		IncomingCircuitKey: incomingCircuitKey,
-		Action:             routerrpc.ResolveHoldForwardAction_FAIL,
-	})
+	failForwardSend(interceptorClient, incomingCircuitKey)
 }
