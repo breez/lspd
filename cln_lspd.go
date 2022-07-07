@@ -12,6 +12,8 @@ import (
 
 	lspdrpc "github.com/breez/lspd/rpc"
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/golang/protobuf/proto"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/niftynei/glightning/glightning"
@@ -109,7 +111,7 @@ func onInit(plugin *glightning.Plugin, options map[string]glightning.Option, con
 	log.Printf("successfull clientcln.StartUp")
 }
 
-func clnOpenChannel(clientcln *glightning.Lightning, paymentHash, destination string, incomingAmountMsat int64) (string, uint32, error) {
+func clnOpenChannel(clientcln *glightning.Lightning, paymentHash, destination string, incomingAmountMsat int64) ([]byte, uint32, error) {
 
 	capacity := incomingAmountMsat/1000 + additionalChannelCapacity
 	if capacity == publicChannelAmount {
@@ -121,9 +123,14 @@ func clnOpenChannel(clientcln *glightning.Lightning, paymentHash, destination st
 	channelPoint, err := clientcln.FundChannelExt(destination, glightning.NewSat(int(capacity)), nil, false, &minConf, nil)
 	if err != nil {
 		log.Printf("clientcln.OpenChannelSync(%v, %v) error: %v", destination, capacity, err)
-		return "", 0, err
+		return nil, 0, err
 	}
-	return channelPoint.FundingTxId, uint32(0), err
+	FundingTxId, err := hex.DecodeString(channelPoint.FundingTxId)
+	if err != nil {
+		log.Printf("hex.DecodeString(channelPoint.FundingTxId) error: %v", err)
+		return nil, 0, err
+	}
+	return FundingTxId, uint32(0), err
 }
 
 func clnIsConnected(clientcln *glightning.Lightning, destination string) error {
@@ -161,13 +168,14 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 	if err != nil {
 		log.Printf("paymentInfo(%v)\nfundingTxOutnum: %v\n error: %v", event.Htlc.PaymentHash, fundingTxOutnum, err)
 	}
-	var zeroConfFundingTxID string
+	//var zeroConfFundingTxID string
 	//var zeroConfFundingTxOutnum uint32
-	if hex.EncodeToString(paymentSecret) != "" {
-		if hex.EncodeToString(fundingTxID) == "" {
+
+	if paymentSecret != nil {
+		if fundingTxID == nil {
 			if hex.EncodeToString(paymentHash) == event.Htlc.PaymentHash {
 
-				zeroConfFundingTxID, _, err = clnOpenChannel(clientcln, hex.EncodeToString(paymentHash), hex.EncodeToString(destination), incomingAmountMsat)
+				fundingTxID, fundingTxOutnum, err = clnOpenChannel(clientcln, hex.EncodeToString(paymentHash), hex.EncodeToString(destination), incomingAmountMsat)
 				log.Printf("openclnOpenChannelChannel(%v, %v) err: %v", destination, incomingAmountMsat, err)
 				if err != nil {
 					log.Printf(" clnOpenChannel error: %v", err)
@@ -175,18 +183,25 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 
 			} else { //probing
 				failureCode := "TEMPORARY_CHANNEL_FAILURE"
-				if err := clnIsConnected(clientcln, hex.EncodeToString(destination)); err == nil {
+				if err = clnIsConnected(clientcln, hex.EncodeToString(destination)); err == nil {
 					failureCode = "INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS"
 				}
 				log.Printf(" failureCode %v , Error %v", failureCode, err)
+				return event.Continue(), err
 			}
 
-			return clnResumeOrCancel(clientcln, hex.EncodeToString(destination), zeroConfFundingTxID, hex.EncodeToString(paymentHash), uint64(outgoingAmountMsat), 99, event)
-
 		}
+		var h chainhash.Hash
+		err = h.SetBytes(fundingTxID)
+		if err != nil {
+			log.Printf("h.SetBytes(%x) error: %v", fundingTxID, err)
+		}
+		channelPoint := wire.NewOutPoint(&h, fundingTxOutnum).String()
+		return clnResumeOrCancel(clientcln, hex.EncodeToString(destination), hex.EncodeToString(fundingTxID), hex.EncodeToString(paymentHash), uint64(outgoingAmountMsat), 99, event, channelPoint)
+
 	}
 
-	return event.Continue(), nil
+	return event.Continue(), err
 }
 
 func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingTxID string) string {
@@ -208,28 +223,32 @@ func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingT
 	log.Printf("No channel found: getChannel(%v)", destination)
 	return ""
 }
-func clnResumeOrCancel(clientcln *glightning.Lightning, destination string, fundingTxID string, paymentHash string, outgoingAmountMsat uint64, riskfactor float32, event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAcceptedResponse, error) {
-	//deadline := time.Now().Add(10 * time.Second)
+func clnResumeOrCancel(clientcln *glightning.Lightning, destination string, fundingTxID string, paymentHash string, outgoingAmountMsat uint64, riskfactor float32, event *glightning.HtlcAcceptedEvent, channelPoint string) (*glightning.HtlcAcceptedResponse, error) {
+	deadline := time.Now().Add(10 * time.Second)
 
 	for {
 		chanID := clnGetChannel(clientcln, destination, fundingTxID)
 
 		if chanID != "" {
 			log.Printf("channel opended successfully chanID: %v)", chanID)
-			/*
-				err := insertChannel(chanID, channelPoint, destination, time.Now())
-				if err != nil {
-					log.Printf("insertChannel error: %v", err)
-				}
-			*/
+			dest, err := hex.DecodeString(destination)
+			if err != nil {
+				log.Printf("hex.DecodeString(destination) error: %v", err)
+				break
+			}
+			err = insertChannel(chanID, channelPoint, dest, time.Now())
+			if err != nil {
+				log.Printf("insertChannel error: %v", err)
+			}
+
 			break
 		}
 
 		log.Printf("waiting for channel to get opened.... %v\n", destination)
-		//if time.Now().After(deadline) {
-		//	log.Printf("Stop retrying getChannel(%v, %v)", destination, fundingTxID)
-		//	break
-		//}
+		if time.Now().After(deadline) {
+			log.Printf("Stop retrying getChannel(%v, %v)", destination, fundingTxID)
+			break
+		}
 		time.Sleep(10 * time.Second)
 	}
 	log.Printf("forwarding htlc to the destination node and a new private channel was opened")
