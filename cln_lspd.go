@@ -7,6 +7,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/golang/protobuf/proto"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/niftynei/glightning/glightning"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -120,6 +123,7 @@ func clnOpenChannel(clientcln *glightning.Lightning, paymentHash, destination st
 	minConf = 0 //need to be updated with mindepth for zeroconf
 
 	//open private channel
+	//todo-glightning need to update the code with accepting parameter for zero-conf
 	channelPoint, err := clientcln.FundChannelExt(destination, glightning.NewSat(int(capacity)), nil, false, &minConf, nil)
 	if err != nil {
 		log.Printf("clientcln.OpenChannelSync(%v, %v) error: %v", destination, capacity, err)
@@ -137,8 +141,7 @@ func clnIsConnected(clientcln *glightning.Lightning, destination string) error {
 	pubKey := destination
 	peers, err := clientcln.ListPeers()
 	if err != nil {
-		//log.Printf("clientcln.ListPeers() error: %v", err)
-		return fmt.Errorf("clientcln.ListPeers() error: %w", err)
+		return fmt.Errorf("clientcln.ListPeers() error: %v", err)
 	}
 	for _, peer := range peers {
 		if pubKey == peer.Id {
@@ -168,8 +171,6 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 	if err != nil {
 		log.Printf("paymentInfo(%v)\nfundingTxOutnum: %v\n error: %v", event.Htlc.PaymentHash, fundingTxOutnum, err)
 	}
-	//var zeroConfFundingTxID string
-	//var zeroConfFundingTxOutnum uint32
 
 	if paymentSecret != nil {
 		if fundingTxID == nil {
@@ -194,7 +195,7 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 		var h chainhash.Hash
 		err = h.SetBytes(fundingTxID)
 		if err != nil {
-			log.Printf("h.SetBytes(%x) error: %v", fundingTxID, err)
+			log.Printf("h.SetBytes(%v) error: %v", fundingTxID, err)
 		}
 		channelPoint := wire.NewOutPoint(&h, fundingTxOutnum).String()
 		return clnResumeOrCancel(clientcln, hex.EncodeToString(destination), hex.EncodeToString(fundingTxID), hex.EncodeToString(paymentHash), uint64(outgoingAmountMsat), 99, event, channelPoint)
@@ -214,9 +215,6 @@ func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingT
 		log.Printf("getChannel(%v): %v", destination, c.ShortChannelId)
 		if c.FundingTxId == fundingTxID && c.Connected {
 			chanid := c.ShortChannelId
-			if err != nil {
-				log.Printf("strconv.ParseUint(c.ShortChannelId, 10, 64) error: %v", err)
-			}
 			return chanid
 		}
 	}
@@ -227,16 +225,24 @@ func clnResumeOrCancel(clientcln *glightning.Lightning, destination string, fund
 	deadline := time.Now().Add(10 * time.Second)
 
 	for {
-		chanID := clnGetChannel(clientcln, destination, fundingTxID)
+		shortChanID := clnGetChannel(clientcln, destination, fundingTxID)
 
-		if chanID != "" {
-			log.Printf("channel opended successfully chanID: %v)", chanID)
+		if shortChanID != "" {
+			log.Printf("channel opended successfully chanID: %v)", shortChanID)
 			dest, err := hex.DecodeString(destination)
 			if err != nil {
 				log.Printf("hex.DecodeString(destination) error: %v", err)
 				break
 			}
-			err = insertChannel(chanID, channelPoint, dest, time.Now())
+			fields := strings.Split(shortChanID, "x")
+			var chanID lnwire.ShortChannelID
+			var temp []int64
+			for i, field := range fields {
+				temp[i], _ = strconv.ParseInt(field, 10, 64)
+			}
+			chanID = lnwire.ShortChannelID{BlockHeight: uint32(temp[0]), TxIndex: uint32(temp[1]), TxPosition: uint16(temp[2])}
+			// we don't get short channel id until 1 conf
+			err = insertChannel(chanID.ToUint64(), channelPoint, dest, time.Now())
 			if err != nil {
 				log.Printf("insertChannel error: %v", err)
 			}
