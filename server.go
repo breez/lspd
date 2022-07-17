@@ -12,10 +12,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/breez/lspd/btceclegacy"
 	lspdrpc "github.com/breez/lspd/rpc"
 	"github.com/golang/protobuf/proto"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/caddyserver/certmagic"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -76,7 +77,7 @@ func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInfo
 }
 
 func (s *server) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymentRequest) (*lspdrpc.RegisterPaymentReply, error) {
-	data, err := btcec.Decrypt(privateKey, in.Blob)
+	data, err := btceclegacy.Decrypt(privateKey, in.Blob)
 	if err != nil {
 		log.Printf("btcec.Decrypt(%x) error: %v", in.Blob, err)
 		return nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Blob, err)
@@ -161,7 +162,7 @@ func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest
 }
 
 func getSignedEncryptedData(in *lspdrpc.Encrypted) (string, []byte, error) {
-	signedBlob, err := btcec.Decrypt(privateKey, in.Data)
+	signedBlob, err := btceclegacy.Decrypt(privateKey, in.Data)
 	if err != nil {
 		log.Printf("btcec.Decrypt(%x) error: %v", in.Data, err)
 		return "", nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Data, err)
@@ -172,7 +173,7 @@ func getSignedEncryptedData(in *lspdrpc.Encrypted) (string, []byte, error) {
 		log.Printf("proto.Unmarshal(%x) error: %v", signedBlob, err)
 		return "", nil, fmt.Errorf("proto.Unmarshal(%x) error: %w", signedBlob, err)
 	}
-	pubkey, err := btcec.ParsePubKey(signed.Pubkey, btcec.S256())
+	pubkey, err := btcec.ParsePubKey(signed.Pubkey)
 	if err != nil {
 		log.Printf("unable to parse pubkey: %v", err)
 		return "", nil, fmt.Errorf("unable to parse pubkey: %w", err)
@@ -225,12 +226,12 @@ func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lsp
 		log.Printf("proto.Marshall() error: %v", err)
 		return nil, fmt.Errorf("proto.Marshal() error: %w", err)
 	}
-	pubkey, err := btcec.ParsePubKey(checkChannelsRequest.EncryptPubkey, btcec.S256())
+	pubkey, err := btcec.ParsePubKey(checkChannelsRequest.EncryptPubkey)
 	if err != nil {
 		log.Printf("unable to parse pubkey: %v", err)
 		return nil, fmt.Errorf("unable to parse pubkey: %w", err)
 	}
-	encrypted, err := btcec.Encrypt(pubkey, dataReply)
+	encrypted, err := btceclegacy.Encrypt(pubkey, dataReply)
 	if err != nil {
 		log.Printf("btcec.Encrypt() error: %v", err)
 		return nil, fmt.Errorf("btcec.Encrypt() error: %w", err)
@@ -323,7 +324,7 @@ func getPendingNodeChannels(nodeID string) ([]*lnrpc.PendingChannelsResponse_Pen
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "genkey" {
-		p, err := btcec.NewPrivateKey(btcec.S256())
+		p, err := btcec.NewPrivateKey()
 		if err != nil {
 			log.Fatalf("btcec.NewPrivateKey() error: %v", err)
 		}
@@ -340,7 +341,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("hex.DecodeString(os.Getenv(\"LSPD_PRIVATE_KEY\")=%v) error: %v", os.Getenv("LSPD_PRIVATE_KEY"), err)
 	}
-	privateKey, publicKey = btcec.PrivKeyFromBytes(btcec.S256(), privateKeyBytes)
+	privateKey, publicKey = btcec.PrivKeyFromBytes(privateKeyBytes)
 
 	certmagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
 	address := os.Getenv("LISTEN_ADDRESS")

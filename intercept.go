@@ -10,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -159,9 +159,9 @@ func intercept() {
 							continue
 						}
 					} else { //probing
-						failureCode := routerrpc.ForwardHtlcInterceptResponse_TEMPORARY_CHANNEL_FAILURE
+						failureCode := lnrpc.Failure_TEMPORARY_CHANNEL_FAILURE
 						if err := isConnected(clientCtx, client, destination); err == nil {
-							failureCode = routerrpc.ForwardHtlcInterceptResponse_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
+							failureCode = lnrpc.Failure_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
 						}
 						interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
 							IncomingCircuitKey: request.IncomingCircuitKey,
@@ -172,14 +172,14 @@ func intercept() {
 					}
 				}
 
-				pubKey, err := btcec.ParsePubKey(destination, btcec.S256())
+				pubKey, err := btcec.ParsePubKey(destination)
 				if err != nil {
 					log.Printf("btcec.ParsePubKey(%x): %v", destination, err)
 					failForwardSend(interceptorClient, request.IncomingCircuitKey)
 					continue
 				}
 
-				sessionKey, err := btcec.NewPrivateKey(btcec.S256())
+				sessionKey, err := btcec.NewPrivateKey()
 				if err != nil {
 					log.Printf("btcec.NewPrivateKey(): %v", err)
 					failForwardSend(interceptorClient, request.IncomingCircuitKey)
