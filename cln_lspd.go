@@ -16,6 +16,7 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
+	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/lightningnetwork/lnd/lnwire"
@@ -29,11 +30,11 @@ import (
 type server_c struct{}
 
 var (
-	cln_privateKey *btcec.PrivateKey
-	cln_publicKey  *btcec.PublicKey
-	minConf        uint16
-	clientcln      *glightning.Lightning
-	wg             sync.WaitGroup
+	clnPrivateKeyBytes []byte
+	clnPublicKeyBytes  []byte
+	minConf            uint16
+	clientcln          *glightning.Lightning
+	wg                 sync.WaitGroup
 )
 
 //grpc clightning server
@@ -51,16 +52,21 @@ func (s *server_c) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelIn
 		TimeLockDelta:         timeLockDelta,
 		ChannelFeePermyriad:   channelFeePermyriad,
 		ChannelMinimumFeeMsat: channelMinimumFeeMsat,
-		LspPubkey:             cln_publicKey.SerializeCompressed(),
+		LspPubkey:             clnPublicKeyBytes,
 		MaxInactiveDuration:   maxInactiveDuration,
 	}, nil
 }
 
 func (s *server_c) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymentRequest) (*lspdrpc.RegisterPaymentReply, error) {
-	data, err := btcec.Decrypt(cln_privateKey, in.Blob)
+	data, err := ecies.Decrypt(ecies.NewPrivateKeyFromBytes(clnPrivateKeyBytes), in.Blob)
 	if err != nil {
-		log.Printf("btcec.Decrypt(%x) error: %v", in.Blob, err)
-		return nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Blob, err)
+		log.Printf("cies.Decrypt(%x) error: %v", in.Blob, err)
+		priv, _ := btcec.PrivKeyFromBytes(btcec.S256(), clnPrivateKeyBytes)
+		data, err = btcec.Decrypt(priv, in.Blob)
+		if err != nil {
+			log.Printf("btcec.Decrypt(%x) error: %v", in.Blob, err)
+			return nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Blob, err)
+		}
 	}
 	var pi lspdrpc.PaymentInformation
 	err = proto.Unmarshal(data, &pi)
@@ -270,11 +276,12 @@ func run_cln() {
 	if err != nil {
 		log.Fatalf("pgConnect() error: %v", err)
 	}
-	privateKeyBytes, err := hex.DecodeString(os.Getenv("LSPD_PRIVATE_KEY_CLN"))
+	clnPrivateKeyBytes, err = hex.DecodeString(os.Getenv("LSPD_PRIVATE_KEY_CLN"))
 	if err != nil {
 		log.Fatalf("hex.DecodeString(os.Getenv(\"LSPD_PRIVATE_KEY_CLN\")=%v) error: %v", os.Getenv("LSPD_PRIVATE_KEY_CLN"), err)
 	}
-	cln_privateKey, cln_publicKey = btcec.PrivKeyFromBytes(btcec.S256(), privateKeyBytes)
+	_, clnPublicKey := btcec.PrivKeyFromBytes(btcec.S256(), clnPrivateKeyBytes)
+	clnPublicKeyBytes = clnPublicKey.SerializeCompressed()
 
 	//grpc server for clightning
 	address := os.Getenv("LISTEN_ADDRESS_CLN")
