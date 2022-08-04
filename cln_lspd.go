@@ -173,7 +173,13 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 		onion,
 	)
 
-	paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, fundingTxOutnum, err := paymentInfo([]byte(event.Htlc.PaymentHash))
+	paymentHashBytes, err := hex.DecodeString(event.Htlc.PaymentHash)
+	if err != nil {
+		log.Printf("hex.DecodeString(%v) error: %v", event.Htlc.PaymentHash, err)
+		return event.Continue(), fmt.Errorf("hex.DecodeString(%v) error: %w", event.Htlc.PaymentHash, err)
+	}
+
+	paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, fundingTxOutnum, err := paymentInfo(paymentHashBytes)
 	if err != nil {
 		log.Printf("paymentInfo(%v)\nfundingTxOutnum: %v\n error: %v", event.Htlc.PaymentHash, fundingTxOutnum, err)
 	}
