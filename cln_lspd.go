@@ -98,7 +98,7 @@ func (s *server_c) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*l
 	return nil, fmt.Errorf("not implemented")
 }
 
-//C-lightning plugin functions
+// C-lightning plugin functions
 func StartPlugin() {
 	//c-lightning plugin initiate
 	plugin := glightning.NewPlugin(onInit)
@@ -234,7 +234,7 @@ func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingT
 	return ""
 }
 func clnResumeOrCancel(clientcln *glightning.Lightning, destination string, fundingTxID string, paymentHash string, outgoingAmountMsat uint64, riskfactor float32, event *glightning.HtlcAcceptedEvent, channelPoint string) (*glightning.HtlcAcceptedResponse, error) {
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(20 * time.Second)
 
 	for {
 		shortChanID := clnGetChannel(clientcln, destination, fundingTxID)
@@ -267,7 +267,7 @@ func clnResumeOrCancel(clientcln *glightning.Lightning, destination string, fund
 			log.Printf("Stop retrying getChannel(%v, %v)", destination, fundingTxID)
 			break
 		}
-		time.Sleep(10 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 	log.Printf("forwarding htlc to the destination node and a new private channel was opened")
 	return event.Continue(), nil
