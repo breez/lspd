@@ -126,11 +126,11 @@ func clnOpenChannel(clientcln *glightning.Lightning, paymentHash, destination st
 	if capacity == publicChannelAmount {
 		capacity++
 	}
-	minConf = 0 //need to be updated with mindepth for zeroconf
+	minDepth := uint16(0) //need to be updated with mindepth for zeroconf
 
 	//open private channel
 	//todo-glightning need to update the code with accepting parameter for zero-conf
-	channelPoint, err := clientcln.FundChannelExt(destination, glightning.NewSat(int(capacity)), nil, false, &minConf, nil)
+	channelPoint, err := clientcln.FundChannelExt(destination, glightning.NewSat(int(capacity)), nil, false, nil, nil, &minDepth)
 	if err != nil {
 		log.Printf("clientcln.OpenChannelSync(%v, %v) error: %v", destination, capacity, err)
 		return nil, 0, err
