@@ -234,7 +234,7 @@ func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingT
 	return ""
 }
 func clnResumeOrCancel(clientcln *glightning.Lightning, destination string, fundingTxID string, paymentHash string, outgoingAmountMsat uint64, riskfactor float32, event *glightning.HtlcAcceptedEvent, channelPoint string) (*glightning.HtlcAcceptedResponse, error) {
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(60 * time.Second)
 
 	for {
 		shortChanID := clnGetChannel(clientcln, destination, fundingTxID)
