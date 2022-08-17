@@ -76,7 +76,7 @@ func openChannel(ctx context.Context, client lnrpc.LightningClient, paymentHash,
 		channelPoint.GetFundingTxidBytes(),
 		channelPoint.OutputIndex,
 	)
-	err = setFundingTx(paymentHash, channelPoint.GetFundingTxidBytes(), int(channelPoint.OutputIndex))
+	err = setFundingTx(paymentHash, channelPoint.GetFundingTxidBytes(), uint32(channelPoint.OutputIndex))
 	return channelPoint.GetFundingTxidBytes(), channelPoint.OutputIndex, err
 }
 
