@@ -48,7 +48,7 @@ func paymentInfo(htlcPaymentHash []byte) ([]byte, []byte, []byte, int64, int64, 
 	return paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, uint32(fundingTxOutnum.Int), nil
 }
 
-func setFundingTx(paymentHash, fundingTxID []byte, fundingTxOutnum int) error {
+func setFundingTx(paymentHash, fundingTxID []byte, fundingTxOutnum uint32) error {
 	commandTag, err := pgxPool.Exec(context.Background(),
 		`UPDATE payments
 			SET funding_tx_id = $2, funding_tx_outnum = $3
@@ -79,7 +79,7 @@ func insertChannel(chanID uint64, channelPoint string, nodeID []byte, lastUpdate
 		`INSERT INTO
 	channels (chanid, channel_point, nodeid, last_update)
 	VALUES ($1, $2, $3, $4)
-	ON CONFLICT (chanid) DO UPDATE SET last_update=$4`,
+	ON CONFLICT (chanid, channel_point) DO UPDATE SET last_update=$4`,
 		chanID, channelPoint, nodeID, lastUpdate)
 	if err != nil {
 		return fmt.Errorf("insertChannel(%v, %s, %x) error: %w",
