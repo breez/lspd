@@ -120,7 +120,7 @@ func onInit(plugin *glightning.Plugin, options map[string]glightning.Option, con
 	log.Printf("successfull clientcln.StartUp")
 }
 
-func clnOpenChannel(clientcln *glightning.Lightning, paymentHash, destination string, incomingAmountMsat int64) ([]byte, int, error) {
+func clnOpenChannel(clientcln *glightning.Lightning, paymentHash, destination string, incomingAmountMsat int64) ([]byte, uint32, error) {
 
 	capacity := incomingAmountMsat/1000 + additionalChannelCapacity
 	if capacity == publicChannelAmount {
@@ -141,7 +141,7 @@ func clnOpenChannel(clientcln *glightning.Lightning, paymentHash, destination st
 		return nil, 0, err
 	}
 	outnum, _ := strconv.Atoi(channelPoint.FundingTxOutputNum)
-	return FundingTxId, outnum, err
+	return FundingTxId, uint32(outnum), err
 }
 
 func clnIsConnected(clientcln *glightning.Lightning, destination string) error {
@@ -189,7 +189,7 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 		if fundingTxID == nil {
 			if hex.EncodeToString(paymentHash) == event.Htlc.PaymentHash {
 
-				fundingTxID, fundingTxOutnum, err := clnOpenChannel(clientcln, hex.EncodeToString(paymentHash), hex.EncodeToString(destination), incomingAmountMsat)
+				fundingTxID, fundingTxOutnum, err = clnOpenChannel(clientcln, hex.EncodeToString(paymentHash), hex.EncodeToString(destination), incomingAmountMsat)
 				log.Printf("openclnOpenChannelChannel(%v, %v) err: %v", destination, incomingAmountMsat, err)
 				if err != nil {
 					log.Printf(" clnOpenChannel error: %v", err)
@@ -253,26 +253,21 @@ func clnResumeOrCancel(clientcln *glightning.Lightning, destination string, fund
 				log.Printf("hex.DecodeString(destination) error: %v", err)
 				break
 			}
-			var chanID lnwire.ShortChannelID
 			var temp []int64
 			var channelId uint64
 			if shortChanID == "" {
 				channelId = uint64(0)
-				err = insertChannel(channelId, channelPoint, dest, time.Now())
-				if err != nil {
-					log.Printf("insertChannel error: %v", err)
-				}
 			} else {
 				fields := strings.Split(shortChanID, "x")
 				for i, field := range fields {
 					temp[i], _ = strconv.ParseInt(field, 10, 64)
 				}
-				chanID = lnwire.ShortChannelID{BlockHeight: uint32(temp[0]), TxIndex: uint32(temp[1]), TxPosition: uint16(temp[2])}
-				// we don't get short channel id until 1 conf
-				err = insertChannel(chanID.ToUint64(), channelPoint, dest, time.Now())
-				if err != nil {
-					log.Printf("insertChannel error: %v", err)
-				}
+				channelId = lnwire.ShortChannelID{BlockHeight: uint32(temp[0]), TxIndex: uint32(temp[1]), TxPosition: uint16(temp[2])}.ToUint64()
+			}
+
+			err = insertChannel(channelId, channelPoint, dest, time.Now())
+			if err != nil {
+				log.Printf("insertChannel error: %v", err)
 			}
 
 			log.Printf("forwarding htlc to the destination node and a new private channel was opened")
