@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/lightningnetwork/lnd/lnwire"
+	"github.com/lightningnetwork/lnd/tlv"
 	"github.com/niftynei/glightning/glightning"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -221,33 +223,35 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 
 	}
 
-	return event.Continue(), err
+	return event.Fail(4103), nil
 }
 
-func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingTxID string) (string, bool) {
-	obj, err := clientcln.ListFunds()
+func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingTxID string) (string, string, bool) {
+	obj, err := clientcln.GetPeer(destination)
 	if err != nil {
 		log.Printf("clientcln.ListChannels(%v) error: %v", destination, err)
-		return "", false
+		return "", "", false
 	}
+
 	for _, c := range obj.Channels {
-		log.Printf("getChannel destination: %v, Short channel id: %v, nodeID: %v , FundingTxID:%v ", destination, c.ShortChannelId, c.Id, c.FundingTxId)
-		if c.FundingTxId == fundingTxID && c.Connected {
-			chanid := c.ShortChannelId
-			return chanid, true
+		log.Printf("getChannel destination: %v, Short channel id: %v , FundingTxID:%v ", destination, c.ShortChannelId, c.FundingTxId)
+		if c.FundingTxId == fundingTxID {
+			alias := c.Alias.Local
+			return alias, c.ShortChannelId, true
 		}
 	}
+
 	log.Printf("No channel found: getChannel(%v)", destination)
-	return "", false
+	return "", "", false
 }
 func clnResumeOrCancel(clientcln *glightning.Lightning, destination string, fundingTxID string, paymentHash string, outgoingAmountMsat uint64, riskfactor float32, event *glightning.HtlcAcceptedEvent, channelPoint string) (*glightning.HtlcAcceptedResponse, error) {
 	deadline := time.Now().Add(60 * time.Second)
 
 	for {
-		shortChanID, channelOpenedFlag := clnGetChannel(clientcln, destination, fundingTxID)
+		alias, shortChanID, channelOpenedFlag := clnGetChannel(clientcln, destination, fundingTxID)
 
 		if channelOpenedFlag != false {
-			log.Printf("channel opended successfully chanID: %v)", shortChanID)
+			log.Printf("channel opended successfully alias: %v)", alias)
 			dest, err := hex.DecodeString(destination)
 			if err != nil {
 				log.Printf("hex.DecodeString(destination) error: %v", err)
@@ -270,8 +274,41 @@ func clnResumeOrCancel(clientcln *glightning.Lightning, destination string, fund
 				log.Printf("insertChannel error: %v", err)
 			}
 
+			//decoding and encoding onion with alias in type 6 record.
+			payload, _ := hex.DecodeString(event.Onion.Payload)
+			s, _ := tlv.NewStream()
+			tlvMap, err := s.DecodeWithParsedTypes(bytes.NewReader(payload))
+			if err != nil {
+				log.Printf("DecodeWithParsedTypes(%x) error: %v", payload, err)
+				return event.Fail(4103), err
+			}
+
+			aliasBytes := []byte(alias)
+
+			uTlvMap := make(map[uint64][]byte)
+			for t, b := range tlvMap {
+				if t == 6 {
+					uTlvMap[uint64(t)] = aliasBytes
+					continue
+				}
+				uTlvMap[uint64(t)] = b
+			}
+			tlvRecords := tlv.MapToRecords(uTlvMap)
+			s, err = tlv.NewStream(tlvRecords...)
+			if err != nil {
+				log.Printf("tlv.NewStream(%x) error: %v", tlvRecords, err)
+				return event.Fail(4103), err
+			}
+			var newPayloadBuf bytes.Buffer
+			err = s.Encode(&newPayloadBuf)
+			if err != nil {
+				log.Printf("Encode error: %v", err)
+				return event.Fail(4103), err
+			}
+			newPayload := hex.EncodeToString(newPayloadBuf.Bytes())
+
 			log.Printf("forwarding htlc to the destination node and a new private channel was opened")
-			return event.Continue(), nil
+			return event.ContinueWithPayload(newPayload), nil
 		}
 
 		log.Printf("waiting for channel to get opened.... %v\n", destination)
