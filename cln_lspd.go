@@ -21,6 +21,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/lightningnetwork/lnd/lnwire"
+	"github.com/lightningnetwork/lnd/record"
 	"github.com/lightningnetwork/lnd/tlv"
 	"github.com/niftynei/glightning/glightning"
 	"google.golang.org/grpc"
@@ -223,7 +224,7 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 
 	}
 
-	return event.Fail(4103), nil
+	return event.Continue(), nil
 }
 
 func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingTxID string) (string, string, bool) {
@@ -247,26 +248,25 @@ func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingT
 func clnResumeOrCancel(clientcln *glightning.Lightning, destination string, fundingTxID string, paymentHash string, outgoingAmountMsat uint64, riskfactor float32, event *glightning.HtlcAcceptedEvent, channelPoint string) (*glightning.HtlcAcceptedResponse, error) {
 	deadline := time.Now().Add(60 * time.Second)
 
+	dest, err := hex.DecodeString(destination)
+	if err != nil {
+		log.Printf("hex.DecodeString(destination) error: %v", err)
+		return nil, err
+	}
+
 	for {
 		alias, shortChanID, channelOpenedFlag := clnGetChannel(clientcln, destination, fundingTxID)
 
-		if channelOpenedFlag != false {
+		if channelOpenedFlag {
 			log.Printf("channel opended successfully alias: %v)", alias)
-			dest, err := hex.DecodeString(destination)
-			if err != nil {
-				log.Printf("hex.DecodeString(destination) error: %v", err)
-				break
-			}
-			var temp []int64
+			var err error
 			var channelId uint64
-			if shortChanID == "" {
-				channelId = uint64(0)
-			} else {
-				fields := strings.Split(shortChanID, "x")
-				for i, field := range fields {
-					temp[i], _ = strconv.ParseInt(field, 10, 64)
-				}
-				channelId = lnwire.ShortChannelID{BlockHeight: uint32(temp[0]), TxIndex: uint32(temp[1]), TxPosition: uint16(temp[2])}.ToUint64()
+			routedChannel := shortChanID
+			if routedChannel == "" {
+				routedChannel = alias
+			}
+			if channelId, err = parseShortChannelID(shortChanID); err != nil {
+				return nil, err
 			}
 
 			err = insertChannel(channelId, channelPoint, dest, time.Now())
@@ -283,12 +283,16 @@ func clnResumeOrCancel(clientcln *glightning.Lightning, destination string, fund
 				return event.Fail(4103), err
 			}
 
-			aliasBytes := []byte(alias)
+			tt := record.NewNextHopIDRecord(&channelId)
+			buf := bytes.NewBuffer([]byte{})
+			if err := tt.Encode(buf); err != nil {
+				return event.Fail(4103), err
+			}
 
 			uTlvMap := make(map[uint64][]byte)
 			for t, b := range tlvMap {
-				if t == 6 {
-					uTlvMap[uint64(t)] = aliasBytes
+				if t == record.NextHopOnionType {
+					uTlvMap[uint64(t)] = buf.Bytes()
 					continue
 				}
 				uTlvMap[uint64(t)] = b
@@ -365,4 +369,24 @@ func run_cln() {
 	}
 
 	wg.Wait() //wait for greenlight intercept
+}
+
+func parseShortChannelID(idStr string) (uint64, error) {
+	fields := strings.Split(idStr, "x")
+	if len(fields) != 3 {
+		return 0, fmt.Errorf("invalid short channel id %v", idStr)
+	}
+	var blockHeight, txIndex, txPos int64
+	var err error
+	if blockHeight, err = strconv.ParseInt(fields[0], 10, 64); err != nil {
+		return 0, fmt.Errorf("failed to parse block height %v", fields[0])
+	}
+	if txIndex, err = strconv.ParseInt(fields[1], 10, 64); err != nil {
+		return 0, fmt.Errorf("failed to parse block height %v", fields[1])
+	}
+	if txPos, err = strconv.ParseInt(fields[2], 10, 64); err != nil {
+		return 0, fmt.Errorf("failed to parse block height %v", fields[2])
+	}
+
+	return lnwire.ShortChannelID{BlockHeight: uint32(blockHeight), TxIndex: uint32(txIndex), TxPosition: uint16(txPos)}.ToUint64(), nil
 }
