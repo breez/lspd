@@ -83,7 +83,7 @@ func channelsSynchronizeOnce() error {
 			log.Printf("hex.DecodeString in channelsSynchronizeOnce error: %v", err)
 			continue
 		}
-		err = insertChannel(c.ChanId, c.ChannelPoint, nodeID, lastUpdate)
+		err = insertChannel(int64(c.ChanId), c.ChannelPoint, nodeID, lastUpdate)
 		if err != nil {
 			log.Printf("insertChannel(%v, %v, %x) in channelsSynchronizeOnce error: %v", c.ChanId, c.ChannelPoint, nodeID, err)
 			continue

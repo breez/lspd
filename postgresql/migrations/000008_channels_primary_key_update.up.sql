@@ -1,1 +1,0 @@
-alter table public.channels add constraint channels_pkey primary key (chanid, channel_point);

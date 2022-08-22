@@ -74,12 +74,12 @@ func registerPayment(destination, paymentHash, paymentSecret []byte, incomingAmo
 	return nil
 }
 
-func insertChannel(chanID uint64, channelPoint string, nodeID []byte, lastUpdate time.Time) error {
+func insertChannel(chanID int64, channelPoint string, nodeID []byte, lastUpdate time.Time) error {
 	_, err := pgxPool.Exec(context.Background(),
 		`INSERT INTO
 	channels (chanid, channel_point, nodeid, last_update)
 	VALUES ($1, $2, $3, $4)
-	ON CONFLICT (chanid, channel_point) DO UPDATE SET last_update=$4`,
+	ON CONFLICT (chanid) DO UPDATE SET last_update=$4`,
 		chanID, channelPoint, nodeID, lastUpdate)
 	if err != nil {
 		return fmt.Errorf("insertChannel(%v, %s, %x) error: %w",

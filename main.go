@@ -22,7 +22,7 @@ const (
 )
 
 func main() {
-
+	log.Println("lspd started")
 	if len(os.Args) > 1 && os.Args[1] == "genkey" {
 		p, err := btcec.NewPrivateKey(btcec.S256())
 		if err != nil {
@@ -37,5 +37,5 @@ func main() {
 	} else if os.Getenv("RUN_LND") == "true" {
 		run_lnd()
 	}
-
+	log.Println("lspd exited")
 }

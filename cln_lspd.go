@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -20,6 +22,7 @@ import (
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	sphinx "github.com/lightningnetwork/lightning-onion"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/record"
 	"github.com/lightningnetwork/lnd/tlv"
@@ -32,10 +35,14 @@ import (
 
 type server_c struct{}
 
+const (
+	TEMPORARY_CHANNEL_FAILURE            = uint16(0x1007)
+	INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS = uint16(0x4015)
+)
+
 var (
 	clnPrivateKeyBytes []byte
 	clnPublicKeyBytes  []byte
-	minConf            uint16
 	clientcln          *glightning.Lightning
 	wg                 sync.WaitGroup
 )
@@ -123,16 +130,180 @@ func onInit(plugin *glightning.Plugin, options map[string]glightning.Option, con
 	log.Printf("successfull clientcln.StartUp")
 }
 
-func clnOpenChannel(clientcln *glightning.Lightning, paymentHash, destination string, incomingAmountMsat int64) ([]byte, uint32, error) {
+func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAcceptedResponse, error) {
+	log.Printf("htlc_accepted called\n")
+	onion := event.Onion
 
+	log.Printf("htlc: %v\nchanID: %v\nincoming amount: %v\noutgoing amount: %v\nincoming expiry: %v\noutgoing expiry: %v\npaymentHash: %v\nonionBlob: %v\n\n",
+		event.Htlc,
+		onion.ShortChannelId,
+		event.Htlc.AmountMilliSatoshi, //with fees
+		onion.ForwardAmount,
+		event.Htlc.CltvExpiryRelative,
+		event.Htlc.CltvExpiry,
+		event.Htlc.PaymentHash,
+		onion,
+	)
+
+	// fail htlc in case payment hash is not valid.
+	paymentHashBytes, err := hex.DecodeString(event.Htlc.PaymentHash)
+	if err != nil {
+		return failHtlc(event, fmt.Errorf("hex.DecodeString(%v) error: %w", event.Htlc.PaymentHash, err)), nil
+	}
+
+	// fail htlc in case fetching payment information fails.
+	paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, fundingTxOutnum, err := paymentInfo(paymentHashBytes)
+	if err != nil {
+		return failHtlc(event, fmt.Errorf("paymentInfo(%v)\nfundingTxOutnum: %v\n error: %v", event.Htlc.PaymentHash, fundingTxOutnum, err)), nil
+	}
+
+	// in case payment is not registered
+	if paymentSecret == nil {
+		return event.Continue(), nil
+	}
+
+	// if payment hash mismatch then it is probably probing
+	if hex.EncodeToString(paymentHash) != event.Htlc.PaymentHash {
+		failureCode := TEMPORARY_CHANNEL_FAILURE
+		if err = clnIsConnected(clientcln, hex.EncodeToString(destination)); err == nil {
+			failureCode = INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
+		}
+		log.Printf(" failureCode %v , Error %v", failureCode, err)
+		return event.Fail(failureCode), nil
+	}
+
+	// in case we don't have a funding Tx we need to open a channel
+	if fundingTxID == nil {
+		fundingTxID, fundingTxOutnum, err = clnOpenChannel(clientcln, hex.EncodeToString(paymentHash), hex.EncodeToString(destination), incomingAmountMsat)
+		log.Printf("openclnOpenChannelChannel(%v, %v) err: %v", destination, incomingAmountMsat, err)
+		if err != nil {
+			return failHtlc(event, fmt.Errorf("clnOpenChannel error: %v", err)), nil
+		}
+
+		//database entry
+		err = setFundingTx(paymentHash, fundingTxID, uint32(fundingTxOutnum))
+		if err != nil {
+			return failHtlc(event, fmt.Errorf("setFundingTx error: %v", err)), nil
+		}
+	}
+
+	// If we got here then we have a funding tx, we need to poll untill channel is opened
+	// and then forward the payment
+	var h chainhash.Hash
+	err = h.SetBytes(fundingTxID)
+	if err != nil {
+		return failHtlc(event, fmt.Errorf("h.SetBytes(%v) error: %v", fundingTxID, err)), nil
+	}
+
+	channelPoint := wire.NewOutPoint(&h, fundingTxOutnum).String()
+	payload, err := clnResumeOrCancel(clientcln, hex.EncodeToString(destination), hex.EncodeToString(fundingTxID), hex.EncodeToString(paymentHash), uint64(outgoingAmountMsat), 99, event, channelPoint)
+	if err != nil {
+		return failHtlc(event, fmt.Errorf("clnResumeOrCancel %v", err)), nil
+	}
+	return event.ContinueWithPayload(payload), nil
+}
+
+func clnResumeOrCancel(clientcln *glightning.Lightning,
+	destination string, fundingTxID string, paymentHash string,
+	outgoingAmountMsat uint64, riskfactor float32, event *glightning.HtlcAcceptedEvent,
+	channelPoint string) (string, error) {
+
+	deadline := time.Now().Add(60 * time.Second)
+
+	dest, err := hex.DecodeString(destination)
+	if err != nil {
+		return "", fmt.Errorf("hex.DecodeString(destination) error: %v", err)
+	}
+
+	for {
+		channelId, channelFound := clnGetChannel(clientcln, destination, fundingTxID)
+
+		if channelFound {
+			log.Printf("channel opended successfully alias: %v)", channelId)
+
+			err = insertChannel(int64(channelId), channelPoint, dest, time.Now())
+			if err != nil {
+				log.Printf("insertChannel error: %v", err)
+				return "", fmt.Errorf("insertChannel error: %v", err)
+			}
+
+			//decoding and encoding onion with alias in type 6 record.
+			newPayload, err := encodePayloadWithNextHop(event.Onion.Payload, channelId)
+			if err != nil {
+				return "", fmt.Errorf("encodePayloadWithNextHop error: %v", err)
+			}
+
+			log.Printf("forwarding htlc to the destination node and a new private channel was opened")
+			return newPayload, nil
+		}
+
+		log.Printf("waiting for channel to get opened.... %v\n", destination)
+		if time.Now().After(deadline) {
+			log.Printf("Stop retrying getChannel(%v, %v)", destination, fundingTxID)
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+	log.Printf("Error: Channel failed to opened... timed out. ")
+	return "", errors.New("error: channel failed to opened... timed out")
+}
+
+func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingTxID string) (uint64, bool) {
+	obj, err := clientcln.GetPeer(destination)
+	if err != nil {
+		log.Printf("clientcln.ListChannels(%v) error: %v", destination, err)
+		return 0, false
+	}
+
+	for _, c := range obj.Channels {
+		log.Printf("getChannel destination: %v, Short channel id: %v, local alias: %v , FundingTxID:%v ", destination, c.ShortChannelId, c.Alias.Local, c.FundingTxId)
+		if c.FundingTxId == fundingTxID {
+			routedChannel := c.ShortChannelId
+			if routedChannel == "" {
+				routedChannel = c.Alias.Local
+			}
+
+			channelId, err := parseShortChannelID(routedChannel)
+			if err != nil {
+				fmt.Printf("parseShortChannelID %v: %v", routedChannel, err)
+				return 0, false
+			}
+			return channelId, true
+		}
+	}
+
+	log.Printf("No channel found: getChannel(%v)", destination)
+	return 0, false
+}
+
+func parseShortChannelID(idStr string) (uint64, error) {
+	fields := strings.Split(idStr, "x")
+	if len(fields) != 3 {
+		return 0, fmt.Errorf("invalid short channel id %v", idStr)
+	}
+	var blockHeight, txIndex, txPos int64
+	var err error
+	if blockHeight, err = strconv.ParseInt(fields[0], 10, 64); err != nil {
+		return 0, fmt.Errorf("failed to parse block height %v", fields[0])
+	}
+	if txIndex, err = strconv.ParseInt(fields[1], 10, 64); err != nil {
+		return 0, fmt.Errorf("failed to parse block height %v", fields[1])
+	}
+	if txPos, err = strconv.ParseInt(fields[2], 10, 64); err != nil {
+		return 0, fmt.Errorf("failed to parse block height %v", fields[2])
+	}
+
+	return lnwire.ShortChannelID{BlockHeight: uint32(blockHeight), TxIndex: uint32(txIndex), TxPosition: uint16(txPos)}.ToUint64(), nil
+}
+
+func clnOpenChannel(clientcln *glightning.Lightning, paymentHash, destination string, incomingAmountMsat int64) ([]byte, uint32, error) {
 	capacity := incomingAmountMsat/1000 + additionalChannelCapacity
 	if capacity == publicChannelAmount {
 		capacity++
 	}
-	minDepth := uint16(0)
 
 	//open private channel
-	//todo-glightning need to update the code with accepting parameter for zero-conf
+	minDepth := uint16(0)
 	channelPoint, err := clientcln.FundChannelExt(destination, glightning.NewSat(int(capacity)), nil, false, nil, nil, &minDepth)
 	if err != nil {
 		log.Printf("clientcln.OpenChannelSync(%v, %v) error: %v", destination, capacity, err)
@@ -143,8 +314,7 @@ func clnOpenChannel(clientcln *glightning.Lightning, paymentHash, destination st
 		log.Printf("hex.DecodeString(channelPoint.FundingTxId) error: %v", err)
 		return nil, 0, err
 	}
-	outnum, _ := strconv.Atoi(channelPoint.FundingTxOutputNum)
-	return FundingTxId, uint32(outnum), err
+	return FundingTxId, uint32(channelPoint.FundingTxOutputNum), err
 }
 
 func clnIsConnected(clientcln *glightning.Lightning, destination string) error {
@@ -162,169 +332,62 @@ func clnIsConnected(clientcln *glightning.Lightning, destination string) error {
 	log.Printf("destination offline: %v", destination)
 	return fmt.Errorf("destination offline")
 }
-func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAcceptedResponse, error) {
-	log.Printf("htlc_accepted called\n")
-	onion := event.Onion
 
-	log.Printf("htlc: %v\nchanID: %v\nincoming amount: %v\noutgoing amount: %v\nincoming expiry: %v\noutgoing expiry: %v\npaymentHash: %v\nonionBlob: %v\n\n",
-		event.Htlc,
-		onion.ShortChannelId,
-		event.Htlc.AmountMilliSatoshi, //with fees
-		onion.ForwardAmount,
-		event.Htlc.CltvExpiryRelative,
-		event.Htlc.CltvExpiry,
-		event.Htlc.PaymentHash,
-		onion,
-	)
-
-	paymentHashBytes, err := hex.DecodeString(event.Htlc.PaymentHash)
-	if err != nil {
-		log.Printf("hex.DecodeString(%v) error: %v", event.Htlc.PaymentHash, err)
-		return event.Continue(), fmt.Errorf("hex.DecodeString(%v) error: %w", event.Htlc.PaymentHash, err)
-	}
-
-	paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, fundingTxOutnum, err := paymentInfo(paymentHashBytes)
-	if err != nil {
-		log.Printf("paymentInfo(%v)\nfundingTxOutnum: %v\n error: %v", event.Htlc.PaymentHash, fundingTxOutnum, err)
-	}
-
-	if paymentSecret != nil {
-		if fundingTxID == nil {
-			if hex.EncodeToString(paymentHash) == event.Htlc.PaymentHash {
-
-				fundingTxID, fundingTxOutnum, err = clnOpenChannel(clientcln, hex.EncodeToString(paymentHash), hex.EncodeToString(destination), incomingAmountMsat)
-				log.Printf("openclnOpenChannelChannel(%v, %v) err: %v", destination, incomingAmountMsat, err)
-				if err != nil {
-					log.Printf(" clnOpenChannel error: %v", err)
-					return event.Fail(4103), err
-				}
-
-				//database entry
-				err = setFundingTx(paymentHash, fundingTxID, uint32(fundingTxOutnum))
-				if err != nil {
-					log.Printf("setFundingTx error: %v", err)
-				}
-			} else { //probing
-				failureCode := "TEMPORARY_CHANNEL_FAILURE"
-				if err = clnIsConnected(clientcln, hex.EncodeToString(destination)); err == nil {
-					failureCode = "INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS"
-				}
-				log.Printf(" failureCode %v , Error %v", failureCode, err)
-				return event.Fail(4103), err
-			}
-
-		}
-		var h chainhash.Hash
-		err = h.SetBytes(fundingTxID)
-		if err != nil {
-			log.Printf("h.SetBytes(%v) error: %v", fundingTxID, err)
-		}
-		channelPoint := wire.NewOutPoint(&h, fundingTxOutnum).String()
-		return clnResumeOrCancel(clientcln, hex.EncodeToString(destination), hex.EncodeToString(fundingTxID), hex.EncodeToString(paymentHash), uint64(outgoingAmountMsat), 99, event, channelPoint)
-
-	}
-
-	return event.Continue(), nil
+func failHtlc(event *glightning.HtlcAcceptedEvent, err error) *glightning.HtlcAcceptedResponse {
+	log.Printf("failing htlc: %v", err)
+	return event.Fail(4103)
 }
 
-func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingTxID string) (string, string, bool) {
-	obj, err := clientcln.GetPeer(destination)
+func encodePayloadWithNextHop(payloadHex string, channelId uint64) (string, error) {
+	payload, err := hex.DecodeString(payloadHex)
 	if err != nil {
-		log.Printf("clientcln.ListChannels(%v) error: %v", destination, err)
-		return "", "", false
+		log.Fatalf("failed to decode types %v", err)
 	}
-
-	for _, c := range obj.Channels {
-		log.Printf("getChannel destination: %v, Short channel id: %v , FundingTxID:%v ", destination, c.ShortChannelId, c.FundingTxId)
-		if c.FundingTxId == fundingTxID {
-			alias := c.Alias.Local
-			return alias, c.ShortChannelId, true
-		}
-	}
-
-	log.Printf("No channel found: getChannel(%v)", destination)
-	return "", "", false
-}
-func clnResumeOrCancel(clientcln *glightning.Lightning, destination string, fundingTxID string, paymentHash string, outgoingAmountMsat uint64, riskfactor float32, event *glightning.HtlcAcceptedEvent, channelPoint string) (*glightning.HtlcAcceptedResponse, error) {
-	deadline := time.Now().Add(60 * time.Second)
-
-	dest, err := hex.DecodeString(destination)
+	bufReader := bytes.NewBuffer(payload)
+	var b [8]byte
+	varInt, err := sphinx.ReadVarInt(bufReader, &b)
 	if err != nil {
-		log.Printf("hex.DecodeString(destination) error: %v", err)
-		return nil, err
+		return "", fmt.Errorf("failed to read payload length %v: %v", payloadHex, err)
 	}
 
-	for {
-		alias, shortChanID, channelOpenedFlag := clnGetChannel(clientcln, destination, fundingTxID)
-
-		if channelOpenedFlag {
-			log.Printf("channel opended successfully alias: %v)", alias)
-			var err error
-			var channelId uint64
-			routedChannel := shortChanID
-			if routedChannel == "" {
-				routedChannel = alias
-			}
-			if channelId, err = parseShortChannelID(shortChanID); err != nil {
-				return nil, err
-			}
-
-			err = insertChannel(channelId, channelPoint, dest, time.Now())
-			if err != nil {
-				log.Printf("insertChannel error: %v", err)
-			}
-
-			//decoding and encoding onion with alias in type 6 record.
-			payload, _ := hex.DecodeString(event.Onion.Payload)
-			s, _ := tlv.NewStream()
-			tlvMap, err := s.DecodeWithParsedTypes(bytes.NewReader(payload))
-			if err != nil {
-				log.Printf("DecodeWithParsedTypes(%x) error: %v", payload, err)
-				return event.Fail(4103), err
-			}
-
-			tt := record.NewNextHopIDRecord(&channelId)
-			buf := bytes.NewBuffer([]byte{})
-			if err := tt.Encode(buf); err != nil {
-				return event.Fail(4103), err
-			}
-
-			uTlvMap := make(map[uint64][]byte)
-			for t, b := range tlvMap {
-				if t == record.NextHopOnionType {
-					uTlvMap[uint64(t)] = buf.Bytes()
-					continue
-				}
-				uTlvMap[uint64(t)] = b
-			}
-			tlvRecords := tlv.MapToRecords(uTlvMap)
-			s, err = tlv.NewStream(tlvRecords...)
-			if err != nil {
-				log.Printf("tlv.NewStream(%x) error: %v", tlvRecords, err)
-				return event.Fail(4103), err
-			}
-			var newPayloadBuf bytes.Buffer
-			err = s.Encode(&newPayloadBuf)
-			if err != nil {
-				log.Printf("Encode error: %v", err)
-				return event.Fail(4103), err
-			}
-			newPayload := hex.EncodeToString(newPayloadBuf.Bytes())
-
-			log.Printf("forwarding htlc to the destination node and a new private channel was opened")
-			return event.ContinueWithPayload(newPayload), nil
-		}
-
-		log.Printf("waiting for channel to get opened.... %v\n", destination)
-		if time.Now().After(deadline) {
-			log.Printf("Stop retrying getChannel(%v, %v)", destination, fundingTxID)
-			break
-		}
-		time.Sleep(1 * time.Second)
+	innerPayload := make([]byte, varInt)
+	if _, err := io.ReadFull(bufReader, innerPayload[:]); err != nil {
+		return "", fmt.Errorf("failed to decode payload %x: %v", innerPayload[:], err)
 	}
-	log.Printf("Error: Channel failed to opened... timed out. ")
-	return event.Fail(4103), nil
+
+	s, _ := tlv.NewStream()
+	tlvMap, err := s.DecodeWithParsedTypes(bytes.NewReader(innerPayload))
+	if err != nil {
+		return "", fmt.Errorf("DecodeWithParsedTypes failed for %x: %v", innerPayload[:], err)
+	}
+
+	tt := record.NewNextHopIDRecord(&channelId)
+	buf := bytes.NewBuffer([]byte{})
+	if err := tt.Encode(buf); err != nil {
+		return "", fmt.Errorf("failed to encode nexthop %x: %v", innerPayload[:], err)
+	}
+
+	uTlvMap := make(map[uint64][]byte)
+	for t, b := range tlvMap {
+		if t == record.NextHopOnionType {
+			uTlvMap[uint64(t)] = buf.Bytes()
+			continue
+		}
+		uTlvMap[uint64(t)] = b
+	}
+	tlvRecords := tlv.MapToRecords(uTlvMap)
+	s, err = tlv.NewStream(tlvRecords...)
+	if err != nil {
+		return "", fmt.Errorf("tlv.NewStream(%x) error: %v", tlvRecords, err)
+	}
+	var newPayloadBuf bytes.Buffer
+	err = s.Encode(&newPayloadBuf)
+	if err != nil {
+		return "", fmt.Errorf("encode error: %v", err)
+	}
+	return hex.EncodeToString(newPayloadBuf.Bytes()), nil
 }
+
 func run_cln() {
 	//var wg sync.WaitGroup
 	//c-lightning plugin started
@@ -369,24 +432,4 @@ func run_cln() {
 	}
 
 	wg.Wait() //wait for greenlight intercept
-}
-
-func parseShortChannelID(idStr string) (uint64, error) {
-	fields := strings.Split(idStr, "x")
-	if len(fields) != 3 {
-		return 0, fmt.Errorf("invalid short channel id %v", idStr)
-	}
-	var blockHeight, txIndex, txPos int64
-	var err error
-	if blockHeight, err = strconv.ParseInt(fields[0], 10, 64); err != nil {
-		return 0, fmt.Errorf("failed to parse block height %v", fields[0])
-	}
-	if txIndex, err = strconv.ParseInt(fields[1], 10, 64); err != nil {
-		return 0, fmt.Errorf("failed to parse block height %v", fields[1])
-	}
-	if txPos, err = strconv.ParseInt(fields[2], 10, 64); err != nil {
-		return 0, fmt.Errorf("failed to parse block height %v", fields[2])
-	}
-
-	return lnwire.ShortChannelID{BlockHeight: uint32(blockHeight), TxIndex: uint32(txIndex), TxPosition: uint16(txPos)}.ToUint64(), nil
 }

@@ -48,6 +48,7 @@ require (
 	github.com/go-acme/lego/v3 v3.7.0 // indirect
 	github.com/go-errors/errors v1.0.1 // indirect
 	github.com/gogo/protobuf v1.3.1 // indirect
+	github.com/golang-migrate/migrate v3.5.4+incompatible // indirect
 	github.com/google/btree v1.0.0 // indirect
 	github.com/google/uuid v1.2.0 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
@@ -110,4 +111,4 @@ require (
 
 replace github.com/lightningnetwork/lnd v0.11.0-beta => github.com/breez/lnd v0.11.0-beta.rc4.0.20210125150416-0c10146b223c
 
-replace github.com/niftynei/glightning v0.8.2 => github.com/breez/glightning v0.0.0-20220817182942-fca6c786af31
+replace github.com/niftynei/glightning v0.8.2 => github.com/breez/glightning v0.0.0-20220821180527-63dbb1a02c1e

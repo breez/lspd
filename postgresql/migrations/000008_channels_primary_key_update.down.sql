@@ -1,1 +1,0 @@
-alter table public.channels drop constraint chanid_pkey;
