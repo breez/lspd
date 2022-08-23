@@ -256,8 +256,8 @@ func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingT
 	}
 
 	for _, c := range obj.Channels {
-		log.Printf("getChannel destination: %v, Short channel id: %v, local alias: %v , FundingTxID:%v ", destination, c.ShortChannelId, c.Alias.Local, c.FundingTxId)
-		if c.FundingTxId == fundingTxID {
+		log.Printf("getChannel destination: %v, Short channel id: %v, local alias: %v , FundingTxID:%v, State:%v ", destination, c.ShortChannelId, c.Alias.Local, c.FundingTxId, c.State)
+		if c.State == "CHANNELD_NORMAL" && c.FundingTxId == fundingTxID {
 			routedChannel := c.ShortChannelId
 			if routedChannel == "" {
 				routedChannel = c.Alias.Local
