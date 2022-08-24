@@ -200,8 +200,7 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 	if err != nil {
 		return failHtlc(event, fmt.Errorf("clnResumeOrCancel %v", err)), nil
 	}
-	//return event.ContinueWithPayload(payload), nil
-	return failHtlc(event, fmt.Errorf("temporary fail for payload: %v", payload)), nil
+	return event.ContinueWithPayload(payload), nil
 }
 
 func clnResumeOrCancel(clientcln *glightning.Lightning,
@@ -305,9 +304,7 @@ func clnOpenChannel(clientcln *glightning.Lightning, paymentHash, destination st
 
 	//open private channel
 	minDepth := uint16(0)
-	channelPoint, err := clientcln.FundChannelExt(destination, glightning.NewSat(int(capacity)), &glightning.FeeRate{
-		Directive: glightning.Slow,
-	}, false, nil, nil, &minDepth)
+	channelPoint, err := clientcln.FundChannelExt(destination, glightning.NewSat(int(capacity)), nil, false, nil, nil, &minDepth)
 	if err != nil {
 		log.Printf("clientcln.OpenChannelSync(%v, %v) error: %v", destination, capacity, err)
 		return nil, 0, err
