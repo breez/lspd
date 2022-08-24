@@ -268,6 +268,7 @@ func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingT
 				fmt.Printf("parseShortChannelID %v: %v", routedChannel, err)
 				return 0, false
 			}
+			time.Sleep(20 * time.Second)
 			return channelId, true
 		}
 	}
@@ -304,7 +305,9 @@ func clnOpenChannel(clientcln *glightning.Lightning, paymentHash, destination st
 
 	//open private channel
 	minDepth := uint16(0)
-	channelPoint, err := clientcln.FundChannelExt(destination, glightning.NewSat(int(capacity)), nil, false, nil, nil, &minDepth)
+	channelPoint, err := clientcln.FundChannelExt(destination, glightning.NewSat(int(capacity)), &glightning.FeeRate{
+		Directive: glightning.Slow,
+	}, false, nil, nil, &minDepth)
 	if err != nil {
 		log.Printf("clientcln.OpenChannelSync(%v, %v) error: %v", destination, capacity, err)
 		return nil, 0, err
