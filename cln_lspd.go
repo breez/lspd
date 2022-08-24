@@ -126,6 +126,7 @@ func onInit(plugin *glightning.Plugin, options map[string]glightning.Option, con
 
 	//lightning server
 	clientcln = glightning.NewLightning()
+	clientcln.SetTimeout(60)
 	clientcln.StartUp(config.RpcFile, config.LightningDir)
 	log.Printf("successfull clientcln.StartUp")
 }
