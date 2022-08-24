@@ -269,7 +269,6 @@ func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingT
 				fmt.Printf("parseShortChannelID %v: %v", routedChannel, err)
 				return 0, false
 			}
-			time.Sleep(20 * time.Second)
 			return channelId, true
 		}
 	}
