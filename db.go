@@ -75,12 +75,22 @@ func registerPayment(destination, paymentHash, paymentSecret []byte, incomingAmo
 }
 
 func insertChannel(chanID uint64, channelPoint string, nodeID []byte, lastUpdate time.Time) error {
-	_, err := pgxPool.Exec(context.Background(),
-		`INSERT INTO
-	channels (chanid, channel_point, nodeid, last_update)
+	var query string
+	sid := lnwire.NewShortChanIDFromInt(chanID)
+	if sid.IsFake() {
+		query = `INSERT INTO
+	channels (initial_chanid, channel_point, nodeid, last_update)
 	VALUES ($1, $2, $3, $4)
-	ON CONFLICT (chanid) DO UPDATE SET last_update=$4`,
-		chanID, channelPoint, nodeID, lastUpdate)
+	ON CONFLICT (channel_point) DO UPDATE SET last_update=$4`
+	} else {
+		query = `INSERT INTO
+	channels (initial_chanid, confirmed_chanid, channel_point, nodeid, last_update)
+	VALUES ($1, $1, $2, $3, $4)
+	ON CONFLICT (channel_point) DO UPDATE SET confirmed_chanid=$1, last_update=$4`
+	}
+
+	_, err := pgxPool.Exec(context.Background(),
+		query, chanID, channelPoint, nodeID, lastUpdate)
 	if err != nil {
 		return fmt.Errorf("insertChannel(%v, %s, %x) error: %w",
 			chanID, channelPoint, nodeID, err)
@@ -94,9 +104,9 @@ func confirmedChannels(sNodeID string) (map[string]uint64, error) {
 		return nil, fmt.Errorf("hex.DecodeString(%v) error: %w", sNodeID, err)
 	}
 	rows, err := pgxPool.Query(context.Background(),
-		`SELECT chanid, channel_point
+		`SELECT confirmed_chanid, channel_point
 	  FROM channels
-	  WHERE nodeid=$1`,
+	  WHERE nodeid=$1 AND confirmed_chanid IS NOT NULL`,
 		nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("channels(%x) error: %w", nodeID, err)
@@ -112,10 +122,7 @@ func confirmedChannels(sNodeID string) (map[string]uint64, error) {
 		if err != nil {
 			return nil, fmt.Errorf("channels(%x) rows.Scan error: %w", nodeID, err)
 		}
-		sid := lnwire.NewShortChanIDFromInt(chanID)
-		if !sid.IsFake() {
-			chans[channelPoint] = chanID
-		}
+		chans[channelPoint] = chanID
 	}
 	return chans, rows.Err()
 }
