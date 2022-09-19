@@ -90,7 +90,7 @@ func insertChannel(chanID uint64, channelPoint string, nodeID []byte, lastUpdate
 	}
 
 	_, err := pgxPool.Exec(context.Background(),
-		query, chanID, channelPoint, nodeID, lastUpdate)
+		query, int64(chanID), channelPoint, nodeID, lastUpdate)
 	if err != nil {
 		return fmt.Errorf("insertChannel(%v, %s, %x) error: %w",
 			chanID, channelPoint, nodeID, err)
@@ -115,14 +115,14 @@ func confirmedChannels(sNodeID string) (map[string]uint64, error) {
 	chans := make(map[string]uint64)
 	for rows.Next() {
 		var (
-			chanID       uint64
+			chanID       int64
 			channelPoint string
 		)
 		err = rows.Scan(&chanID, &channelPoint)
 		if err != nil {
 			return nil, fmt.Errorf("channels(%x) rows.Scan error: %w", nodeID, err)
 		}
-		chans[channelPoint] = chanID
+		chans[channelPoint] = uint64(chanID)
 	}
 	return chans, rows.Err()
 }

@@ -28,7 +28,7 @@ func (cfe *copyFromEvents) Values() ([]interface{}, error) {
 	event := cfe.events[cfe.idx]
 	values := []interface{}{
 		event.TimestampNs,
-		event.ChanIdIn, event.ChanIdOut,
+		int64(event.ChanIdIn), int64(event.ChanIdOut),
 		event.AmtInMsat, event.AmtOutMsat}
 	return values, nil
 }
