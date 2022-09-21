@@ -89,12 +89,16 @@ func insertChannel(chanID uint64, channelPoint string, nodeID []byte, lastUpdate
 	ON CONFLICT (channel_point) DO UPDATE SET confirmed_chanid=$1, last_update=$4`
 	}
 
-	_, err := pgxPool.Exec(context.Background(),
+	c, err := pgxPool.Exec(context.Background(),
 		query, int64(chanID), channelPoint, nodeID, lastUpdate)
 	if err != nil {
+		log.Printf("insertChannel(%v, %s, %x) error: %v",
+			chanID, channelPoint, nodeID, err)
 		return fmt.Errorf("insertChannel(%v, %s, %x) error: %w",
 			chanID, channelPoint, nodeID, err)
 	}
+	log.Printf("insertChannel(%v, %s, %x) result: %v",
+		chanID, channelPoint, nodeID, c.String())
 	return nil
 }
 
