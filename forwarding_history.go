@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/lightningnetwork/lnd/htlcswitch/hop"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/chainrpc"
 	"google.golang.org/grpc/metadata"
@@ -28,7 +29,7 @@ func (cfe *copyFromEvents) Values() ([]interface{}, error) {
 	event := cfe.events[cfe.idx]
 	values := []interface{}{
 		event.TimestampNs,
-		event.ChanIdIn, event.ChanIdOut,
+		int64(event.ChanIdIn), int64(event.ChanIdOut),
 		event.AmtInMsat, event.AmtOutMsat}
 	return values, nil
 }
@@ -83,7 +84,14 @@ func channelsSynchronizeOnce() error {
 			log.Printf("hex.DecodeString in channelsSynchronizeOnce error: %v", err)
 			continue
 		}
-		err = insertChannel(c.ChanId, c.ChannelPoint, nodeID, lastUpdate)
+		confirmedChanId := c.ChanId
+		if c.ZeroConf {
+			confirmedChanId = c.ZeroConfConfirmedScid
+			if confirmedChanId == hop.Source.ToUint64() {
+				confirmedChanId = 0
+			}
+		}
+		err = insertChannel(c.ChanId, confirmedChanId, c.ChannelPoint, nodeID, lastUpdate)
 		if err != nil {
 			log.Printf("insertChannel(%v, %v, %x) in channelsSynchronizeOnce error: %v", c.ChanId, c.ChannelPoint, nodeID, err)
 			continue
