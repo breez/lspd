@@ -64,6 +64,7 @@ func openChannel(ctx context.Context, client lnrpc.LightningClient, paymentHash,
 		LocalFundingAmount: capacity,
 		TargetConf:         6,
 		Private:            true,
+		CommitmentType:     lnrpc.CommitmentType_ANCHORS,
 		ZeroConf:           true,
 	})
 	if err != nil {
