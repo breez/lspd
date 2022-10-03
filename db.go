@@ -85,10 +85,10 @@ func insertChannel(initialChanID, confirmedChanId uint64, channelPoint string, n
 	if err != nil {
 		log.Printf("insertChannel(%v, %v, %s, %x) error: %v",
 			initialChanID, confirmedChanId, channelPoint, nodeID, err)
-		return fmt.Errorf("insertChannel(%v, %s, %x) error: %w",
-			initialChanID, confirmedChanId, nodeID, err)
+		return fmt.Errorf("insertChannel(%v, %v, %s, %x) error: %w",
+			initialChanID, confirmedChanId, channelPoint, nodeID, err)
 	}
-	log.Printf("insertChannel(%v, %s, %x) result: %v",
+	log.Printf("insertChannel(%v, %v, %x) result: %v",
 		initialChanID, confirmedChanId, nodeID, c.String())
 	return nil
 }
