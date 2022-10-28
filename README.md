@@ -28,3 +28,23 @@ In order to open the channel on the fly, the lsp is connecting to lnd using the 
 
 ## Probing support
 The lsp supports probing non-mpp payments if the payment hash for probing is sha256('probing-01:' || payment_hash) when payment_hash is the hash of the real payment.
+
+## Integration tests
+In order to run the integration tests, you need:
+- Docker running
+- python3 installed
+- A development build of lightningd
+- bitcoind v0.20.2
+- bitcoin-cli v0.20.2
+- build of lspd
+
+To run the integration tests, run the following command from the lspd root directory (replacing the appropriate paths). 
+
+
+```
+go test -v ./itest --bitcoindexec /full/path/to/bitcoind --lightningdexec /full/path/to/lightningd --bitcoincliexec /full/path/to/bitcoin-cli --lspdexec /full/path/to/lspd --lspdmigrationsdir /full/path/to/lspd/postgresql/migrations --testdir /path/to/test/output/dir --preservelogs
+```
+- Optional: `--preservelogs` persists only the logs in the testing directory
+- Optional: `--preservestate` preserves all artifacts from the lightning nodes, miners, postgres container and startup scripts
+
+Alternatively, if the paths in the flags in above command are added to $PATH instead, they'll be taken from there.
