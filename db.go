@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/lightningnetwork/lnd/lnwire"
 )
 
 var (
@@ -74,7 +73,7 @@ func registerPayment(destination, paymentHash, paymentSecret []byte, incomingAmo
 	return nil
 }
 
-func insertChannel(chanID int64, channelPoint string, nodeID []byte, lastUpdate time.Time) error {
+func insertChannelOld(chanID int64, channelPoint string, nodeID []byte, lastUpdate time.Time) error {
 	_, err := pgxPool.Exec(context.Background(),
 		`INSERT INTO
 	channels (chanid, channel_point, nodeid, last_update)
@@ -88,15 +87,35 @@ func insertChannel(chanID int64, channelPoint string, nodeID []byte, lastUpdate 
 	return nil
 }
 
+func insertChannel(initialChanID, confirmedChanID uint64, channelPoint string, nodeID []byte, lastUpdate time.Time) error {
+
+	query := `INSERT INTO
+	channels (initial_chanid, confirmed_chanid, channel_point, nodeid, last_update)
+	VALUES ($1, NULLIF($2, 0), $3, $4, $5)
+	ON CONFLICT (channel_point) DO UPDATE SET confirmed_chanid=NULLIF($2,0), last_update=$5`
+
+	c, err := pgxPool.Exec(context.Background(),
+		query, int64(initialChanID), int64(confirmedChanID), channelPoint, nodeID, lastUpdate)
+	if err != nil {
+		log.Printf("insertChannel(%v, %v, %s, %x) error: %v",
+			initialChanID, confirmedChanID, channelPoint, nodeID, err)
+		return fmt.Errorf("insertChannel(%v, %v, %s, %x) error: %w",
+			initialChanID, confirmedChanID, channelPoint, nodeID, err)
+	}
+	log.Printf("insertChannel(%v, %v, %x) result: %v",
+		initialChanID, confirmedChanID, nodeID, c.String())
+	return nil
+}
+
 func confirmedChannels(sNodeID string) (map[string]uint64, error) {
 	nodeID, err := hex.DecodeString(sNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("hex.DecodeString(%v) error: %w", sNodeID, err)
 	}
 	rows, err := pgxPool.Query(context.Background(),
-		`SELECT chanid, channel_point
+		`SELECT confirmed_chanid, channel_point
 	  FROM channels
-	  WHERE nodeid=$1`,
+	  WHERE nodeid=$1 AND confirmed_chanid IS NOT NULL`,
 		nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("channels(%x) error: %w", nodeID, err)
@@ -105,17 +124,14 @@ func confirmedChannels(sNodeID string) (map[string]uint64, error) {
 	chans := make(map[string]uint64)
 	for rows.Next() {
 		var (
-			chanID       uint64
+			chanID       int64
 			channelPoint string
 		)
 		err = rows.Scan(&chanID, &channelPoint)
 		if err != nil {
 			return nil, fmt.Errorf("channels(%x) rows.Scan error: %w", nodeID, err)
 		}
-		sid := lnwire.NewShortChanIDFromInt(chanID)
-		if !sid.IsFake() {
-			chans[channelPoint] = chanID
-		}
+		chans[channelPoint] = uint64(chanID)
 	}
 	return chans, rows.Err()
 }

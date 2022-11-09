@@ -1,16 +1,8 @@
 package main
 
 import (
-	"context"
-	"encoding/hex"
-	"fmt"
-	"log"
-	"os"
-	"time"
-
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/chainrpc"
-	"google.golang.org/grpc/metadata"
 )
 
 type copyFromEvents struct {
@@ -38,7 +30,7 @@ func (cfe *copyFromEvents) Err() error {
 }
 
 func channelsSynchronize(client chainrpc.ChainNotifierClient) {
-	lastSync := time.Now().Add(-6 * time.Minute)
+	/*lastSync := time.Now().Add(-6 * time.Minute)
 	for {
 		cancellableCtx, cancel := context.WithCancel(context.Background())
 		clientCtx := metadata.AppendToOutgoingContext(cancellableCtx, "macaroon", os.Getenv("LND_MACAROON_HEX"))
@@ -64,10 +56,10 @@ func channelsSynchronize(client chainrpc.ChainNotifierClient) {
 			}
 		}
 		cancel()
-	}
+	}*/
 }
 
-func channelsSynchronizeOnce() error {
+/*func channelsSynchronizeOnce() error {
 	log.Printf("channelsSynchronizeOnce - begin")
 	clientCtx := metadata.AppendToOutgoingContext(context.Background(), "macaroon", os.Getenv("LND_MACAROON_HEX"))
 	channels, err := client.ListChannels(clientCtx, &lnrpc.ListChannelsRequest{PrivateOnly: true})
@@ -92,17 +84,17 @@ func channelsSynchronizeOnce() error {
 	log.Printf("channelsSynchronizeOnce - done")
 
 	return nil
-}
+}*/
 
 func forwardingHistorySynchronize() {
-	for {
+	/*for {
 		err := forwardingHistorySynchronizeOnce()
 		log.Printf("forwardingHistorySynchronizeOnce() err: %v", err)
 		time.Sleep(1 * time.Minute)
-	}
+	}*/
 }
 
-func forwardingHistorySynchronizeOnce() error {
+/*func forwardingHistorySynchronizeOnce() error {
 	last, err := lastForwardingEvent()
 	if err != nil {
 		return fmt.Errorf("lastForwardingEvent() error: %w", err)
@@ -141,4 +133,4 @@ func forwardingHistorySynchronizeOnce() error {
 		}
 	}
 	return nil
-}
+}*/

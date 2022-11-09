@@ -217,19 +217,23 @@ func clnResumeOrCancel(clientcln *glightning.Lightning,
 	}
 
 	for {
-		channelId, channelFound := clnGetChannel(clientcln, destination, fundingTxID)
+		initialChanID, confirmedChanID, channelFound := clnGetChannel(clientcln, destination, fundingTxID)
 
 		if channelFound {
-			log.Printf("channel opended successfully alias: %v)", channelId)
+			log.Printf("channel opended successfully alias: %v, confirmed: %v", initialChanID, confirmedChanID)
 
-			err = insertChannel(int64(channelId), channelPoint, dest, time.Now())
+			err = insertChannel(initialChanID, confirmedChanID, channelPoint, dest, time.Now())
 			if err != nil {
 				log.Printf("insertChannel error: %v", err)
 				return "", fmt.Errorf("insertChannel error: %v", err)
 			}
 
+			channelID := confirmedChanID
+			if channelID == 0 {
+				channelID = initialChanID
+			}
 			//decoding and encoding onion with alias in type 6 record.
-			newPayload, err := encodePayloadWithNextHop(event.Onion.Payload, channelId)
+			newPayload, err := encodePayloadWithNextHop(event.Onion.Payload, channelID)
 			if err != nil {
 				return "", fmt.Errorf("encodePayloadWithNextHop error: %v", err)
 			}
@@ -249,35 +253,41 @@ func clnResumeOrCancel(clientcln *glightning.Lightning,
 	return "", errors.New("error: channel failed to opened... timed out")
 }
 
-func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingTxID string) (uint64, bool) {
+func clnGetChannel(clientcln *glightning.Lightning, destination string, fundingTxID string) (initialChanID, confirmedChanID uint64, channelFound bool) {
+
 	obj, err := clientcln.GetPeer(destination)
 	if err != nil {
 		log.Printf("clientcln.ListChannels(%v) error: %v", destination, err)
-		return 0, false
+		return 0, 0, false
 	}
 
 	for _, c := range obj.Channels {
 		log.Printf("getChannel destination: %v, Short channel id: %v, local alias: %v , FundingTxID:%v, State:%v ", destination, c.ShortChannelId, c.Alias.Local, c.FundingTxId, c.State)
 		if c.State == "CHANNELD_NORMAL" && c.FundingTxId == fundingTxID {
-			routedChannel := c.ShortChannelId
-			if routedChannel == "" {
-				routedChannel = c.Alias.Local
-			}
-
-			channelId, err := parseShortChannelID(routedChannel)
+			confirmedChanID, err = parseShortChannelID(c.ShortChannelId)
 			if err != nil {
-				fmt.Printf("parseShortChannelID %v: %v", routedChannel, err)
-				return 0, false
+				fmt.Printf("parseShortChannelID %v: %v", c.ShortChannelId, err)
+				return 0, 0, false
 			}
-			return channelId, true
+			initialChanID, err = parseShortChannelID(c.Alias.Local)
+			if err != nil {
+				fmt.Printf("parseShortChannelID %v: %v", c.Alias.Local, err)
+				return 0, 0, false
+			}
+			return initialChanID, confirmedChanID, true
 		}
 	}
 
 	log.Printf("No channel found: getChannel(%v)", destination)
-	return 0, false
+	return 0, 0, false
 }
 
 func parseShortChannelID(idStr string) (uint64, error) {
+
+	if idStr == "" {
+		return 0, nil
+	}
+
 	fields := strings.Split(idStr, "x")
 	if len(fields) != 3 {
 		return 0, fmt.Errorf("invalid short channel id %v", idStr)
