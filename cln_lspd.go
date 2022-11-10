@@ -317,7 +317,7 @@ func clnOpenChannel(clientcln *glightning.Lightning, paymentHash, destination st
 	minDepth := uint16(0)
 	channelPoint, err := clientcln.FundChannelExt(destination, glightning.NewSat(int(capacity)), &glightning.FeeRate{
 		Directive: glightning.Slow,
-	}, false, nil, nil, &minDepth, glightning.NewMsat(0))
+	}, false, nil, glightning.NewMsat(0), &minDepth)
 	if err != nil {
 		log.Printf("clientcln.OpenChannelSync(%v, %v) error: %v", destination, capacity, err)
 		return nil, 0, err
