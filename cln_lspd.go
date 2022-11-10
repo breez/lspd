@@ -27,6 +27,7 @@ import (
 	"github.com/lightningnetwork/lnd/record"
 	"github.com/lightningnetwork/lnd/tlv"
 	"github.com/niftynei/glightning/glightning"
+	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -45,6 +46,7 @@ var (
 	clnPublicKeyBytes  []byte
 	clientcln          *glightning.Lightning
 	grpcServer         *grpc.Server
+	payHashGroup       singleflight.Group
 	wg                 sync.WaitGroup
 )
 
@@ -158,7 +160,7 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 	}
 
 	// fail htlc in case fetching payment information fails.
-	paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, fundingTxOutnum, err := paymentInfo(paymentHashBytes)
+	paymentHash, paymentSecret, destination, _, outgoingAmountMsat, fundingTxID, fundingTxOutnum, err := paymentInfo(paymentHashBytes)
 	if err != nil {
 		return failHtlc(event, fmt.Errorf("paymentInfo(%v)\nfundingTxOutnum: %v\n error: %v", event.Htlc.PaymentHash, fundingTxOutnum, err)), nil
 	}
@@ -178,20 +180,13 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 		return event.Fail(failureCode), nil
 	}
 
-	// in case we don't have a funding Tx we need to open a channel
-	if fundingTxID == nil {
-		fundingTxID, fundingTxOutnum, err = clnOpenChannel(clientcln, hex.EncodeToString(paymentHash), hex.EncodeToString(destination), incomingAmountMsat)
-		log.Printf("openclnOpenChannelChannel(%v, %v) err: %v", destination, incomingAmountMsat, err)
-		if err != nil {
-			return failHtlc(event, fmt.Errorf("clnOpenChannel error: %v", err)), nil
-		}
-
-		//database entry
-		err = setFundingTx(paymentHash, fundingTxID, uint32(fundingTxOutnum))
-		if err != nil {
-			return failHtlc(event, fmt.Errorf("setFundingTx error: %v", err)), nil
-		}
+	channelResult, err := clnOpenChannelIfNeeded(paymentHash, fundingTxID, fundingTxOutnum)
+	if err != nil {
+		return failHtlc(event, fmt.Errorf("clnOpenChannelIfNeeded error: %v", err)), nil
 	}
+
+	fundingTxID = channelResult.fundingTxID
+	fundingTxOutnum = channelResult.fundingTxOutnum
 
 	// If we got here then we have a funding tx, we need to poll untill channel is opened
 	// and then forward the payment
@@ -206,7 +201,54 @@ func OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAccept
 	if err != nil {
 		return failHtlc(event, fmt.Errorf("clnResumeOrCancel %v", err)), nil
 	}
+
 	return event.ContinueWithPayload(payload), nil
+}
+
+type channelResult struct {
+	fundingTxID     []byte
+	fundingTxOutnum uint32
+}
+
+func clnOpenChannelIfNeeded(paymentHash []byte, fundingTxID []byte, fundingTxOutnum uint32) (*channelResult, error) {
+	if fundingTxID != nil {
+		return &channelResult{
+			fundingTxID:     fundingTxID,
+			fundingTxOutnum: fundingTxOutnum,
+		}, nil
+	}
+
+	payHashStr := hex.EncodeToString(paymentHash)
+	resp, err, _ := payHashGroup.Do(payHashStr, func() (interface{}, error) {
+		// Update the payment information, because another HTLC may have already opened the channel when waiting for the lock.
+		// fail htlc in case fetching payment information fails.
+		paymentHash, _, destination, incomingAmountMsat, _, fundingTxID, fundingTxOutnum, err := paymentInfo(paymentHash)
+		if err != nil {
+			return nil, fmt.Errorf("paymentInfo(%v)\nfundingTxOutnum: %v\n error: %v", payHashStr, fundingTxOutnum, err)
+		}
+
+		// Check again whether the funding tx is nil, that would mean no other HTLCs opened the channel yet.
+		if fundingTxID == nil {
+			fundingTxID, fundingTxOutnum, err = clnOpenChannel(clientcln, hex.EncodeToString(paymentHash), hex.EncodeToString(destination), incomingAmountMsat)
+			log.Printf("openclnOpenChannelChannel(%v, %v) err: %v", destination, incomingAmountMsat, err)
+			if err != nil {
+				return nil, fmt.Errorf("clnOpenChannel error: %v", err)
+			}
+
+			//database entry
+			err = setFundingTx(paymentHash, fundingTxID, uint32(fundingTxOutnum))
+			if err != nil {
+				return nil, fmt.Errorf("setFundingTx error: %v", err)
+			}
+		}
+
+		return &channelResult{
+			fundingTxID:     fundingTxID,
+			fundingTxOutnum: fundingTxOutnum,
+		}, nil
+	})
+
+	return resp.(*channelResult), err
 }
 
 func clnResumeOrCancel(clientcln *glightning.Lightning,
