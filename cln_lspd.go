@@ -44,6 +44,7 @@ var (
 	clnPrivateKeyBytes []byte
 	clnPublicKeyBytes  []byte
 	clientcln          *glightning.Lightning
+	grpcServer         *grpc.Server
 	wg                 sync.WaitGroup
 )
 
@@ -120,7 +121,11 @@ func StartPlugin() {
 	if err != nil {
 		log.Printf("start plugin error: %v", err)
 	}
+
+	// Signal the plugin has been killed
+	wg.Done()
 }
+
 func onInit(plugin *glightning.Plugin, options map[string]glightning.Option, config *glightning.Config) {
 	log.Printf("successfully init'd! %v\n", config.RpcFile)
 
@@ -418,16 +423,22 @@ func run_cln() {
 	_, clnPublicKey := btcec.PrivKeyFromBytes(btcec.S256(), clnPrivateKeyBytes)
 	clnPublicKeyBytes = clnPublicKey.SerializeCompressed()
 
+	go StartServer()
+	wg.Wait() //wait for plugin to be killed
+	grpcServer.GracefulStop()
+}
+
+func StartServer() {
 	//grpc server for clightning
 	address := os.Getenv("LISTEN_ADDRESS_CLN")
 	var lis net.Listener
 
-	lis, err = net.Listen("tcp", address)
+	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	s := grpc.NewServer(
+	grpcServer = grpc.NewServer(
 		grpc_middleware.WithUnaryServerChain(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 			if md, ok := metadata.FromIncomingContext(ctx); ok {
 				for _, auth := range md.Get("authorization") {
@@ -439,10 +450,8 @@ func run_cln() {
 			return nil, status.Errorf(codes.PermissionDenied, "Not authorized")
 		}),
 	)
-	lspdrpc.RegisterChannelOpenerServer(s, &server_c{})
-	if err := s.Serve(lis); err != nil {
+	lspdrpc.RegisterChannelOpenerServer(grpcServer, &server_c{})
+	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
-
-	wg.Wait() //wait for greenlight intercept
 }
