@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/aws/aws-sdk-go v1.30.20
-	github.com/btcsuite/btcd v0.23.1
+	github.com/btcsuite/btcd v0.23.2
 	github.com/btcsuite/btcd/btcec/v2 v2.2.1
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.1
 	github.com/caddyserver/certmagic v0.11.2
