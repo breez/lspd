@@ -113,11 +113,11 @@ func failForwardSend(interceptorClient routerrpc.Router_HtlcInterceptorClient, i
 	})
 }
 
-func intercept() {
+func intercept(client *LndClient) {
 	for {
 		cancellableCtx, cancel := context.WithCancel(context.Background())
 		clientCtx := metadata.AppendToOutgoingContext(cancellableCtx, "macaroon", os.Getenv("LND_MACAROON_HEX"))
-		interceptorClient, err := routerClient.HtlcInterceptor(clientCtx)
+		interceptorClient, err := client.routerClient.HtlcInterceptor(clientCtx)
 		if err != nil {
 			log.Printf("routerClient.HtlcInterceptor(): %v", err)
 			cancel()
@@ -162,7 +162,7 @@ func intercept() {
 
 				if fundingTxID == nil {
 					if bytes.Compare(paymentHash, request.PaymentHash) == 0 {
-						fundingTxID, fundingTxOutnum, err = openChannel(clientCtx, client, request.PaymentHash, destination, incomingAmountMsat)
+						fundingTxID, fundingTxOutnum, err = openChannel(clientCtx, client.client, request.PaymentHash, destination, incomingAmountMsat)
 						log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
 						if err != nil {
 							failForwardSend(interceptorClient, request.IncomingCircuitKey)
@@ -170,7 +170,7 @@ func intercept() {
 						}
 					} else { //probing
 						failureCode := lnrpc.Failure_TEMPORARY_CHANNEL_FAILURE
-						if err := isConnected(clientCtx, client, destination); err == nil {
+						if err := isConnected(clientCtx, client.client, destination); err == nil {
 							failureCode = lnrpc.Failure_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
 						}
 						interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
@@ -281,7 +281,7 @@ func resumeOrCancel(
 ) {
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		initialChanID, confirmedChanID := getChannel(ctx, client, destination, channelPoint)
+		initialChanID, confirmedChanID := getChannel(ctx, client.client, destination, channelPoint)
 		if initialChanID != 0 {
 			interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
 				IncomingCircuitKey:      incomingCircuitKey,
