@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/btcsuite/btcd/wire"
 	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -26,7 +27,7 @@ func pgConnect() error {
 	return nil
 }
 
-func paymentInfo(htlcPaymentHash []byte) ([]byte, []byte, []byte, int64, int64, []byte, uint32, error) {
+func paymentInfo(htlcPaymentHash []byte) ([]byte, []byte, []byte, int64, int64, *wire.OutPoint, error) {
 	var (
 		paymentHash, paymentSecret, destination []byte
 		incomingAmountMsat, outgoingAmountMsat  int64
@@ -42,18 +43,26 @@ func paymentInfo(htlcPaymentHash []byte) ([]byte, []byte, []byte, int64, int64, 
 		if err == pgx.ErrNoRows {
 			err = nil
 		}
-		return nil, nil, nil, 0, 0, nil, 0, err
+		return nil, nil, nil, 0, 0, nil, err
 	}
-	return paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, uint32(fundingTxOutnum.Int), nil
+
+	var cp *wire.OutPoint
+	if fundingTxID != nil {
+		cp, err = NewOutPoint(fundingTxID, uint32(fundingTxOutnum.Int))
+		if err != nil {
+			log.Printf("invalid funding txid in database %x", fundingTxID)
+		}
+	}
+	return paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, cp, nil
 }
 
-func setFundingTx(paymentHash, fundingTxID []byte, fundingTxOutnum int) error {
+func setFundingTx(paymentHash []byte, channelPoint *wire.OutPoint) error {
 	commandTag, err := pgxPool.Exec(context.Background(),
 		`UPDATE payments
 			SET funding_tx_id = $2, funding_tx_outnum = $3
 			WHERE payment_hash=$1`,
-		paymentHash, fundingTxID, fundingTxOutnum)
-	log.Printf("setFundingTx(%x, %x, %v): %s err: %v", paymentHash, fundingTxID, fundingTxOutnum, commandTag, err)
+		paymentHash, channelPoint.Hash[:], channelPoint.Index)
+	log.Printf("setFundingTx(%x, %x, %v): %s err: %v", paymentHash, channelPoint.Hash[:], channelPoint.Index, commandTag, err)
 	return err
 }
 

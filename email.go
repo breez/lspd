@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"html/template"
 	"log"
 	"os"
@@ -14,8 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ses"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/wire"
 )
 
 const (
@@ -127,16 +124,7 @@ func sendChannelMismatchNotification(nodeID string, notFakeChannels, closedChann
 func sendOpenChannelEmailNotification(
 	paymentHash []byte, incomingAmountMsat int64,
 	destination []byte, capacity int64,
-	fundingTxID []byte, fundingTxOutnum uint32) error {
-
-	var h chainhash.Hash
-	err := h.SetBytes(fundingTxID)
-	if err != nil {
-		log.Printf("h.SetBytes(%x) error: %v", fundingTxID, err)
-		return fmt.Errorf("h.SetBytes(%x) error: %w", fundingTxID, err)
-	}
-	channelPoint := wire.NewOutPoint(&h, fundingTxOutnum).String()
-
+	channelPoint string) error {
 	var html bytes.Buffer
 
 	tpl := `

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/htlcswitch/hop"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -54,33 +53,31 @@ func isConnected(ctx context.Context, client lnrpc.LightningClient, destination 
 	return fmt.Errorf("destination offline")
 }
 
-func openChannel(ctx context.Context, client lnrpc.LightningClient, paymentHash, destination []byte, incomingAmountMsat int64) ([]byte, uint32, error) {
+func openChannel(client LightningClient, paymentHash, destination []byte, incomingAmountMsat int64) (*wire.OutPoint, error) {
 	capacity := incomingAmountMsat/1000 + additionalChannelCapacity
 	if capacity == publicChannelAmount {
 		capacity++
 	}
-	channelPoint, err := client.OpenChannelSync(ctx, &lnrpc.OpenChannelRequest{
-		NodePubkey:         destination,
-		LocalFundingAmount: capacity,
-		TargetConf:         6,
-		Private:            true,
-		CommitmentType:     lnrpc.CommitmentType_ANCHORS,
-		ZeroConf:           true,
+	channelPoint, err := client.OpenChannel(&OpenChannelRequest{
+		Destination: destination,
+		CapacitySat: uint64(capacity),
+		TargetConf:  6,
+		IsPrivate:   true,
+		IsZeroConf:  true,
 	})
 	if err != nil {
 		log.Printf("client.OpenChannelSync(%x, %v) error: %v", destination, capacity, err)
-		return nil, 0, err
+		return nil, err
 	}
 	sendOpenChannelEmailNotification(
 		paymentHash,
 		incomingAmountMsat,
 		destination,
 		capacity,
-		channelPoint.GetFundingTxidBytes(),
-		channelPoint.OutputIndex,
+		channelPoint.String(),
 	)
-	err = setFundingTx(paymentHash, channelPoint.GetFundingTxidBytes(), int(channelPoint.OutputIndex))
-	return channelPoint.GetFundingTxidBytes(), channelPoint.OutputIndex, err
+	err = setFundingTx(paymentHash, channelPoint)
+	return channelPoint, err
 }
 
 func getChannel(ctx context.Context, client lnrpc.LightningClient, node []byte, channelPoint string) (uint64, uint64) {
@@ -150,7 +147,7 @@ func intercept(client *LndClient) {
 				request.OnionBlob,
 			)
 
-			paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, fundingTxID, fundingTxOutnum, err := paymentInfo(request.PaymentHash)
+			paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, channelPoint, err := paymentInfo(request.PaymentHash)
 			if err != nil {
 				log.Printf("paymentInfo(%x) error: %v", request.PaymentHash, err)
 				failForwardSend(interceptorClient, request.IncomingCircuitKey)
@@ -160,9 +157,9 @@ func intercept(client *LndClient) {
 				paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat)
 			if paymentSecret != nil {
 
-				if fundingTxID == nil {
+				if channelPoint == nil {
 					if bytes.Compare(paymentHash, request.PaymentHash) == 0 {
-						fundingTxID, fundingTxOutnum, err = openChannel(clientCtx, client.client, request.PaymentHash, destination, incomingAmountMsat)
+						channelPoint, err = openChannel(client, request.PaymentHash, destination, incomingAmountMsat)
 						log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
 						if err != nil {
 							failForwardSend(interceptorClient, request.IncomingCircuitKey)
@@ -244,17 +241,10 @@ func intercept(client *LndClient) {
 					failForwardSend(interceptorClient, request.IncomingCircuitKey)
 					continue
 				}
-				var h chainhash.Hash
-				err = h.SetBytes(fundingTxID)
-				if err != nil {
-					log.Printf("h.SetBytes(%x) error: %v", fundingTxID, err)
-					failForwardSend(interceptorClient, request.IncomingCircuitKey)
-					continue
-				}
-				channelPoint := wire.NewOutPoint(&h, fundingTxOutnum).String()
+
 				go resumeOrCancel(
 					clientCtx, interceptorClient, request.IncomingCircuitKey, destination,
-					channelPoint, uint64(amt), onionBlob.Bytes(),
+					channelPoint.String(), uint64(amt), onionBlob.Bytes(),
 				)
 
 			} else {
