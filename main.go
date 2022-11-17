@@ -24,6 +24,7 @@ func main() {
 	}
 
 	client = NewLndClient()
+	interceptor := NewLndHtlcInterceptor(client)
 
 	info, err := client.GetInfo()
 	if err != nil {
@@ -36,7 +37,7 @@ func main() {
 		nodePubkey = info.Pubkey
 	}
 
-	go intercept(client)
+	go interceptor.Start()
 
 	go forwardingHistorySynchronize(client)
 	go channelsSynchronize(client)
