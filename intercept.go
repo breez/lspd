@@ -11,7 +11,6 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightningnetwork/lnd/htlcswitch/hop"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
 	"github.com/lightningnetwork/lnd/lnwire"
@@ -60,29 +59,6 @@ func openChannel(client LightningClient, paymentHash, destination []byte, incomi
 	)
 	err = setFundingTx(paymentHash, channelPoint)
 	return channelPoint, err
-}
-
-func getChannel(ctx context.Context, client lnrpc.LightningClient, node []byte, channelPoint string) (uint64, uint64) {
-	r, err := client.ListChannels(ctx, &lnrpc.ListChannelsRequest{Peer: node})
-	if err != nil {
-		log.Printf("client.ListChannels(%x) error: %v", node, err)
-		return 0, 0
-	}
-	for _, c := range r.Channels {
-		log.Printf("getChannel(%x): %v", node, c.ChanId)
-		if c.ChannelPoint == channelPoint && c.Active {
-			confirmedChanId := c.ChanId
-			if c.ZeroConf {
-				confirmedChanId = c.ZeroConfConfirmedScid
-				if confirmedChanId == hop.Source.ToUint64() {
-					confirmedChanId = 0
-				}
-			}
-			return c.ChanId, confirmedChanId
-		}
-	}
-	log.Printf("No channel found: getChannel(%x)", node)
-	return 0, 0
 }
 
 func failForwardSend(interceptorClient routerrpc.Router_HtlcInterceptorClient, incomingCircuitKey *routerrpc.CircuitKey) {
@@ -228,7 +204,7 @@ func intercept(client *LndClient) {
 
 				go resumeOrCancel(
 					clientCtx, interceptorClient, request.IncomingCircuitKey, destination,
-					channelPoint.String(), uint64(amt), onionBlob.Bytes(),
+					*channelPoint, uint64(amt), onionBlob.Bytes(),
 				)
 
 			} else {
@@ -249,22 +225,27 @@ func resumeOrCancel(
 	interceptorClient routerrpc.Router_HtlcInterceptorClient,
 	incomingCircuitKey *routerrpc.CircuitKey,
 	destination []byte,
-	channelPoint string,
+	channelPoint wire.OutPoint,
 	outgoingAmountMsat uint64,
 	onionBlob []byte,
 ) {
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		initialChanID, confirmedChanID := getChannel(ctx, client.client, destination, channelPoint)
-		if initialChanID != 0 {
+		ch, err := client.GetChannel(destination, channelPoint)
+		if err != nil {
+			failForwardSend(interceptorClient, incomingCircuitKey)
+			return
+		}
+
+		if uint64(ch.InitialChannelID) != 0 {
 			interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
 				IncomingCircuitKey:      incomingCircuitKey,
 				Action:                  routerrpc.ResolveHoldForwardAction_RESUME,
 				OutgoingAmountMsat:      outgoingAmountMsat,
-				OutgoingRequestedChanId: initialChanID,
+				OutgoingRequestedChanId: uint64(ch.InitialChannelID),
 				OnionBlob:               onionBlob,
 			})
-			err := insertChannel(initialChanID, confirmedChanID, channelPoint, destination, time.Now())
+			err := insertChannel(uint64(ch.InitialChannelID), uint64(ch.ConfirmedChannelID), channelPoint.String(), destination, time.Now())
 			if err != nil {
 				log.Printf("insertChannel error: %v", err)
 			}
