@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"math/big"
@@ -34,23 +33,6 @@ func checkPayment(incomingAmountMsat, outgoingAmountMsat int64) error {
 		return fmt.Errorf("not enough fees")
 	}
 	return nil
-}
-
-func isConnected(ctx context.Context, client lnrpc.LightningClient, destination []byte) error {
-	pubKey := hex.EncodeToString(destination)
-	r, err := client.ListPeers(ctx, &lnrpc.ListPeersRequest{LatestError: true})
-	if err != nil {
-		log.Printf("client.ListPeers() error: %v", err)
-		return fmt.Errorf("client.ListPeers() error: %w", err)
-	}
-	for _, peer := range r.Peers {
-		if pubKey == peer.PubKey {
-			log.Printf("destination online: %x", destination)
-			return nil
-		}
-	}
-	log.Printf("destination offline: %x", destination)
-	return fmt.Errorf("destination offline")
 }
 
 func openChannel(client LightningClient, paymentHash, destination []byte, incomingAmountMsat int64) (*wire.OutPoint, error) {
@@ -167,9 +149,11 @@ func intercept(client *LndClient) {
 						}
 					} else { //probing
 						failureCode := lnrpc.Failure_TEMPORARY_CHANNEL_FAILURE
-						if err := isConnected(clientCtx, client.client, destination); err == nil {
+						isConnected, _ := client.IsConnected(destination)
+						if err != nil || !*isConnected {
 							failureCode = lnrpc.Failure_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
 						}
+
 						interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
 							IncomingCircuitKey: request.IncomingCircuitKey,
 							Action:             routerrpc.ResolveHoldForwardAction_FAIL,
