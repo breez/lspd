@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 )
@@ -25,6 +26,7 @@ func main() {
 
 	client = NewLndClient()
 	interceptor := NewLndHtlcInterceptor(client)
+	s := NewGrpcServer()
 
 	info, err := client.GetInfo()
 	if err != nil {
@@ -37,16 +39,35 @@ func main() {
 		nodePubkey = info.Pubkey
 	}
 
-	go interceptor.Start()
-
 	go forwardingHistorySynchronize(client)
 	go channelsSynchronize(client)
 
-	s := NewGrpcServer()
-	err = s.Start()
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
+	var wg sync.WaitGroup
+	wg.Add(2)
 
+	go func() {
+		err := interceptor.Start()
+		if err == nil {
+			log.Printf("Interceptor stopped.")
+		} else {
+			log.Printf("FATAL. Interceptor stopped with error: %v", err)
+		}
+		s.Stop()
+		wg.Done()
+	}()
+
+	go func() {
+		err := s.Start()
+		if err == nil {
+			log.Printf("GRPC server stopped.")
+		} else {
+			log.Printf("FATAL. GRPC server stopped with error: %v", err)
+		}
+
+		interceptor.Stop()
+		wg.Done()
+	}()
+
+	wg.Wait()
 	log.Printf("lspd exited")
 }

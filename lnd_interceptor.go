@@ -15,7 +15,8 @@ import (
 )
 
 type LndHtlcInterceptor struct {
-	client *LndClient
+	client        *LndClient
+	stopRequested bool
 }
 
 func NewLndHtlcInterceptor(client *LndClient) *LndHtlcInterceptor {
@@ -30,12 +31,16 @@ func (i *LndHtlcInterceptor) Start() error {
 	return i.intercept()
 }
 
-func (i *LndHtlcInterceptor) Stop() error {
-	return nil
+func (i *LndHtlcInterceptor) Stop() {
+	i.stopRequested = true
 }
 
 func (i *LndHtlcInterceptor) intercept() error {
 	for {
+		if i.stopRequested {
+			return nil
+		}
+
 		cancellableCtx, cancel := context.WithCancel(context.Background())
 		clientCtx := metadata.AppendToOutgoingContext(cancellableCtx, "macaroon", os.Getenv("LND_MACAROON_HEX"))
 		interceptorClient, err := client.routerClient.HtlcInterceptor(clientCtx)
@@ -47,6 +52,9 @@ func (i *LndHtlcInterceptor) intercept() error {
 		}
 
 		for {
+			if i.stopRequested {
+				return nil
+			}
 			request, err := interceptorClient.Recv()
 			if err != nil {
 				// If it is  just the error result of the context cancellation
