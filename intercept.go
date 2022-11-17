@@ -51,7 +51,7 @@ func intercept(reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingE
 	if paymentSecret != nil {
 
 		if channelPoint == nil {
-			if bytes.Compare(paymentHash, reqPaymentHash) == 0 {
+			if bytes.Equal(paymentHash, reqPaymentHash) {
 				channelPoint, err = openChannel(client, reqPaymentHash, destination, incomingAmountMsat)
 				log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
 				if err != nil {
