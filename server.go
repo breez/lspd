@@ -46,7 +46,7 @@ type server struct {
 }
 
 var (
-	client              *LndClient
+	client              LightningClient
 	openChannelReqGroup singleflight.Group
 	privateKey          *btcec.PrivateKey
 	publicKey           *btcec.PublicKey

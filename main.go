@@ -24,8 +24,30 @@ func main() {
 		log.Fatalf("pgConnect() error: %v", err)
 	}
 
-	client = NewLndClient()
-	interceptor := NewLndHtlcInterceptor(client)
+	runCln := os.Getenv("RUN_CLN") == "true"
+	runLnd := os.Getenv("RUN_LND") == "true"
+
+	if runCln && runLnd {
+		log.Fatalf("One of RUN_CLN or RUN_LND must be true, not both.")
+	}
+
+	if !runCln && !runLnd {
+		log.Fatalf("Either RUN_CLN or RUN_LND must be true.")
+	}
+
+	var interceptor HtlcInterceptor
+	if runCln {
+		c := NewClnClient("lightningrpc", ".")
+		client = c
+		interceptor = NewClnHtlcInterceptor(c)
+	}
+
+	if runLnd {
+		c := NewLndClient()
+		client = c
+		interceptor = NewLndHtlcInterceptor(c)
+	}
+
 	s := NewGrpcServer()
 
 	info, err := client.GetInfo()
@@ -38,9 +60,6 @@ func main() {
 	if nodePubkey == "" {
 		nodePubkey = info.Pubkey
 	}
-
-	go forwardingHistorySynchronize(client)
-	go channelsSynchronize(client)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
