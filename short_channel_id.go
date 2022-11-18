@@ -4,37 +4,40 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/lightningnetwork/lnd/lnwire"
 )
 
 type ShortChannelID uint64
 
 func NewShortChannelIDFromString(channelID string) (*ShortChannelID, error) {
-	parts := strings.Split(channelID, "x")
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("expected 3 parts, got %d", len(parts))
+	if channelID == "" {
+		return nil, nil
 	}
 
-	blockHeight, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return nil, err
+	fields := strings.Split(channelID, "x")
+	if len(fields) != 3 {
+		return nil, fmt.Errorf("invalid short channel id %v", channelID)
 	}
-
-	txIndex, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return nil, err
+	var blockHeight, txIndex, txPos int64
+	var err error
+	if blockHeight, err = strconv.ParseInt(fields[0], 10, 64); err != nil {
+		return nil, fmt.Errorf("failed to parse block height %v", fields[0])
 	}
-
-	outputIndex, err := strconv.Atoi(parts[2])
-	if err != nil {
-		return nil, err
+	if txIndex, err = strconv.ParseInt(fields[1], 10, 64); err != nil {
+		return nil, fmt.Errorf("failed to parse block height %v", fields[1])
+	}
+	if txPos, err = strconv.ParseInt(fields[2], 10, 64); err != nil {
+		return nil, fmt.Errorf("failed to parse block height %v", fields[2])
 	}
 
 	result := ShortChannelID(
-		(uint64(outputIndex) & 0xFFFF) +
-			((uint64(txIndex) << 16) & 0xFFFFFF0000) +
-			((uint64(blockHeight) << 40) & 0xFFFFFF0000000000),
+		lnwire.ShortChannelID{
+			BlockHeight: uint32(blockHeight),
+			TxIndex:     uint32(txIndex),
+			TxPosition:  uint16(txPos),
+		}.ToUint64(),
 	)
-
 	return &result, nil
 }
 

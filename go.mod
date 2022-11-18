@@ -13,8 +13,9 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/jackc/pgtype v1.8.1
 	github.com/jackc/pgx/v4 v4.13.0
-	github.com/lightningnetwork/lightning-onion v1.0.2-0.20220211021909-bb84a1ccb0c5
+	github.com/lightningnetwork/lightning-onion v1.2.0
 	github.com/lightningnetwork/lnd v0.15.1-beta
+	github.com/niftynei/glightning v0.8.2
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/grpc v1.38.0
 )
@@ -136,8 +137,9 @@ require (
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.17.0 // indirect
 	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3 // indirect
+	golang.org/x/exp v0.0.0-20221114191408-850992195362
 	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f // indirect
-	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
+	golang.org/x/sys v0.1.0 // indirect
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba // indirect
@@ -154,3 +156,5 @@ require (
 )
 
 replace github.com/lightningnetwork/lnd v0.15.1-beta => github.com/breez/lnd v0.15.0-beta.rc6.0.20220831104847-00b86a81e57a
+
+replace github.com/niftynei/glightning v0.8.2 => github.com/breez/glightning v0.0.0-20220822151439-7bb360481467
