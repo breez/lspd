@@ -53,6 +53,7 @@ func (i *LndHtlcInterceptor) intercept() error {
 
 		for {
 			if i.stopRequested {
+				cancel()
 				return nil
 			}
 			request, err := interceptorClient.Recv()
@@ -99,6 +100,8 @@ func (i *LndHtlcInterceptor) intercept() error {
 				})
 			}
 		}
+
+		cancel()
 	}
 }
 
