@@ -31,8 +31,9 @@ func (i *LndHtlcInterceptor) Start() error {
 	return i.intercept()
 }
 
-func (i *LndHtlcInterceptor) Stop() {
+func (i *LndHtlcInterceptor) Stop() error {
 	i.stopRequested = true
+	return nil
 }
 
 func (i *LndHtlcInterceptor) intercept() error {
@@ -43,7 +44,7 @@ func (i *LndHtlcInterceptor) intercept() error {
 
 		cancellableCtx, cancel := context.WithCancel(context.Background())
 		clientCtx := metadata.AppendToOutgoingContext(cancellableCtx, "macaroon", os.Getenv("LND_MACAROON_HEX"))
-		interceptorClient, err := client.routerClient.HtlcInterceptor(clientCtx)
+		interceptorClient, err := i.client.routerClient.HtlcInterceptor(clientCtx)
 		if err != nil {
 			log.Printf("routerClient.HtlcInterceptor(): %v", err)
 			cancel()
