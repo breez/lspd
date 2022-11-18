@@ -17,16 +17,17 @@ import (
 type interceptAction int
 
 const (
-	INTERCEPT_RESUME           interceptAction = 0
-	INTERCEPT_RESUME_OR_CANCEL interceptAction = 1
-	INTERCEPT_FAIL_HTLC        interceptAction = 2
+	INTERCEPT_RESUME              interceptAction = 0
+	INTERCEPT_RESUME_OR_CANCEL    interceptAction = 1
+	INTERCEPT_FAIL_HTLC           interceptAction = 2
+	INTERCEPT_FAIL_HTLC_WITH_CODE interceptAction = 3
 )
 
-type interceptFailureCode int
+type interceptFailureCode uint16
 
-const (
-	FAILURE_TEMPORARY_CHANNEL_FAILURE            interceptFailureCode = 0
-	FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS interceptFailureCode = 1
+var (
+	FAILURE_TEMPORARY_CHANNEL_FAILURE            interceptFailureCode = 0x1007
+	FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS interceptFailureCode = 0x4015
 )
 
 type interceptResult struct {
@@ -67,7 +68,7 @@ func intercept(reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingE
 				}
 
 				return interceptResult{
-					action:      INTERCEPT_FAIL_HTLC,
+					action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
 					failureCode: failureCode,
 				}
 			}
