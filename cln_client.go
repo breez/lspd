@@ -112,7 +112,7 @@ func (c *ClnClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)
 func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetChannelResult, error) {
 	pubkey := hex.EncodeToString(peerID)
 	peer, err := c.client.GetPeer(pubkey)
-	fundingTxID := channelPoint.Hash.String()
+	fundingTxID := hex.EncodeToString(channelPoint.Hash[:])
 	if err != nil {
 		log.Printf("CLN: client.GetPeer(%s) error: %v", pubkey, err)
 		return nil, err
@@ -138,7 +138,7 @@ func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetC
 		}
 	}
 
-	log.Printf("No channel found: getChannel(%v)", pubkey)
+	log.Printf("No channel found: getChannel(%v, %v)", pubkey, fundingTxID)
 	return nil, fmt.Errorf("no channel found")
 }
 
