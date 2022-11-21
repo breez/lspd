@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -17,23 +18,34 @@ import (
 type LndHtlcInterceptor struct {
 	client        *LndClient
 	stopRequested bool
+	initWg        sync.WaitGroup
 }
 
-func NewLndHtlcInterceptor(client *LndClient) *LndHtlcInterceptor {
-	return &LndHtlcInterceptor{
-		client: client,
+func NewLndHtlcInterceptor() *LndHtlcInterceptor {
+	i := &LndHtlcInterceptor{
+		client: NewLndClient(),
 	}
+
+	i.initWg.Add(1)
+
+	return i
 }
 
 func (i *LndHtlcInterceptor) Start() error {
 	go forwardingHistorySynchronize(i.client)
 	go channelsSynchronize(i.client)
+	i.initWg.Done()
 	return i.intercept()
 }
 
 func (i *LndHtlcInterceptor) Stop() error {
 	i.stopRequested = true
 	return nil
+}
+
+func (i *LndHtlcInterceptor) WaitStarted() LightningClient {
+	i.initWg.Wait()
+	return i.client
 }
 
 func (i *LndHtlcInterceptor) intercept() error {

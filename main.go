@@ -37,29 +37,14 @@ func main() {
 
 	var interceptor HtlcInterceptor
 	if runCln {
-		c := NewClnClient("lightningrpc", ".")
-		client = c
-		interceptor = NewClnHtlcInterceptor(c)
+		interceptor = NewClnHtlcInterceptor()
 	}
 
 	if runLnd {
-		c := NewLndClient()
-		client = c
-		interceptor = NewLndHtlcInterceptor(c)
+		interceptor = NewLndHtlcInterceptor()
 	}
 
 	s := NewGrpcServer()
-
-	info, err := client.GetInfo()
-	if err != nil {
-		log.Fatalf("client.GetInfo() error: %v", err)
-	}
-	if nodeName == "" {
-		nodeName = info.Alias
-	}
-	if nodePubkey == "" {
-		nodePubkey = info.Pubkey
-	}
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -74,6 +59,18 @@ func main() {
 		s.Stop()
 		wg.Done()
 	}()
+
+	client = interceptor.WaitStarted()
+	info, err := client.GetInfo()
+	if err != nil {
+		log.Fatalf("client.GetInfo() error: %v", err)
+	}
+	if nodeName == "" {
+		nodeName = info.Alias
+	}
+	if nodePubkey == "" {
+		nodePubkey = info.Pubkey
+	}
 
 	go func() {
 		err := s.Start()

@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	sphinx "github.com/lightningnetwork/lightning-onion"
@@ -18,17 +19,19 @@ import (
 type ClnHtlcInterceptor struct {
 	client *ClnClient
 	plugin *glightning.Plugin
+	initWg sync.WaitGroup
 }
 
-func NewClnHtlcInterceptor(client *ClnClient) *ClnHtlcInterceptor {
-	return &ClnHtlcInterceptor{
-		client: client,
-	}
+func NewClnHtlcInterceptor() *ClnHtlcInterceptor {
+	i := &ClnHtlcInterceptor{}
+
+	i.initWg.Add(1)
+	return i
 }
 
 func (i *ClnHtlcInterceptor) Start() error {
 	//c-lightning plugin initiate
-	plugin := glightning.NewPlugin(onInit)
+	plugin := glightning.NewPlugin(i.onInit)
 	i.plugin = plugin
 	plugin.RegisterHooks(&glightning.Hooks{
 		HtlcAccepted: i.OnHtlcAccepted,
@@ -52,8 +55,25 @@ func (i *ClnHtlcInterceptor) Stop() error {
 	return nil
 }
 
-func onInit(plugin *glightning.Plugin, options map[string]glightning.Option, config *glightning.Config) {
+func (i *ClnHtlcInterceptor) WaitStarted() LightningClient {
+	i.initWg.Wait()
+	return i.client
+}
+
+func (i *ClnHtlcInterceptor) onInit(plugin *glightning.Plugin, options map[string]glightning.Option, config *glightning.Config) {
 	log.Printf("successfully init'd! %v\n", config.RpcFile)
+
+	//lightning server
+	clientcln := glightning.NewLightning()
+	clientcln.SetTimeout(60)
+	clientcln.StartUp(config.RpcFile, config.LightningDir)
+
+	i.client = &ClnClient{
+		client: clientcln,
+	}
+
+	log.Printf("successfull clientcln.StartUp")
+	i.initWg.Done()
 }
 
 func (i *ClnHtlcInterceptor) OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAcceptedResponse, error) {
@@ -143,7 +163,8 @@ func (i *ClnHtlcInterceptor) resumeOrCancel(event *glightning.HtlcAcceptedEvent,
 func encodePayloadWithNextHop(payloadHex string, channelId uint64) (string, error) {
 	payload, err := hex.DecodeString(payloadHex)
 	if err != nil {
-		log.Fatalf("failed to decode types %v", err)
+		log.Printf("failed to decode types. error: %v", err)
+		return "", err
 	}
 	bufReader := bytes.NewBuffer(payload)
 	var b [8]byte
