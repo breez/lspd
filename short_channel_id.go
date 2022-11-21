@@ -12,7 +12,8 @@ type ShortChannelID uint64
 
 func NewShortChannelIDFromString(channelID string) (*ShortChannelID, error) {
 	if channelID == "" {
-		return nil, nil
+		c := ShortChannelID(0)
+		return &c, nil
 	}
 
 	fields := strings.Split(channelID, "x")
