@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
@@ -20,7 +21,7 @@ type interceptAction int
 
 const (
 	INTERCEPT_RESUME              interceptAction = 0
-	INTERCEPT_RESUME_OR_CANCEL    interceptAction = 1
+	INTERCEPT_RESUME_WITH_ONION   interceptAction = 1
 	INTERCEPT_FAIL_HTLC           interceptAction = 2
 	INTERCEPT_FAIL_HTLC_WITH_CODE interceptAction = 3
 )
@@ -40,6 +41,7 @@ type interceptResult struct {
 	destination  []byte
 	amountMsat   uint64
 	channelPoint *wire.OutPoint
+	channelId    uint64
 	onionBlob    []byte
 }
 
@@ -53,114 +55,157 @@ func intercept(reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingE
 				action: INTERCEPT_FAIL_HTLC,
 			}, nil
 		}
-		log.Printf("paymentHash:%x\npaymentSecret:%x\ndestination:%x\nincomingAmountMsat:%v\noutgoingAmountMsat:%v\n\n",
+		log.Printf("paymentHash:%x\npaymentSecret:%x\ndestination:%x\nincomingAmountMsat:%v\noutgoingAmountMsat:%v",
 			paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat)
-		if paymentSecret != nil {
-
-			if channelPoint == nil {
-				if bytes.Equal(paymentHash, reqPaymentHash) {
-					channelPoint, err = openChannel(client, reqPaymentHash, destination, incomingAmountMsat)
-					log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
-					if err != nil {
-						return interceptResult{
-							action: INTERCEPT_FAIL_HTLC,
-						}, nil
-					}
-				} else { //probing
-					failureCode := FAILURE_TEMPORARY_CHANNEL_FAILURE
-					isConnected, _ := client.IsConnected(destination)
-					if err != nil || !*isConnected {
-						failureCode = FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
-					}
-
-					return interceptResult{
-						action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-						failureCode: failureCode,
-					}, nil
-				}
-			}
-
-			pubKey, err := btcec.ParsePubKey(destination)
-			if err != nil {
-				log.Printf("btcec.ParsePubKey(%x): %v", destination, err)
-				return interceptResult{
-					action: INTERCEPT_FAIL_HTLC,
-				}, nil
-			}
-
-			sessionKey, err := btcec.NewPrivateKey()
-			if err != nil {
-				log.Printf("btcec.NewPrivateKey(): %v", err)
-				return interceptResult{
-					action: INTERCEPT_FAIL_HTLC,
-				}, nil
-			}
-
-			var bigProd, bigAmt big.Int
-			amt := (bigAmt.Div(bigProd.Mul(big.NewInt(outgoingAmountMsat), big.NewInt(int64(reqOutgoingAmountMsat))), big.NewInt(incomingAmountMsat))).Int64()
-
-			var addr [32]byte
-			copy(addr[:], paymentSecret)
-			hop := route.Hop{
-				AmtToForward:     lnwire.MilliSatoshi(amt),
-				OutgoingTimeLock: reqOutgoingExpiry,
-				MPP:              record.NewMPP(lnwire.MilliSatoshi(outgoingAmountMsat), addr),
-				CustomRecords:    make(record.CustomSet),
-			}
-
-			var b bytes.Buffer
-			err = hop.PackHopPayload(&b, uint64(0))
-			if err != nil {
-				log.Printf("hop.PackHopPayload(): %v", err)
-				return interceptResult{
-					action: INTERCEPT_FAIL_HTLC,
-				}, nil
-			}
-
-			payload, err := sphinx.NewHopPayload(nil, b.Bytes())
-			if err != nil {
-				log.Printf("sphinx.NewHopPayload(): %v", err)
-				return interceptResult{
-					action: INTERCEPT_FAIL_HTLC,
-				}, nil
-			}
-
-			var sphinxPath sphinx.PaymentPath
-			sphinxPath[0] = sphinx.OnionHop{
-				NodePub:    *pubKey,
-				HopPayload: payload,
-			}
-			sphinxPacket, err := sphinx.NewOnionPacket(
-				&sphinxPath, sessionKey, reqPaymentHash,
-				sphinx.DeterministicPacketFiller,
-			)
-			if err != nil {
-				log.Printf("sphinx.NewOnionPacket(): %v", err)
-				return interceptResult{
-					action: INTERCEPT_FAIL_HTLC,
-				}, nil
-			}
-			var onionBlob bytes.Buffer
-			err = sphinxPacket.Encode(&onionBlob)
-			if err != nil {
-				log.Printf("sphinxPacket.Encode(): %v", err)
-				return interceptResult{
-					action: INTERCEPT_FAIL_HTLC,
-				}, nil
-			}
-
-			return interceptResult{
-				action:       INTERCEPT_RESUME_OR_CANCEL,
-				destination:  destination,
-				channelPoint: channelPoint,
-				amountMsat:   uint64(amt),
-				onionBlob:    onionBlob.Bytes(),
-			}, nil
-		} else {
+		if paymentSecret == nil {
 			return interceptResult{
 				action: INTERCEPT_RESUME,
 			}, nil
 		}
+
+		if channelPoint == nil {
+			if bytes.Equal(paymentHash, reqPaymentHash) {
+				channelPoint, err = openChannel(client, reqPaymentHash, destination, incomingAmountMsat)
+				if err != nil {
+					log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
+					return interceptResult{
+						action: INTERCEPT_FAIL_HTLC,
+					}, nil
+				}
+			} else { //probing
+				failureCode := FAILURE_TEMPORARY_CHANNEL_FAILURE
+				isConnected, _ := client.IsConnected(destination)
+				if err != nil || !isConnected {
+					failureCode = FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
+				}
+
+				return interceptResult{
+					action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+					failureCode: failureCode,
+				}, nil
+			}
+		}
+
+		pubKey, err := btcec.ParsePubKey(destination)
+		if err != nil {
+			log.Printf("btcec.ParsePubKey(%x): %v", destination, err)
+			return interceptResult{
+				action: INTERCEPT_FAIL_HTLC,
+			}, nil
+		}
+
+		sessionKey, err := btcec.NewPrivateKey()
+		if err != nil {
+			log.Printf("btcec.NewPrivateKey(): %v", err)
+			return interceptResult{
+				action: INTERCEPT_FAIL_HTLC,
+			}, nil
+		}
+
+		var bigProd, bigAmt big.Int
+		amt := (bigAmt.Div(bigProd.Mul(big.NewInt(outgoingAmountMsat), big.NewInt(int64(reqOutgoingAmountMsat))), big.NewInt(incomingAmountMsat))).Int64()
+
+		var addr [32]byte
+		copy(addr[:], paymentSecret)
+		hop := route.Hop{
+			AmtToForward:     lnwire.MilliSatoshi(amt),
+			OutgoingTimeLock: reqOutgoingExpiry,
+			MPP:              record.NewMPP(lnwire.MilliSatoshi(outgoingAmountMsat), addr),
+			CustomRecords:    make(record.CustomSet),
+		}
+
+		var b bytes.Buffer
+		err = hop.PackHopPayload(&b, uint64(0))
+		if err != nil {
+			log.Printf("hop.PackHopPayload(): %v", err)
+			return interceptResult{
+				action: INTERCEPT_FAIL_HTLC,
+			}, nil
+		}
+
+		payload, err := sphinx.NewHopPayload(nil, b.Bytes())
+		if err != nil {
+			log.Printf("sphinx.NewHopPayload(): %v", err)
+			return interceptResult{
+				action: INTERCEPT_FAIL_HTLC,
+			}, nil
+		}
+
+		var sphinxPath sphinx.PaymentPath
+		sphinxPath[0] = sphinx.OnionHop{
+			NodePub:    *pubKey,
+			HopPayload: payload,
+		}
+		sphinxPacket, err := sphinx.NewOnionPacket(
+			&sphinxPath, sessionKey, reqPaymentHash,
+			sphinx.DeterministicPacketFiller,
+		)
+		if err != nil {
+			log.Printf("sphinx.NewOnionPacket(): %v", err)
+			return interceptResult{
+				action: INTERCEPT_FAIL_HTLC,
+			}, nil
+		}
+		var onionBlob bytes.Buffer
+		err = sphinxPacket.Encode(&onionBlob)
+		if err != nil {
+			log.Printf("sphinxPacket.Encode(): %v", err)
+			return interceptResult{
+				action: INTERCEPT_FAIL_HTLC,
+			}, nil
+		}
+
+		deadline := time.Now().Add(60 * time.Second)
+
+		for {
+			chanResult, _ := client.GetChannel(destination, *channelPoint)
+			if chanResult != nil {
+				log.Printf("channel opended successfully alias: %v, confirmed: %v", chanResult.InitialChannelID.ToString(), chanResult.ConfirmedChannelID.ToString())
+
+				err := insertChannel(
+					uint64(chanResult.InitialChannelID),
+					uint64(chanResult.ConfirmedChannelID),
+					channelPoint.String(),
+					destination,
+					time.Now(),
+				)
+
+				if err != nil {
+					log.Printf("insertChannel error: %v", err)
+					return interceptResult{
+						action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+						failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					}, nil
+				}
+
+				channelID := uint64(chanResult.ConfirmedChannelID)
+				if channelID == 0 {
+					channelID = uint64(chanResult.InitialChannelID)
+				}
+
+				return interceptResult{
+					action:       INTERCEPT_RESUME_WITH_ONION,
+					destination:  destination,
+					channelPoint: channelPoint,
+					channelId:    channelID,
+					amountMsat:   uint64(amt),
+					onionBlob:    onionBlob.Bytes(),
+				}, nil
+			}
+
+			log.Printf("waiting for channel to get opened.... %v\n", destination)
+			if time.Now().After(deadline) {
+				log.Printf("Stop retrying getChannel(%v, %v)", destination, channelPoint.String())
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+
+		log.Printf("Error: Channel failed to opened... timed out. ")
+		return interceptResult{
+			action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+			failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+		}, nil
 	})
 
 	return resp.(interceptResult)

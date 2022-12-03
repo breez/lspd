@@ -5,13 +5,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"github.com/lightningnetwork/lnd/htlcswitch/hop"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/chainrpc"
-	"google.golang.org/grpc/metadata"
 )
 
 type copyFromEvents struct {
@@ -42,8 +40,7 @@ func channelsSynchronize(client *LndClient) {
 	lastSync := time.Now().Add(-6 * time.Minute)
 	for {
 		cancellableCtx, cancel := context.WithCancel(context.Background())
-		clientCtx := metadata.AppendToOutgoingContext(cancellableCtx, "macaroon", os.Getenv("LND_MACAROON_HEX"))
-		stream, err := client.chainNotifierClient.RegisterBlockEpochNtfn(clientCtx, &chainrpc.BlockEpoch{})
+		stream, err := client.chainNotifierClient.RegisterBlockEpochNtfn(cancellableCtx, &chainrpc.BlockEpoch{})
 		if err != nil {
 			log.Printf("chainNotifierClient.RegisterBlockEpochNtfn(): %v", err)
 			cancel()
@@ -70,8 +67,7 @@ func channelsSynchronize(client *LndClient) {
 
 func channelsSynchronizeOnce(client *LndClient) error {
 	log.Printf("channelsSynchronizeOnce - begin")
-	clientCtx := metadata.AppendToOutgoingContext(context.Background(), "macaroon", os.Getenv("LND_MACAROON_HEX"))
-	channels, err := client.client.ListChannels(clientCtx, &lnrpc.ListChannelsRequest{PrivateOnly: true})
+	channels, err := client.client.ListChannels(context.Background(), &lnrpc.ListChannelsRequest{PrivateOnly: true})
 	if err != nil {
 		log.Printf("ListChannels error: %v", err)
 		return fmt.Errorf("client.ListChannels() error: %w", err)
@@ -123,10 +119,9 @@ func forwardingHistorySynchronizeOnce(client *LndClient) error {
 	log.Printf("last2: %v", last)
 	now := time.Now()
 	endTime := uint64(now.Add(time.Hour * 24).Unix())
-	clientCtx := metadata.AppendToOutgoingContext(context.Background(), "macaroon", os.Getenv("LND_MACAROON_HEX"))
 	indexOffset := uint32(0)
 	for {
-		forwardHistory, err := client.client.ForwardingHistory(clientCtx, &lnrpc.ForwardingHistoryRequest{
+		forwardHistory, err := client.client.ForwardingHistory(context.Background(), &lnrpc.ForwardingHistoryRequest{
 			StartTime:    uint64(last),
 			EndTime:      endTime,
 			NumMaxEvents: 10000,

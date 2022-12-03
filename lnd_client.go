@@ -33,9 +33,14 @@ func NewLndClient() *LndClient {
 		log.Fatalf("credentials: failed to append certificates")
 	}
 	creds := credentials.NewClientTLSFromCert(cp, "")
+	macCred := NewMacaroonCredential(os.Getenv("LND_MACAROON_HEX"))
 
 	// Address of an LND instance
-	conn, err := grpc.Dial(os.Getenv("LND_ADDRESS"), grpc.WithTransportCredentials(creds))
+	conn, err := grpc.Dial(
+		os.Getenv("LND_ADDRESS"),
+		grpc.WithTransportCredentials(creds),
+		grpc.WithPerRPCCredentials(macCred),
+	)
 	if err != nil {
 		log.Fatalf("Failed to connect to LND gRPC: %v", err)
 	}
@@ -56,7 +61,7 @@ func (c *LndClient) Close() {
 }
 
 func (c *LndClient) GetInfo() (*GetInfoResult, error) {
-	info, err := c.client.GetInfo(macaroonContext(), &lnrpc.GetInfoRequest{})
+	info, err := c.client.GetInfo(context.Background(), &lnrpc.GetInfoRequest{})
 	if err != nil {
 		log.Printf("LND: client.GetInfo() error: %v", err)
 		return nil, err
@@ -68,29 +73,27 @@ func (c *LndClient) GetInfo() (*GetInfoResult, error) {
 	}, nil
 }
 
-func (c *LndClient) IsConnected(destination []byte) (*bool, error) {
+func (c *LndClient) IsConnected(destination []byte) (bool, error) {
 	pubKey := hex.EncodeToString(destination)
 
-	r, err := c.client.ListPeers(macaroonContext(), &lnrpc.ListPeersRequest{LatestError: true})
+	r, err := c.client.ListPeers(context.Background(), &lnrpc.ListPeersRequest{LatestError: true})
 	if err != nil {
 		log.Printf("LND: client.ListPeers() error: %v", err)
-		return nil, fmt.Errorf("LND: client.ListPeers() error: %w", err)
+		return false, fmt.Errorf("LND: client.ListPeers() error: %w", err)
 	}
 	for _, peer := range r.Peers {
 		if pubKey == peer.PubKey {
 			log.Printf("destination online: %x", destination)
-			result := true
-			return &result, nil
+			return true, nil
 		}
 	}
 
 	log.Printf("LND: destination offline: %x", destination)
-	result := false
-	return &result, nil
+	return false, nil
 }
 
 func (c *LndClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error) {
-	channelPoint, err := c.client.OpenChannelSync(macaroonContext(), &lnrpc.OpenChannelRequest{
+	channelPoint, err := c.client.OpenChannelSync(context.Background(), &lnrpc.OpenChannelRequest{
 		NodePubkey:         req.Destination,
 		LocalFundingAmount: int64(req.CapacitySat),
 		TargetConf:         int32(req.TargetConf),
@@ -115,7 +118,7 @@ func (c *LndClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)
 }
 
 func (c *LndClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetChannelResult, error) {
-	r, err := c.client.ListChannels(macaroonContext(), &lnrpc.ListChannelsRequest{Peer: peerID})
+	r, err := c.client.ListChannels(context.Background(), &lnrpc.ListChannelsRequest{Peer: peerID})
 	if err != nil {
 		log.Printf("client.ListChannels(%x) error: %v", peerID, err)
 		return nil, err
@@ -197,7 +200,7 @@ func (c *LndClient) GetClosedChannels(nodeID string, channelPoints map[string]ui
 }
 
 func (c *LndClient) getWaitingCloseChannels(nodeID string) ([]*lnrpc.PendingChannelsResponse_WaitingCloseChannel, error) {
-	pendingResponse, err := c.client.PendingChannels(macaroonContext(), &lnrpc.PendingChannelsRequest{})
+	pendingResponse, err := c.client.PendingChannels(context.Background(), &lnrpc.PendingChannelsRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -208,8 +211,4 @@ func (c *LndClient) getWaitingCloseChannels(nodeID string) ([]*lnrpc.PendingChan
 		}
 	}
 	return waitingCloseChannels, nil
-}
-
-func macaroonContext() context.Context {
-	return metadata.AppendToOutgoingContext(context.Background(), "macaroon", os.Getenv("LND_MACAROON_HEX"))
 }

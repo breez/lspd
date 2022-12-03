@@ -43,25 +43,23 @@ func (c *ClnClient) GetInfo() (*GetInfoResult, error) {
 	}, nil
 }
 
-func (c *ClnClient) IsConnected(destination []byte) (*bool, error) {
+func (c *ClnClient) IsConnected(destination []byte) (bool, error) {
 	pubKey := hex.EncodeToString(destination)
 	peers, err := c.client.ListPeers()
 	if err != nil {
 		log.Printf("CLN: client.ListPeers() error: %v", err)
-		return nil, fmt.Errorf("CLN: client.ListPeers() error: %w", err)
+		return false, fmt.Errorf("CLN: client.ListPeers() error: %w", err)
 	}
 
 	for _, peer := range peers {
 		if pubKey == peer.Id {
 			log.Printf("destination online: %x", destination)
-			result := true
-			return &result, nil
+			return true, nil
 		}
 	}
 
 	log.Printf("CLN: destination offline: %x", destination)
-	result := false
-	return &result, nil
+	return false, nil
 }
 
 func (c *ClnClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error) {

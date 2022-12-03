@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"sync"
-	"time"
 
 	sphinx "github.com/lightningnetwork/lightning-onion"
 	"github.com/lightningnetwork/lnd/record"
@@ -100,8 +99,8 @@ func (i *ClnHtlcInterceptor) OnHtlcAccepted(event *glightning.HtlcAcceptedEvent)
 
 	interceptResult := intercept(paymentHashBytes, onion.ForwardAmount, uint32(event.Htlc.CltvExpiry))
 	switch interceptResult.action {
-	case INTERCEPT_RESUME_OR_CANCEL:
-		return i.resumeOrCancel(event, interceptResult), nil
+	case INTERCEPT_RESUME_WITH_ONION:
+		return i.resumeWithOnion(event, interceptResult), nil
 	case INTERCEPT_FAIL_HTLC:
 		return event.Fail(uint16(FAILURE_TEMPORARY_CHANNEL_FAILURE)), nil
 	case INTERCEPT_FAIL_HTLC_WITH_CODE:
@@ -113,51 +112,16 @@ func (i *ClnHtlcInterceptor) OnHtlcAccepted(event *glightning.HtlcAcceptedEvent)
 	}
 }
 
-func (i *ClnHtlcInterceptor) resumeOrCancel(event *glightning.HtlcAcceptedEvent, interceptResult interceptResult) *glightning.HtlcAcceptedResponse {
-	deadline := time.Now().Add(60 * time.Second)
-
-	for {
-		chanResult, _ := i.client.GetChannel(interceptResult.destination, *interceptResult.channelPoint)
-		if chanResult != nil {
-			log.Printf("channel opended successfully alias: %v, confirmed: %v", chanResult.InitialChannelID.ToString(), chanResult.ConfirmedChannelID.ToString())
-
-			err := insertChannel(
-				uint64(chanResult.InitialChannelID),
-				uint64(chanResult.ConfirmedChannelID),
-				interceptResult.channelPoint.String(),
-				interceptResult.destination,
-				time.Now(),
-			)
-
-			if err != nil {
-				log.Printf("insertChannel error: %v", err)
-				return event.Fail(uint16(FAILURE_TEMPORARY_CHANNEL_FAILURE))
-			}
-
-			channelID := uint64(chanResult.ConfirmedChannelID)
-			if channelID == 0 {
-				channelID = uint64(chanResult.InitialChannelID)
-			}
-			//decoding and encoding onion with alias in type 6 record.
-			newPayload, err := encodePayloadWithNextHop(event.Onion.Payload, channelID)
-			if err != nil {
-				log.Printf("encodePayloadWithNextHop error: %v", err)
-				return event.Fail(uint16(FAILURE_TEMPORARY_CHANNEL_FAILURE))
-			}
-
-			log.Printf("forwarding htlc to the destination node and a new private channel was opened")
-			return event.ContinueWithPayload(newPayload)
-		}
-
-		log.Printf("waiting for channel to get opened.... %v\n", interceptResult.destination)
-		if time.Now().After(deadline) {
-			log.Printf("Stop retrying getChannel(%v, %v)", interceptResult.destination, interceptResult.channelPoint.String())
-			break
-		}
-		time.Sleep(1 * time.Second)
+func (i *ClnHtlcInterceptor) resumeWithOnion(event *glightning.HtlcAcceptedEvent, interceptResult interceptResult) *glightning.HtlcAcceptedResponse {
+	//decoding and encoding onion with alias in type 6 record.
+	newPayload, err := encodePayloadWithNextHop(event.Onion.Payload, interceptResult.channelId)
+	if err != nil {
+		log.Printf("encodePayloadWithNextHop error: %v", err)
+		return event.Fail(uint16(FAILURE_TEMPORARY_CHANNEL_FAILURE))
 	}
-	log.Printf("Error: Channel failed to opened... timed out. ")
-	return event.Fail(uint16(FAILURE_TEMPORARY_CHANNEL_FAILURE))
+
+	log.Printf("forwarding htlc to the destination node and a new private channel was opened")
+	return event.ContinueWithPayload(newPayload)
 }
 
 func encodePayloadWithNextHop(payloadHex string, channelId uint64) (string, error) {

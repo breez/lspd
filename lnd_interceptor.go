@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"sync"
 	"time"
 
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -19,6 +17,7 @@ type LndHtlcInterceptor struct {
 	client        *LndClient
 	stopRequested bool
 	initWg        sync.WaitGroup
+	doneWg        sync.WaitGroup
 }
 
 func NewLndHtlcInterceptor() *LndHtlcInterceptor {
@@ -49,14 +48,18 @@ func (i *LndHtlcInterceptor) WaitStarted() LightningClient {
 }
 
 func (i *LndHtlcInterceptor) intercept() error {
+	defer func() {
+		log.Printf("LND intercept(): stopping. Waiting for in-progress interceptions to complete.")
+		i.doneWg.Wait()
+	}()
+
 	for {
 		if i.stopRequested {
 			return nil
 		}
 
 		cancellableCtx, cancel := context.WithCancel(context.Background())
-		clientCtx := metadata.AppendToOutgoingContext(cancellableCtx, "macaroon", os.Getenv("LND_MACAROON_HEX"))
-		interceptorClient, err := i.client.routerClient.HtlcInterceptor(clientCtx)
+		interceptorClient, err := i.client.routerClient.HtlcInterceptor(cancellableCtx)
 		if err != nil {
 			log.Printf("routerClient.HtlcInterceptor(): %v", err)
 			cancel()
@@ -93,30 +96,40 @@ func (i *LndHtlcInterceptor) intercept() error {
 				request.OnionBlob,
 			)
 
-			interceptResult := intercept(request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry)
-			switch interceptResult.action {
-			case INTERCEPT_RESUME_OR_CANCEL:
-				go resumeOrCancel(clientCtx, interceptorClient, request.IncomingCircuitKey,
-					interceptResult)
-			case INTERCEPT_FAIL_HTLC:
-				failForwardSend(interceptorClient, request.IncomingCircuitKey)
-			case INTERCEPT_FAIL_HTLC_WITH_CODE:
-				interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
-					IncomingCircuitKey: request.IncomingCircuitKey,
-					Action:             routerrpc.ResolveHoldForwardAction_FAIL,
-					FailureCode:        mapFailureCode(interceptResult.failureCode),
-				})
-			case INTERCEPT_RESUME:
-				fallthrough
-			default:
-				interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
-					IncomingCircuitKey:      request.IncomingCircuitKey,
-					Action:                  routerrpc.ResolveHoldForwardAction_RESUME,
-					OutgoingAmountMsat:      request.OutgoingAmountMsat,
-					OutgoingRequestedChanId: request.OutgoingRequestedChanId,
-					OnionBlob:               request.OnionBlob,
-				})
-			}
+			i.doneWg.Add(1)
+			go func() {
+				interceptResult := intercept(request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry)
+				switch interceptResult.action {
+				case INTERCEPT_RESUME_WITH_ONION:
+					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
+						IncomingCircuitKey:      request.IncomingCircuitKey,
+						Action:                  routerrpc.ResolveHoldForwardAction_RESUME,
+						OutgoingAmountMsat:      interceptResult.amountMsat,
+						OutgoingRequestedChanId: uint64(interceptResult.channelId),
+						OnionBlob:               interceptResult.onionBlob,
+					})
+				case INTERCEPT_FAIL_HTLC:
+					failForwardSend(interceptorClient, request.IncomingCircuitKey)
+				case INTERCEPT_FAIL_HTLC_WITH_CODE:
+					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
+						IncomingCircuitKey: request.IncomingCircuitKey,
+						Action:             routerrpc.ResolveHoldForwardAction_FAIL,
+						FailureCode:        mapFailureCode(interceptResult.failureCode),
+					})
+				case INTERCEPT_RESUME:
+					fallthrough
+				default:
+					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
+						IncomingCircuitKey:      request.IncomingCircuitKey,
+						Action:                  routerrpc.ResolveHoldForwardAction_RESUME,
+						OutgoingAmountMsat:      request.OutgoingAmountMsat,
+						OutgoingRequestedChanId: request.OutgoingRequestedChanId,
+						OnionBlob:               request.OnionBlob,
+					})
+				}
+
+				i.doneWg.Done()
+			}()
 		}
 
 		cancel()
@@ -139,42 +152,4 @@ func failForwardSend(interceptorClient routerrpc.Router_HtlcInterceptorClient, i
 		IncomingCircuitKey: incomingCircuitKey,
 		Action:             routerrpc.ResolveHoldForwardAction_FAIL,
 	})
-}
-
-func resumeOrCancel(
-	ctx context.Context,
-	interceptorClient routerrpc.Router_HtlcInterceptorClient,
-	incomingCircuitKey *routerrpc.CircuitKey,
-	interceptResult interceptResult,
-) {
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		ch, err := client.GetChannel(interceptResult.destination, *interceptResult.channelPoint)
-		if err != nil {
-			failForwardSend(interceptorClient, incomingCircuitKey)
-			return
-		}
-
-		if uint64(ch.InitialChannelID) != 0 {
-			interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
-				IncomingCircuitKey:      incomingCircuitKey,
-				Action:                  routerrpc.ResolveHoldForwardAction_RESUME,
-				OutgoingAmountMsat:      interceptResult.amountMsat,
-				OutgoingRequestedChanId: uint64(ch.InitialChannelID),
-				OnionBlob:               interceptResult.onionBlob,
-			})
-			err := insertChannel(uint64(ch.InitialChannelID), uint64(ch.ConfirmedChannelID), interceptResult.channelPoint.String(), interceptResult.destination, time.Now())
-			if err != nil {
-				log.Printf("insertChannel error: %v", err)
-			}
-			return
-		}
-		log.Printf("getChannel(%x, %v) returns 0", interceptResult.destination, interceptResult.channelPoint.String())
-		if time.Now().After(deadline) {
-			log.Printf("Stop retrying getChannel(%x, %v)", interceptResult.destination, interceptResult.channelPoint.String())
-			break
-		}
-		time.Sleep(1 * time.Second)
-	}
-	failForwardSend(interceptorClient, incomingCircuitKey)
 }

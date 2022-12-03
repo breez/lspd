@@ -23,7 +23,7 @@ type OpenChannelRequest struct {
 
 type LightningClient interface {
 	GetInfo() (*GetInfoResult, error)
-	IsConnected(destination []byte) (*bool, error)
+	IsConnected(destination []byte) (bool, error)
 	OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)
 	GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetChannelResult, error)
 	GetNodeChannelCount(nodeID []byte) (int, error)
