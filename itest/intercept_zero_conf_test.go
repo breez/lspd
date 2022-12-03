@@ -2,7 +2,6 @@ package itest
 
 import (
 	"log"
-	"testing"
 	"time"
 
 	"github.com/breez/lntest"
@@ -10,24 +9,18 @@ import (
 	"gotest.tools/assert"
 )
 
-func TestOpenZeroConfChannelOnReceive(t *testing.T) {
-	harness := lntest.NewTestHarness(t)
-	defer harness.TearDown()
-
-	timeout := time.Now().Add(time.Minute)
-
-	miner := lntest.NewMiner(harness)
-	alice := lntest.NewCoreLightningNode(harness, miner, "Alice", timeout)
-	bob := NewZeroConfNode(harness, miner, "Bob", timeout)
-	lsp := NewLspdNode(harness, miner, "Lsp", timeout)
+func testOpenZeroConfChannelOnReceive(h *lntest.TestHarness, lsp LspNode, miner *lntest.Miner, timeout time.Time) {
+	alice := lntest.NewCoreLightningNode(h, miner, "Alice", timeout)
+	bob := NewZeroConfNode(h, miner, "Bob", timeout)
 
 	alice.Fund(10000000, timeout)
-	lsp.lightningNode.Fund(10000000, timeout)
+	lsp.LightningNode().Fund(10000000, timeout)
 
 	log.Print("Opening channel between Alice and the lsp")
-	alice.OpenChannelAndWait(lsp.lightningNode, &lntest.OpenChannelOptions{
+	channel := alice.OpenChannel(lsp.LightningNode(), &lntest.OpenChannelOptions{
 		AmountSat: 1000000,
-	}, timeout)
+	})
+	alice.WaitForChannelReady(channel, timeout)
 
 	log.Printf("Adding bob's invoices")
 	outerAmountMsat := uint64(2100000)
@@ -41,12 +34,12 @@ func TestOpenZeroConfChannelOnReceive(t *testing.T) {
 	})
 
 	log.Print("Connecting bob to lspd")
-	bob.lightningNode.ConnectPeer(lsp.lightningNode)
+	bob.lightningNode.ConnectPeer(lsp.LightningNode())
 
 	// NOTE: We pretend to be paying fees to the lsp, but actually we won't.
 	log.Printf("Registering payment with lsp")
 	pretendAmount := outerAmountMsat - 2000000
-	lsp.RegisterPayment(&lspd.PaymentInformation{
+	RegisterPayment(lsp, &lspd.PaymentInformation{
 		PaymentHash:        innerInvoice.paymentHash,
 		PaymentSecret:      innerInvoice.paymentSecret,
 		Destination:        bob.lightningNode.NodeId(),
@@ -58,28 +51,22 @@ func TestOpenZeroConfChannelOnReceive(t *testing.T) {
 	payResp := alice.Pay(outerInvoice.bolt11, timeout)
 	bobInvoice := bob.lightningNode.GetInvoice(payResp.PaymentHash)
 
-	assert.DeepEqual(t, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
-	assert.Equal(t, outerAmountMsat, bobInvoice.AmountReceivedMsat)
+	assert.DeepEqual(h.T, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
+	assert.Equal(h.T, outerAmountMsat, bobInvoice.AmountReceivedMsat)
 }
 
-func TestOpenZeroConfSingleHtlc(t *testing.T) {
-	harness := lntest.NewTestHarness(t)
-	defer harness.TearDown()
-
-	timeout := time.Now().Add(time.Minute)
-
-	miner := lntest.NewMiner(harness)
-	alice := lntest.NewCoreLightningNode(harness, miner, "Alice", timeout)
-	bob := NewZeroConfNode(harness, miner, "Bob", timeout)
-	lsp := NewLspdNode(harness, miner, "Lsp", timeout)
+func testOpenZeroConfSingleHtlc(h *lntest.TestHarness, lsp LspNode, miner *lntest.Miner, timeout time.Time) {
+	alice := lntest.NewCoreLightningNode(h, miner, "Alice", timeout)
+	bob := NewZeroConfNode(h, miner, "Bob", timeout)
 
 	alice.Fund(10000000, timeout)
-	lsp.lightningNode.Fund(10000000, timeout)
+	lsp.LightningNode().Fund(10000000, timeout)
 
 	log.Print("Opening channel between Alice and the lsp")
-	channel := alice.OpenChannelAndWait(lsp.lightningNode, &lntest.OpenChannelOptions{
+	channel := alice.OpenChannel(lsp.LightningNode(), &lntest.OpenChannelOptions{
 		AmountSat: 1000000,
-	}, timeout)
+	})
+	channelId := alice.WaitForChannelReady(channel, timeout)
 
 	log.Printf("Adding bob's invoices")
 	outerAmountMsat := uint64(2100000)
@@ -93,12 +80,12 @@ func TestOpenZeroConfSingleHtlc(t *testing.T) {
 	})
 
 	log.Print("Connecting bob to lspd")
-	bob.lightningNode.ConnectPeer(lsp.lightningNode)
+	bob.lightningNode.ConnectPeer(lsp.LightningNode())
 
 	// NOTE: We pretend to be paying fees to the lsp, but actually we won't.
 	log.Printf("Registering payment with lsp")
 	pretendAmount := outerAmountMsat - 2000000
-	lsp.RegisterPayment(&lspd.PaymentInformation{
+	RegisterPayment(lsp, &lspd.PaymentInformation{
 		PaymentHash:        innerInvoice.paymentHash,
 		PaymentSecret:      innerInvoice.paymentSecret,
 		Destination:        bob.lightningNode.NodeId(),
@@ -107,23 +94,23 @@ func TestOpenZeroConfSingleHtlc(t *testing.T) {
 	})
 
 	log.Printf("Alice paying")
-	route := constructRoute(lsp.lightningNode, bob.lightningNode, channel.ChannelId, "1x0x0", outerAmountMsat)
-	alice.StartPayPartViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, 0, route)
-	payResp := alice.WaitForPaymentPart(outerInvoice.paymentHash, timeout, 0)
+	route := constructRoute(lsp.LightningNode(), bob.lightningNode, channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
+	payResp := alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route, timeout)
 	bobInvoice := bob.lightningNode.GetInvoice(payResp.PaymentHash)
 
-	assert.DeepEqual(t, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
-	assert.Equal(t, outerAmountMsat, bobInvoice.AmountReceivedMsat)
+	assert.DeepEqual(h.T, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
+	assert.Equal(h.T, outerAmountMsat, bobInvoice.AmountReceivedMsat)
 }
 
 func constructRoute(
-	lsp *lntest.CoreLightningNode,
-	bob *lntest.CoreLightningNode,
-	aliceLspChannel string,
-	lspBobChannel string,
-	amountMsat uint64) *lntest.Route {
+	lsp lntest.LightningNode,
+	bob lntest.LightningNode,
+	aliceLspChannel lntest.ShortChannelID,
+	lspBobChannel lntest.ShortChannelID,
+	amountMsat uint64,
+) *lntest.Route {
 	return &lntest.Route{
-		Route: []*lntest.Hop{
+		Hops: []*lntest.Hop{
 			{
 				Id:         lsp.NodeId(),
 				Channel:    aliceLspChannel,

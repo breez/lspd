@@ -83,6 +83,13 @@ func StartPostgresContainer(t *testing.T, ctx context.Context, logfile string) *
 	err = cli.ContainerStart(ctx, createResp.ID, types.ContainerStartOptions{})
 	lntest.CheckError(t, err)
 
+	ct := &PostgresContainer{
+		id:       createResp.ID,
+		password: "pgpassword",
+		port:     port,
+		cli:      cli,
+	}
+
 HealthCheck:
 	for {
 		inspect, err := cli.ContainerInspect(ctx, createResp.ID)
@@ -93,17 +100,18 @@ HealthCheck:
 		case "unhealthy":
 			lntest.CheckError(t, errors.New("container unhealthy"))
 		case "healthy":
-			break HealthCheck
-		default:
-			time.Sleep(500 * time.Millisecond)
-		}
-	}
+			for {
+				pgxPool, err := pgxpool.Connect(context.Background(), ct.ConnectionString())
+				if err == nil {
+					pgxPool.Close()
+					break HealthCheck
+				}
 
-	ct := &PostgresContainer{
-		id:       createResp.ID,
-		password: "pgpassword",
-		port:     port,
-		cli:      cli,
+				time.Sleep(50 * time.Millisecond)
+			}
+		default:
+			time.Sleep(200 * time.Millisecond)
+		}
 	}
 
 	go ct.monitorLogs(logfile)

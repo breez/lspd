@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -108,7 +107,7 @@ type generateInvoicesRequest struct {
 	innerAmountMsat uint64
 	outerAmountMsat uint64
 	description     string
-	lsp             *LspNode
+	lsp             LspNode
 }
 
 type invoice struct {
@@ -116,17 +115,15 @@ type invoice struct {
 	paymentHash     []byte
 	paymentSecret   []byte
 	paymentPreimage []byte
-	expiresAt       uint64
 }
 
 func (n *ZeroConfNode) GenerateInvoices(req generateInvoicesRequest) (invoice, invoice) {
 	preimage, err := GenerateRandomBytes(32)
 	lntest.CheckError(n.harness.T, err)
 
-	lspNodeId, err := btcec.ParsePubKey(req.lsp.lightningNode.NodeId())
+	lspNodeId, err := btcec.ParsePubKey(req.lsp.NodeId())
 	lntest.CheckError(n.harness.T, err)
 
-	log.Printf("Adding bob's invoices")
 	innerInvoice := n.lightningNode.CreateBolt11Invoice(&lntest.CreateInvoiceOptions{
 		AmountMsat:  req.innerAmountMsat,
 		Description: &req.description,
@@ -161,14 +158,12 @@ func (n *ZeroConfNode) GenerateInvoices(req generateInvoicesRequest) (invoice, i
 		paymentHash:     innerInvoice.PaymentHash,
 		paymentSecret:   innerInvoice.PaymentSecret,
 		paymentPreimage: preimage,
-		expiresAt:       innerInvoice.ExpiresAt,
 	}
 	outer := invoice{
 		bolt11:          outerInvoice,
 		paymentHash:     outerInvoiceRaw.PaymentHash[:],
 		paymentSecret:   innerInvoice.PaymentSecret,
 		paymentPreimage: preimage,
-		expiresAt:       innerInvoice.ExpiresAt,
 	}
 
 	return inner, outer
