@@ -86,6 +86,7 @@ func (c *ClnClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)
 		&minConf,
 		glightning.NewMsat(0),
 		minDepth,
+		glightning.NewSat(0),
 	)
 
 	if err != nil {
