@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/niftynei/glightning/glightning"
 	"golang.org/x/exp/slices"
@@ -92,15 +93,15 @@ func (c *ClnClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)
 		return nil, err
 	}
 
-	fundingTxId, err := hex.DecodeString(fundResult.FundingTxId)
+	fundingTxId, err := chainhash.NewHashFromStr(fundResult.FundingTxId)
 	if err != nil {
-		log.Printf("CLN: hex.DecodeString(%s) error: %v", fundResult.FundingTxId, err)
+		log.Printf("CLN: chainhash.NewHashFromStr(%s) error: %v", fundResult.FundingTxId, err)
 		return nil, err
 	}
 
-	channelPoint, err := NewOutPoint(fundingTxId, uint32(fundResult.FundingTxOutputNum))
+	channelPoint, err := NewOutPoint(fundingTxId[:], uint32(fundResult.FundingTxOutputNum))
 	if err != nil {
-		log.Printf("CLN: NewOutPoint(%x, %d) error: %v", fundingTxId, fundResult.FundingTxOutputNum, err)
+		log.Printf("CLN: NewOutPoint(%s, %d) error: %v", fundingTxId.String(), fundResult.FundingTxOutputNum, err)
 		return nil, err
 	}
 
@@ -110,12 +111,12 @@ func (c *ClnClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)
 func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetChannelResult, error) {
 	pubkey := hex.EncodeToString(peerID)
 	peer, err := c.client.GetPeer(pubkey)
-	fundingTxID := hex.EncodeToString(channelPoint.Hash[:])
 	if err != nil {
 		log.Printf("CLN: client.GetPeer(%s) error: %v", pubkey, err)
 		return nil, err
 	}
 
+	fundingTxID := channelPoint.Hash.String()
 	for _, c := range peer.Channels {
 		log.Printf("getChannel destination: %s, Short channel id: %v, local alias: %v , FundingTxID:%v, State:%v ", pubkey, c.ShortChannelId, c.Alias.Local, c.FundingTxId, c.State)
 		if slices.Contains(OPEN_STATUSES, c.State) && c.FundingTxId == fundingTxID {

@@ -62,7 +62,7 @@ func setFundingTx(paymentHash []byte, channelPoint *wire.OutPoint) error {
 			SET funding_tx_id = $2, funding_tx_outnum = $3
 			WHERE payment_hash=$1`,
 		paymentHash, channelPoint.Hash[:], channelPoint.Index)
-	log.Printf("setFundingTx(%x, %x, %v): %s err: %v", paymentHash, channelPoint.Hash[:], channelPoint.Index, commandTag, err)
+	log.Printf("setFundingTx(%x, %s, %d): %s err: %v", paymentHash, channelPoint.Hash.String(), channelPoint.Index, commandTag, err)
 	return err
 }
 

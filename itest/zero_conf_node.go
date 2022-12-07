@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/breez/lntest"
 	btcec "github.com/btcsuite/btcd/btcec/v2"
@@ -51,7 +50,7 @@ pip install pyln-client > /dev/null 2>&1
 python %s
 `
 
-func NewZeroConfNode(h *lntest.TestHarness, m *lntest.Miner, name string, timeout time.Time) *ZeroConfNode {
+func NewZeroConfNode(h *lntest.TestHarness, m *lntest.Miner, name string) *ZeroConfNode {
 	privKey, err := btcec.NewPrivateKey()
 	lntest.CheckError(h.T, err)
 
@@ -89,7 +88,6 @@ func NewZeroConfNode(h *lntest.TestHarness, m *lntest.Miner, name string, timeou
 		h,
 		m,
 		name,
-		timeout,
 		fmt.Sprintf("--dev-force-privkey=%x", s),
 		fmt.Sprintf("--plugin=%s", pluginFilePath),
 	)

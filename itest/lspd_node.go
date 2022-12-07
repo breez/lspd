@@ -2,7 +2,7 @@ package itest
 
 import (
 	"bufio"
-	context "context"
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/breez/lntest"
 	"github.com/breez/lspd/btceclegacy"
@@ -18,7 +17,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/golang/protobuf/proto"
-	grpc "google.golang.org/grpc"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -135,7 +134,7 @@ func (l *LndLspNode) LightningNode() lntest.LightningNode {
 	return l.lightningNode
 }
 
-func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string, timeout time.Time) LspNode {
+func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode {
 	scriptFilePath, grpcAddress, publ, postgresBackend := setupLspd(h, name, "RUN_CLN=true")
 	args := []string{
 		fmt.Sprintf("--plugin=%s", scriptFilePath),
@@ -144,7 +143,7 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string, timeout
 		fmt.Sprintf("--cltv-delta=%d", lspCltvDelta),
 	}
 
-	lightningNode := lntest.NewCoreLightningNode(h, m, name, timeout, args...)
+	lightningNode := lntest.NewCoreLightningNode(h, m, name, args...)
 
 	conn, err := grpc.Dial(
 		grpcAddress,
@@ -168,7 +167,7 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string, timeout
 	return lspNode
 }
 
-func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string, timeout time.Time) LspNode {
+func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode {
 	args := []string{
 		"--protocol.zero-conf",
 		"--protocol.option-scid-alias",
@@ -180,7 +179,7 @@ func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string, timeout
 		fmt.Sprintf("--bitcoin.timelockdelta=%d", lspCltvDelta),
 	}
 
-	lightningNode := lntest.NewLndNode(h, m, name, timeout, args...)
+	lightningNode := lntest.NewLndNode(h, m, name, args...)
 	tlsCert := strings.Replace(string(lightningNode.TlsCert()), "\n", "\\n", -1)
 	scriptFilePath, grpcAddress, publ, postgresBackend := setupLspd(h, name,
 		"RUN_LND=true",

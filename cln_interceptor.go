@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	sphinx "github.com/lightningnetwork/lightning-onion"
+	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/record"
 	"github.com/lightningnetwork/lnd/tlv"
 	"github.com/niftynei/glightning/glightning"
@@ -120,8 +121,9 @@ func (i *ClnHtlcInterceptor) resumeWithOnion(event *glightning.HtlcAcceptedEvent
 		return event.Fail(uint16(FAILURE_TEMPORARY_CHANNEL_FAILURE))
 	}
 
+	chanId := lnwire.NewChanIDFromOutPoint(interceptResult.channelPoint)
 	log.Printf("forwarding htlc to the destination node and a new private channel was opened")
-	return event.ContinueWithPayload(newPayload)
+	return event.ContinueWith(chanId.String(), newPayload)
 }
 
 func encodePayloadWithNextHop(payloadHex string, channelId uint64) (string, error) {

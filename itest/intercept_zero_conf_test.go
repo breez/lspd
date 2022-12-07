@@ -2,25 +2,24 @@ package itest
 
 import (
 	"log"
-	"time"
 
 	"github.com/breez/lntest"
 	lspd "github.com/breez/lspd/rpc"
 	"gotest.tools/assert"
 )
 
-func testOpenZeroConfChannelOnReceive(h *lntest.TestHarness, lsp LspNode, miner *lntest.Miner, timeout time.Time) {
-	alice := lntest.NewCoreLightningNode(h, miner, "Alice", timeout)
-	bob := NewZeroConfNode(h, miner, "Bob", timeout)
+func testOpenZeroConfChannelOnReceive(h *lntest.TestHarness, lsp LspNode, miner *lntest.Miner) {
+	alice := lntest.NewCoreLightningNode(h, miner, "Alice")
+	bob := NewZeroConfNode(h, miner, "Bob")
 
-	alice.Fund(10000000, timeout)
-	lsp.LightningNode().Fund(10000000, timeout)
+	alice.Fund(10000000)
+	lsp.LightningNode().Fund(10000000)
 
 	log.Print("Opening channel between Alice and the lsp")
 	channel := alice.OpenChannel(lsp.LightningNode(), &lntest.OpenChannelOptions{
 		AmountSat: 1000000,
 	})
-	alice.WaitForChannelReady(channel, timeout)
+	alice.WaitForChannelReady(channel)
 
 	log.Printf("Adding bob's invoices")
 	outerAmountMsat := uint64(2100000)
@@ -48,25 +47,25 @@ func testOpenZeroConfChannelOnReceive(h *lntest.TestHarness, lsp LspNode, miner 
 	})
 
 	log.Printf("Alice paying")
-	payResp := alice.Pay(outerInvoice.bolt11, timeout)
+	payResp := alice.Pay(outerInvoice.bolt11)
 	bobInvoice := bob.lightningNode.GetInvoice(payResp.PaymentHash)
 
 	assert.DeepEqual(h.T, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
 	assert.Equal(h.T, outerAmountMsat, bobInvoice.AmountReceivedMsat)
 }
 
-func testOpenZeroConfSingleHtlc(h *lntest.TestHarness, lsp LspNode, miner *lntest.Miner, timeout time.Time) {
-	alice := lntest.NewCoreLightningNode(h, miner, "Alice", timeout)
-	bob := NewZeroConfNode(h, miner, "Bob", timeout)
+func testOpenZeroConfSingleHtlc(h *lntest.TestHarness, lsp LspNode, miner *lntest.Miner) {
+	alice := lntest.NewCoreLightningNode(h, miner, "Alice")
+	bob := NewZeroConfNode(h, miner, "Bob")
 
-	alice.Fund(10000000, timeout)
-	lsp.LightningNode().Fund(10000000, timeout)
+	alice.Fund(10000000)
+	lsp.LightningNode().Fund(10000000)
 
 	log.Print("Opening channel between Alice and the lsp")
 	channel := alice.OpenChannel(lsp.LightningNode(), &lntest.OpenChannelOptions{
 		AmountSat: 1000000,
 	})
-	channelId := alice.WaitForChannelReady(channel, timeout)
+	channelId := alice.WaitForChannelReady(channel)
 
 	log.Printf("Adding bob's invoices")
 	outerAmountMsat := uint64(2100000)
@@ -95,7 +94,7 @@ func testOpenZeroConfSingleHtlc(h *lntest.TestHarness, lsp LspNode, miner *lntes
 
 	log.Printf("Alice paying")
 	route := constructRoute(lsp.LightningNode(), bob.lightningNode, channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
-	payResp := alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route, timeout)
+	payResp := alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
 	bobInvoice := bob.lightningNode.GetInvoice(payResp.PaymentHash)
 
 	assert.DeepEqual(h.T, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
