@@ -8,19 +8,17 @@ import (
 	"path/filepath"
 
 	"github.com/breez/lntest"
-	btcec "github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/zpay32"
 )
 
-type ZeroConfNode struct {
+type breezClient struct {
 	name          string
 	harness       *lntest.TestHarness
-	lightningNode *lntest.CoreLightningNode
-	privKey       *secp256k1.PrivateKey
+	lightningNode lntest.LightningNode
 	scriptDir     string
 }
 
@@ -50,12 +48,7 @@ pip install pyln-client > /dev/null 2>&1
 python %s
 `
 
-func NewZeroConfNode(h *lntest.TestHarness, m *lntest.Miner, name string) *ZeroConfNode {
-	privKey, err := btcec.NewPrivateKey()
-	lntest.CheckError(h.T, err)
-
-	s := privKey.Serialize()
-
+func newClnBreezClient(h *lntest.TestHarness, m *lntest.Miner, name string) *breezClient {
 	scriptDir, err := os.MkdirTemp(h.Dir, name)
 	lntest.CheckError(h.T, err)
 	pythonFilePath := filepath.Join(scriptDir, "zero_conf_plugin.py")
@@ -88,7 +81,6 @@ func NewZeroConfNode(h *lntest.TestHarness, m *lntest.Miner, name string) *ZeroC
 		h,
 		m,
 		name,
-		fmt.Sprintf("--dev-force-privkey=%x", s),
 		fmt.Sprintf("--plugin=%s", pluginFilePath),
 		// NOTE: max-concurrent-htlcs is 30 on mainnet by default. In cln V22.11
 		// there is a check for 'all dust' commitment transactions. The max
@@ -99,12 +91,20 @@ func NewZeroConfNode(h *lntest.TestHarness, m *lntest.Miner, name string) *ZeroC
 		"--max-concurrent-htlcs=30",
 	)
 
-	return &ZeroConfNode{
+	return &breezClient{
 		name:          name,
 		harness:       h,
 		lightningNode: node,
 		scriptDir:     scriptDir,
-		privKey:       privKey,
+	}
+}
+
+func newLndBreezClient(h *lntest.TestHarness, m *lntest.Miner, name string) *breezClient {
+	lnd := lntest.NewLndNode(h, m, name)
+	return &breezClient{
+		name:          name,
+		harness:       h,
+		lightningNode: lnd,
 	}
 }
 
@@ -122,7 +122,7 @@ type invoice struct {
 	paymentPreimage []byte
 }
 
-func (n *ZeroConfNode) GenerateInvoices(req generateInvoicesRequest) (invoice, invoice) {
+func (n *breezClient) GenerateInvoices(req generateInvoicesRequest) (invoice, invoice) {
 	preimage, err := GenerateRandomBytes(32)
 	lntest.CheckError(n.harness.T, err)
 
@@ -153,7 +153,7 @@ func (n *ZeroConfNode) GenerateInvoices(req generateInvoicesRequest) (invoice, i
 	outerInvoice, err := outerInvoiceRaw.Encode(zpay32.MessageSigner{
 		SignCompact: func(msg []byte) ([]byte, error) {
 			hash := sha256.Sum256(msg)
-			return ecdsa.SignCompact(n.privKey, hash[:], true)
+			return ecdsa.SignCompact(n.lightningNode.PrivateKey(), hash[:], true)
 		},
 	})
 	lntest.CheckError(n.harness.T, err)

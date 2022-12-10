@@ -13,25 +13,25 @@ var defaultTimeout time.Duration = time.Second * 120
 
 func TestLspd(t *testing.T) {
 	testCases := allTestCases
-	// runTests(t, testCases, "LND-lspd", func(h *lntest.TestHarness, m *lntest.Miner) LspNode {
-	// 	return NewLndLspdNode(h, m, "lsp")
+	// runTests(t, testCases, "LND-lspd", func(h *lntest.TestHarness, m *lntest.Miner) (LspNode, *breezClient) {
+	// 	return NewLndLspdNode(h, m, "lsp"), newLndBreezClient(h, m, "breez-client")
 	// })
 
-	runTests(t, testCases, "CLN-lspd", func(h *lntest.TestHarness, m *lntest.Miner) LspNode {
-		return NewClnLspdNode(h, m, "lsp")
+	runTests(t, testCases, "CLN-lspd", func(h *lntest.TestHarness, m *lntest.Miner) (LspNode, *breezClient) {
+		return NewClnLspdNode(h, m, "lsp"), newClnBreezClient(h, m, "breez-client")
 	})
 }
 
-func runTests(t *testing.T, testCases []*testCase, prefix string, lspFunc func(h *lntest.TestHarness, m *lntest.Miner) LspNode) {
+func runTests(t *testing.T, testCases []*testCase, prefix string, nodesFunc func(h *lntest.TestHarness, m *lntest.Miner) (LspNode, *breezClient)) {
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.Run(fmt.Sprintf("%s: %s", prefix, testCase.name), func(t *testing.T) {
-			runTest(t, testCase, prefix, lspFunc)
+			runTest(t, testCase, prefix, nodesFunc)
 		})
 	}
 }
 
-func runTest(t *testing.T, testCase *testCase, prefix string, lspFunc func(h *lntest.TestHarness, m *lntest.Miner) LspNode) {
+func runTest(t *testing.T, testCase *testCase, prefix string, nodesFunc func(h *lntest.TestHarness, m *lntest.Miner) (LspNode, *breezClient)) {
 	log.Printf("%s: Running test case '%s'", prefix, testCase.name)
 	var dd time.Duration
 	to := testCase.timeout
@@ -42,20 +42,26 @@ func runTest(t *testing.T, testCase *testCase, prefix string, lspFunc func(h *ln
 	deadline := time.Now().Add(to)
 	log.Printf("Using deadline %v", deadline.String())
 
-	harness := lntest.NewTestHarness(t, deadline)
-	defer harness.TearDown()
+	h := lntest.NewTestHarness(t, deadline)
+	defer h.TearDown()
 
 	log.Printf("Creating miner")
-	miner := lntest.NewMiner(harness)
+	miner := lntest.NewMiner(h)
 	log.Printf("Creating lsp")
-	lsp := lspFunc(harness, miner)
+	lsp, c := nodesFunc(h, miner)
 	log.Printf("Run testcase")
-	testCase.test(harness, lsp, miner)
+	testCase.test(&testParams{
+		t:   t,
+		h:   h,
+		m:   miner,
+		c:   c,
+		lsp: lsp,
+	})
 }
 
 type testCase struct {
 	name    string
-	test    func(h *lntest.TestHarness, lsp LspNode, miner *lntest.Miner)
+	test    func(t *testParams)
 	timeout time.Duration
 }
 

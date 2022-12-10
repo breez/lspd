@@ -8,15 +8,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func testOpenZeroConfChannelOnReceive(h *lntest.TestHarness, lsp LspNode, miner *lntest.Miner) {
-	alice := lntest.NewCoreLightningNode(h, miner, "Alice")
-	bob := NewZeroConfNode(h, miner, "Bob")
-
+func testOpenZeroConfChannelOnReceive(p *testParams) {
+	alice := lntest.NewCoreLightningNode(p.h, p.m, "Alice")
 	alice.Fund(10000000)
-	lsp.LightningNode().Fund(10000000)
+	p.lsp.LightningNode().Fund(10000000)
 
 	log.Print("Opening channel between Alice and the lsp")
-	channel := alice.OpenChannel(lsp.LightningNode(), &lntest.OpenChannelOptions{
+	channel := alice.OpenChannel(p.lsp.LightningNode(), &lntest.OpenChannelOptions{
 		AmountSat: 1000000,
 	})
 	alice.WaitForChannelReady(channel)
@@ -25,50 +23,49 @@ func testOpenZeroConfChannelOnReceive(h *lntest.TestHarness, lsp LspNode, miner 
 	outerAmountMsat := uint64(2100000)
 	innerAmountMsat := uint64(2100000)
 	description := "Please pay me"
-	innerInvoice, outerInvoice := bob.GenerateInvoices(generateInvoicesRequest{
+	innerInvoice, outerInvoice := p.BreezClient().GenerateInvoices(generateInvoicesRequest{
 		innerAmountMsat: innerAmountMsat,
 		outerAmountMsat: outerAmountMsat,
 		description:     description,
-		lsp:             lsp,
+		lsp:             p.lsp,
 	})
 
 	log.Print("Connecting bob to lspd")
-	bob.lightningNode.ConnectPeer(lsp.LightningNode())
+	p.BreezClient().lightningNode.ConnectPeer(p.lsp.LightningNode())
 
 	// NOTE: We pretend to be paying fees to the lsp, but actually we won't.
 	log.Printf("Registering payment with lsp")
 	pretendAmount := outerAmountMsat - 2000000
-	RegisterPayment(lsp, &lspd.PaymentInformation{
+	RegisterPayment(p.lsp, &lspd.PaymentInformation{
 		PaymentHash:        innerInvoice.paymentHash,
 		PaymentSecret:      innerInvoice.paymentSecret,
-		Destination:        bob.lightningNode.NodeId(),
+		Destination:        p.BreezClient().lightningNode.NodeId(),
 		IncomingAmountMsat: int64(outerAmountMsat),
 		OutgoingAmountMsat: int64(pretendAmount),
 	})
 
 	log.Printf("Alice paying")
 	payResp := alice.Pay(outerInvoice.bolt11)
-	bobInvoice := bob.lightningNode.GetInvoice(payResp.PaymentHash)
+	bobInvoice := p.BreezClient().lightningNode.GetInvoice(payResp.PaymentHash)
 
-	assert.Equal(h.T, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
-	assert.Equal(h.T, outerAmountMsat, bobInvoice.AmountReceivedMsat)
+	assert.Equal(p.t, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
+	assert.Equal(p.t, outerAmountMsat, bobInvoice.AmountReceivedMsat)
 
 	// Make sure capacity is correct
-	chans := bob.lightningNode.GetChannels()
-	assert.Len(h.T, chans, 1)
+	chans := p.BreezClient().lightningNode.GetChannels()
+	assert.Len(p.t, chans, 1)
 	c := chans[0]
-	AssertChannelCapacity(h.T, outerAmountMsat, c.CapacityMsat)
+	AssertChannelCapacity(p.t, outerAmountMsat, c.CapacityMsat)
 }
 
-func testOpenZeroConfSingleHtlc(h *lntest.TestHarness, lsp LspNode, miner *lntest.Miner) {
-	alice := lntest.NewCoreLightningNode(h, miner, "Alice")
-	bob := NewZeroConfNode(h, miner, "Bob")
+func testOpenZeroConfSingleHtlc(p *testParams) {
+	alice := lntest.NewCoreLightningNode(p.h, p.m, "Alice")
 
 	alice.Fund(10000000)
-	lsp.LightningNode().Fund(10000000)
+	p.lsp.LightningNode().Fund(10000000)
 
 	log.Print("Opening channel between Alice and the lsp")
-	channel := alice.OpenChannel(lsp.LightningNode(), &lntest.OpenChannelOptions{
+	channel := alice.OpenChannel(p.lsp.LightningNode(), &lntest.OpenChannelOptions{
 		AmountSat: 1000000,
 	})
 	channelId := alice.WaitForChannelReady(channel)
@@ -77,40 +74,40 @@ func testOpenZeroConfSingleHtlc(h *lntest.TestHarness, lsp LspNode, miner *lntes
 	outerAmountMsat := uint64(2100000)
 	innerAmountMsat := uint64(2100000)
 	description := "Please pay me"
-	innerInvoice, outerInvoice := bob.GenerateInvoices(generateInvoicesRequest{
+	innerInvoice, outerInvoice := p.BreezClient().GenerateInvoices(generateInvoicesRequest{
 		innerAmountMsat: innerAmountMsat,
 		outerAmountMsat: outerAmountMsat,
 		description:     description,
-		lsp:             lsp,
+		lsp:             p.lsp,
 	})
 
 	log.Print("Connecting bob to lspd")
-	bob.lightningNode.ConnectPeer(lsp.LightningNode())
+	p.BreezClient().lightningNode.ConnectPeer(p.lsp.LightningNode())
 
 	// NOTE: We pretend to be paying fees to the lsp, but actually we won't.
 	log.Printf("Registering payment with lsp")
 	pretendAmount := outerAmountMsat - 2000000
-	RegisterPayment(lsp, &lspd.PaymentInformation{
+	RegisterPayment(p.lsp, &lspd.PaymentInformation{
 		PaymentHash:        innerInvoice.paymentHash,
 		PaymentSecret:      innerInvoice.paymentSecret,
-		Destination:        bob.lightningNode.NodeId(),
+		Destination:        p.BreezClient().lightningNode.NodeId(),
 		IncomingAmountMsat: int64(outerAmountMsat),
 		OutgoingAmountMsat: int64(pretendAmount),
 	})
 
 	log.Printf("Alice paying")
-	route := constructRoute(lsp.LightningNode(), bob.lightningNode, channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
+	route := constructRoute(p.lsp.LightningNode(), p.BreezClient().lightningNode, channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
 	payResp := alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
-	bobInvoice := bob.lightningNode.GetInvoice(payResp.PaymentHash)
+	bobInvoice := p.BreezClient().lightningNode.GetInvoice(payResp.PaymentHash)
 
-	assert.Equal(h.T, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
-	assert.Equal(h.T, outerAmountMsat, bobInvoice.AmountReceivedMsat)
+	assert.Equal(p.t, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
+	assert.Equal(p.t, outerAmountMsat, bobInvoice.AmountReceivedMsat)
 
 	// Make sure capacity is correct
-	chans := bob.lightningNode.GetChannels()
-	assert.Len(h.T, chans, 1)
+	chans := p.BreezClient().lightningNode.GetChannels()
+	assert.Len(p.t, chans, 1)
 	c := chans[0]
-	AssertChannelCapacity(h.T, outerAmountMsat, c.CapacityMsat)
+	AssertChannelCapacity(p.t, outerAmountMsat, c.CapacityMsat)
 }
 
 func constructRoute(
