@@ -141,6 +141,8 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode
 		fmt.Sprintf("--fee-base=%d", lspBaseFeeMsat),
 		fmt.Sprintf("--fee-per-satoshi=%d", lspFeeRatePpm),
 		fmt.Sprintf("--cltv-delta=%d", lspCltvDelta),
+		"--max-concurrent-htlcs=30",
+		"--dev-allowdustreserve=true",
 	}
 
 	lightningNode := lntest.NewCoreLightningNode(h, m, name, args...)

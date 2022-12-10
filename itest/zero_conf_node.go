@@ -90,6 +90,13 @@ func NewZeroConfNode(h *lntest.TestHarness, m *lntest.Miner, name string) *ZeroC
 		name,
 		fmt.Sprintf("--dev-force-privkey=%x", s),
 		fmt.Sprintf("--plugin=%s", pluginFilePath),
+		// NOTE: max-concurrent-htlcs is 30 on mainnet by default. In cln V22.11
+		// there is a check for 'all dust' commitment transactions. The max
+		// concurrent HTLCs of both sides of the channel * dust limit must be
+		// lower than the channel capacity in order to open a zero conf zero
+		// reserve channel. Relevant code:
+		// https://github.com/ElementsProject/lightning/blob/774d16a72e125e4ae4e312b9e3307261983bec0e/openingd/openingd.c#L481-L520
+		"--max-concurrent-htlcs=30",
 	)
 
 	return &ZeroConfNode{

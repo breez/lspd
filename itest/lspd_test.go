@@ -68,4 +68,8 @@ var allTestCases = []*testCase{
 		name: "testOpenZeroConfSingleHtlc",
 		test: testOpenZeroConfSingleHtlc,
 	},
+	{
+		name: "testZeroReserve",
+		test: testZeroReserve,
+	},
 }

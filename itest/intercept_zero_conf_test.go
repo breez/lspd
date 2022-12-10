@@ -5,7 +5,7 @@ import (
 
 	"github.com/breez/lntest"
 	lspd "github.com/breez/lspd/rpc"
-	"gotest.tools/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func testOpenZeroConfChannelOnReceive(h *lntest.TestHarness, lsp LspNode, miner *lntest.Miner) {
@@ -50,8 +50,14 @@ func testOpenZeroConfChannelOnReceive(h *lntest.TestHarness, lsp LspNode, miner 
 	payResp := alice.Pay(outerInvoice.bolt11)
 	bobInvoice := bob.lightningNode.GetInvoice(payResp.PaymentHash)
 
-	assert.DeepEqual(h.T, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
+	assert.Equal(h.T, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
 	assert.Equal(h.T, outerAmountMsat, bobInvoice.AmountReceivedMsat)
+
+	// Make sure capacity is correct
+	chans := bob.lightningNode.GetChannels()
+	assert.Len(h.T, chans, 1)
+	c := chans[0]
+	AssertChannelCapacity(h.T, outerAmountMsat, c.CapacityMsat)
 }
 
 func testOpenZeroConfSingleHtlc(h *lntest.TestHarness, lsp LspNode, miner *lntest.Miner) {
@@ -97,8 +103,14 @@ func testOpenZeroConfSingleHtlc(h *lntest.TestHarness, lsp LspNode, miner *lntes
 	payResp := alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
 	bobInvoice := bob.lightningNode.GetInvoice(payResp.PaymentHash)
 
-	assert.DeepEqual(h.T, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
+	assert.Equal(h.T, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
 	assert.Equal(h.T, outerAmountMsat, bobInvoice.AmountReceivedMsat)
+
+	// Make sure capacity is correct
+	chans := bob.lightningNode.GetChannels()
+	assert.Len(h.T, chans, 1)
+	c := chans[0]
+	AssertChannelCapacity(h.T, outerAmountMsat, c.CapacityMsat)
 }
 
 func constructRoute(
