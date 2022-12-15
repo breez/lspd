@@ -12,6 +12,7 @@ import (
 
 	"github.com/breez/lspd/btceclegacy"
 	lspdrpc "github.com/breez/lspd/rpc"
+	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"google.golang.org/grpc"
@@ -49,6 +50,7 @@ var (
 	client              LightningClient
 	openChannelReqGroup singleflight.Group
 	privateKey          *btcec.PrivateKey
+	privateKeyBytes     []byte
 	publicKey           *btcec.PublicKey
 	nodeName            = os.Getenv("NODE_NAME")
 	nodePubkey          = os.Getenv("NODE_PUBKEY")
@@ -73,11 +75,16 @@ func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInfo
 }
 
 func (s *server) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymentRequest) (*lspdrpc.RegisterPaymentReply, error) {
-	data, err := btceclegacy.Decrypt(privateKey, in.Blob)
+	data, err := ecies.Decrypt(ecies.NewPrivateKeyFromBytes(privateKeyBytes), in.Blob)
 	if err != nil {
-		log.Printf("btcec.Decrypt(%x) error: %v", in.Blob, err)
-		return nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Blob, err)
+		log.Printf("ecies.Decrypt(%x) error: %v", in.Blob, err)
+		data, err = btceclegacy.Decrypt(privateKey, in.Blob)
+		if err != nil {
+			log.Printf("btcec.Decrypt(%x) error: %v", in.Blob, err)
+			return nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Blob, err)
+		}
 	}
+
 	var pi lspdrpc.PaymentInformation
 	err = proto.Unmarshal(data, &pi)
 	if err != nil {
@@ -150,10 +157,14 @@ func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest
 }
 
 func getSignedEncryptedData(in *lspdrpc.Encrypted) (string, []byte, error) {
-	signedBlob, err := btceclegacy.Decrypt(privateKey, in.Data)
+	signedBlob, err := ecies.Decrypt(ecies.NewPrivateKeyFromBytes(privateKeyBytes), in.Data)
 	if err != nil {
-		log.Printf("btcec.Decrypt(%x) error: %v", in.Data, err)
-		return "", nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Data, err)
+		log.Printf("ecies.Decrypt(%x) error: %v", in.Data, err)
+		signedBlob, err = btceclegacy.Decrypt(privateKey, in.Data)
+		if err != nil {
+			log.Printf("btcec.Decrypt(%x) error: %v", in.Data, err)
+			return "", nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Data, err)
+		}
 	}
 	var signed lspdrpc.Signed
 	err = proto.Unmarshal(signedBlob, &signed)
@@ -249,11 +260,13 @@ func NewGrpcServer() *server {
 }
 
 func (s *server) Start() error {
-	privateKeyBytes, err := hex.DecodeString(os.Getenv("LSPD_PRIVATE_KEY"))
+	pk, err := hex.DecodeString(os.Getenv("LSPD_PRIVATE_KEY"))
 	if err != nil {
 		log.Fatalf("hex.DecodeString(os.Getenv(\"LSPD_PRIVATE_KEY\")=%v) error: %v", os.Getenv("LSPD_PRIVATE_KEY"), err)
 	}
-	privateKey, publicKey = btcec.PrivKeyFromBytes(privateKeyBytes)
+
+	privateKeyBytes = pk
+	privateKey, publicKey = btcec.PrivKeyFromBytes(pk)
 
 	certmagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
 	address := os.Getenv("LISTEN_ADDRESS")
