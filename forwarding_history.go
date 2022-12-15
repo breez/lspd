@@ -44,7 +44,7 @@ func channelsSynchronize(client *LndClient) {
 		if err != nil {
 			log.Printf("chainNotifierClient.RegisterBlockEpochNtfn(): %v", err)
 			cancel()
-			time.Sleep(1 * time.Second)
+			<-time.After(time.Second)
 			continue
 		}
 
@@ -52,10 +52,11 @@ func channelsSynchronize(client *LndClient) {
 			_, err := stream.Recv()
 			if err != nil {
 				log.Printf("stream.Recv: %v", err)
+				<-time.After(time.Second)
 				break
 			}
 			if lastSync.Add(5 * time.Minute).Before(time.Now()) {
-				time.Sleep(30 * time.Second)
+				<-time.After(30 * time.Second)
 				err = channelsSynchronizeOnce(client)
 				lastSync = time.Now()
 				log.Printf("channelsSynchronizeOnce() err: %v", err)
@@ -102,7 +103,7 @@ func forwardingHistorySynchronize(client *LndClient) {
 	for {
 		err := forwardingHistorySynchronizeOnce(client)
 		log.Printf("forwardingHistorySynchronizeOnce() err: %v", err)
-		time.Sleep(1 * time.Minute)
+		<-time.After(1 * time.Minute)
 	}
 }
 

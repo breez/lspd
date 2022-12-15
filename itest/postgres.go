@@ -107,10 +107,10 @@ HealthCheck:
 					break HealthCheck
 				}
 
-				time.Sleep(50 * time.Millisecond)
+				<-time.After(50 * time.Millisecond)
 			}
 		default:
-			time.Sleep(200 * time.Millisecond)
+			<-time.After(200 * time.Millisecond)
 		}
 	}
 

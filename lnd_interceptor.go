@@ -58,12 +58,13 @@ func (i *LndHtlcInterceptor) intercept() error {
 			return nil
 		}
 
+		log.Printf("Connecting LND HTLC interceptor.")
 		cancellableCtx, cancel := context.WithCancel(context.Background())
 		interceptorClient, err := i.client.routerClient.HtlcInterceptor(cancellableCtx)
 		if err != nil {
 			log.Printf("routerClient.HtlcInterceptor(): %v", err)
 			cancel()
-			time.Sleep(1 * time.Second)
+			<-time.After(time.Second)
 			continue
 		}
 
@@ -133,6 +134,7 @@ func (i *LndHtlcInterceptor) intercept() error {
 		}
 
 		cancel()
+		<-time.After(time.Second)
 	}
 }
 

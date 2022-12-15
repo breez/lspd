@@ -198,7 +198,7 @@ func intercept(reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingE
 				log.Printf("Stop retrying getChannel(%v, %v)", destination, channelPoint.String())
 				break
 			}
-			time.Sleep(1 * time.Second)
+			<-time.After(1 * time.Second)
 		}
 
 		log.Printf("Error: Channel failed to opened... timed out. ")

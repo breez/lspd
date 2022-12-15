@@ -65,6 +65,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("client.GetInfo() error: %v", err)
 	}
+	log.Printf("Connected to node '%s', alias '%s'", info.Pubkey, info.Alias)
+
 	if nodeName == "" {
 		nodeName = info.Alias
 	}
