@@ -12,10 +12,10 @@ import (
 	"strings"
 
 	"github.com/breez/lntest"
-	"github.com/breez/lspd/btceclegacy"
 	lspd "github.com/breez/lspd/rpc"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -39,6 +39,7 @@ var (
 type LspNode interface {
 	Harness() *lntest.TestHarness
 	PublicKey() *btcec.PublicKey
+	EciesPublicKey() *ecies.PublicKey
 	Rpc() lspd.ChannelOpenerClient
 	NodeId() []byte
 	LightningNode() lntest.LightningNode
@@ -49,6 +50,7 @@ type ClnLspNode struct {
 	lightningNode   *lntest.CoreLightningNode
 	rpc             lspd.ChannelOpenerClient
 	publicKey       btcec.PublicKey
+	eciesPublicKey  ecies.PublicKey
 	postgresBackend *PostgresContainer
 }
 
@@ -58,6 +60,10 @@ func (c *ClnLspNode) Harness() *lntest.TestHarness {
 
 func (c *ClnLspNode) PublicKey() *btcec.PublicKey {
 	return &c.publicKey
+}
+
+func (c *ClnLspNode) EciesPublicKey() *ecies.PublicKey {
+	return &c.eciesPublicKey
 }
 
 func (c *ClnLspNode) Rpc() lspd.ChannelOpenerClient {
@@ -86,6 +92,7 @@ type LndLspNode struct {
 	lightningNode   *lntest.LndNode
 	rpc             lspd.ChannelOpenerClient
 	publicKey       btcec.PublicKey
+	eciesPublicKey  ecies.PublicKey
 	postgresBackend *PostgresContainer
 	logFile         *os.File
 	lspdCmd         *exec.Cmd
@@ -97,6 +104,10 @@ func (c *LndLspNode) Harness() *lntest.TestHarness {
 
 func (c *LndLspNode) PublicKey() *btcec.PublicKey {
 	return &c.publicKey
+}
+
+func (c *LndLspNode) EciesPublicKey() *ecies.PublicKey {
+	return &c.eciesPublicKey
 }
 
 func (c *LndLspNode) Rpc() lspd.ChannelOpenerClient {
@@ -135,7 +146,7 @@ func (l *LndLspNode) LightningNode() lntest.LightningNode {
 }
 
 func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode {
-	scriptFilePath, grpcAddress, publ, postgresBackend := setupLspd(h, name, "RUN_CLN=true")
+	scriptFilePath, grpcAddress, publ, eciesPubl, postgresBackend := setupLspd(h, name, "RUN_CLN=true")
 	args := []string{
 		fmt.Sprintf("--plugin=%s", scriptFilePath),
 		fmt.Sprintf("--fee-base=%d", lspBaseFeeMsat),
@@ -161,6 +172,7 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode
 		lightningNode:   lightningNode,
 		rpc:             client,
 		publicKey:       *publ,
+		eciesPublicKey:  *eciesPubl,
 		postgresBackend: postgresBackend,
 	}
 
@@ -183,7 +195,7 @@ func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode
 
 	lightningNode := lntest.NewLndNode(h, m, name, args...)
 	tlsCert := strings.Replace(string(lightningNode.TlsCert()), "\n", "\\n", -1)
-	scriptFilePath, grpcAddress, publ, postgresBackend := setupLspd(h, name,
+	scriptFilePath, grpcAddress, publ, eciesPubl, postgresBackend := setupLspd(h, name,
 		"RUN_LND=true",
 		fmt.Sprintf("LND_CERT=\"%s\"", tlsCert),
 		fmt.Sprintf("LND_ADDRESS=%s", lightningNode.GrpcHost()),
@@ -218,6 +230,7 @@ func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode
 		lightningNode:   lightningNode,
 		rpc:             client,
 		publicKey:       *publ,
+		eciesPublicKey:  *eciesPubl,
 		postgresBackend: postgresBackend,
 		logFile:         logFile,
 		lspdCmd:         lspdCmd,
@@ -228,7 +241,7 @@ func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode
 	return lspNode
 }
 
-func setupLspd(h *lntest.TestHarness, name string, envExt ...string) (string, string, *secp256k1.PublicKey, *PostgresContainer) {
+func setupLspd(h *lntest.TestHarness, name string, envExt ...string) (string, string, *secp256k1.PublicKey, *ecies.PublicKey, *PostgresContainer) {
 	scriptDir := h.GetDirectory(fmt.Sprintf("lspd-%s", name))
 	log.Printf("%s: Creating LSPD in dir %s", name, scriptDir)
 	migrationsDir, err := getMigrationsDir()
@@ -249,6 +262,7 @@ func setupLspd(h *lntest.TestHarness, name string, envExt ...string) (string, st
 	lntest.CheckError(h.T, err)
 
 	_, publ := btcec.PrivKeyFromBytes(lspdPrivateKeyBytes)
+	eciesPubl := ecies.NewPrivateKeyFromBytes(lspdPrivateKeyBytes).PublicKey
 	host := "localhost"
 	grpcAddress := fmt.Sprintf("%s:%d", host, lspdPort)
 	env := []string{
@@ -284,14 +298,14 @@ func setupLspd(h *lntest.TestHarness, name string, envExt ...string) (string, st
 	lntest.CheckError(h.T, err)
 	scriptFile.Close()
 
-	return scriptFilePath, grpcAddress, publ, postgresBackend
+	return scriptFilePath, grpcAddress, publ, eciesPubl, postgresBackend
 }
 
 func RegisterPayment(l LspNode, paymentInfo *lspd.PaymentInformation) {
 	serialized, err := proto.Marshal(paymentInfo)
 	lntest.CheckError(l.Harness().T, err)
 
-	encrypted, err := btceclegacy.Encrypt(l.PublicKey(), serialized)
+	encrypted, err := ecies.Encrypt(l.EciesPublicKey(), serialized)
 	lntest.CheckError(l.Harness().T, err)
 
 	log.Printf("Registering payment")
