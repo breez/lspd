@@ -50,8 +50,9 @@ var (
 	client              LightningClient
 	openChannelReqGroup singleflight.Group
 	privateKey          *btcec.PrivateKey
-	privateKeyBytes     []byte
 	publicKey           *btcec.PublicKey
+	eciesPrivateKey     *ecies.PrivateKey
+	eciesPublicKey      *ecies.PublicKey
 	nodeName            = os.Getenv("NODE_NAME")
 	nodePubkey          = os.Getenv("NODE_PUBKEY")
 )
@@ -75,7 +76,7 @@ func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInfo
 }
 
 func (s *server) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymentRequest) (*lspdrpc.RegisterPaymentReply, error) {
-	data, err := ecies.Decrypt(ecies.NewPrivateKeyFromBytes(privateKeyBytes), in.Blob)
+	data, err := ecies.Decrypt(eciesPrivateKey, in.Blob)
 	if err != nil {
 		log.Printf("ecies.Decrypt(%x) error: %v", in.Blob, err)
 		data, err = btceclegacy.Decrypt(privateKey, in.Blob)
@@ -156,46 +157,48 @@ func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest
 	return r.(*lspdrpc.OpenChannelReply), err
 }
 
-func getSignedEncryptedData(in *lspdrpc.Encrypted) (string, []byte, error) {
-	signedBlob, err := ecies.Decrypt(ecies.NewPrivateKeyFromBytes(privateKeyBytes), in.Data)
+func getSignedEncryptedData(in *lspdrpc.Encrypted) (string, []byte, bool, error) {
+	usedEcies := true
+	signedBlob, err := ecies.Decrypt(eciesPrivateKey, in.Data)
 	if err != nil {
 		log.Printf("ecies.Decrypt(%x) error: %v", in.Data, err)
+		usedEcies = false
 		signedBlob, err = btceclegacy.Decrypt(privateKey, in.Data)
 		if err != nil {
 			log.Printf("btcec.Decrypt(%x) error: %v", in.Data, err)
-			return "", nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Data, err)
+			return "", nil, usedEcies, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Data, err)
 		}
 	}
 	var signed lspdrpc.Signed
 	err = proto.Unmarshal(signedBlob, &signed)
 	if err != nil {
 		log.Printf("proto.Unmarshal(%x) error: %v", signedBlob, err)
-		return "", nil, fmt.Errorf("proto.Unmarshal(%x) error: %w", signedBlob, err)
+		return "", nil, usedEcies, fmt.Errorf("proto.Unmarshal(%x) error: %w", signedBlob, err)
 	}
 	pubkey, err := btcec.ParsePubKey(signed.Pubkey)
 	if err != nil {
 		log.Printf("unable to parse pubkey: %v", err)
-		return "", nil, fmt.Errorf("unable to parse pubkey: %w", err)
+		return "", nil, usedEcies, fmt.Errorf("unable to parse pubkey: %w", err)
 	}
 	wireSig, err := lnwire.NewSigFromRawSignature(signed.Signature)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to decode signature: %v", err)
+		return "", nil, usedEcies, fmt.Errorf("failed to decode signature: %v", err)
 	}
 	sig, err := wireSig.ToSignature()
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to convert from wire format: %v",
+		return "", nil, usedEcies, fmt.Errorf("failed to convert from wire format: %v",
 			err)
 	}
 	// The signature is over the sha256 hash of the message.
 	digest := chainhash.HashB(signed.Data)
 	if !sig.Verify(digest, pubkey) {
-		return "", nil, fmt.Errorf("invalid signature")
+		return "", nil, usedEcies, fmt.Errorf("invalid signature")
 	}
-	return hex.EncodeToString(signed.Pubkey), signed.Data, nil
+	return hex.EncodeToString(signed.Pubkey), signed.Data, usedEcies, nil
 }
 
 func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lspdrpc.Encrypted, error) {
-	nodeID, data, err := getSignedEncryptedData(in)
+	nodeID, data, usedEcies, err := getSignedEncryptedData(in)
 	if err != nil {
 		log.Printf("getSignedEncryptedData error: %v", err)
 		return nil, fmt.Errorf("getSignedEncryptedData error: %v", err)
@@ -230,11 +233,22 @@ func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lsp
 		log.Printf("unable to parse pubkey: %v", err)
 		return nil, fmt.Errorf("unable to parse pubkey: %w", err)
 	}
-	encrypted, err := btceclegacy.Encrypt(pubkey, dataReply)
-	if err != nil {
-		log.Printf("btcec.Encrypt() error: %v", err)
-		return nil, fmt.Errorf("btcec.Encrypt() error: %w", err)
+
+	var encrypted []byte
+	if usedEcies {
+		encrypted, err = ecies.Encrypt(eciesPublicKey, dataReply)
+		if err != nil {
+			log.Printf("ecies.Encrypt() error: %v", err)
+			return nil, fmt.Errorf("ecies.Encrypt() error: %w", err)
+		}
+	} else {
+		encrypted, err = btceclegacy.Encrypt(pubkey, dataReply)
+		if err != nil {
+			log.Printf("btcec.Encrypt() error: %v", err)
+			return nil, fmt.Errorf("btcec.Encrypt() error: %w", err)
+		}
 	}
+
 	return &lspdrpc.Encrypted{Data: encrypted}, nil
 }
 
@@ -265,7 +279,8 @@ func (s *server) Start() error {
 		log.Fatalf("hex.DecodeString(os.Getenv(\"LSPD_PRIVATE_KEY\")=%v) error: %v", os.Getenv("LSPD_PRIVATE_KEY"), err)
 	}
 
-	privateKeyBytes = pk
+	eciesPrivateKey = ecies.NewPrivateKeyFromBytes(pk)
+	eciesPublicKey = eciesPrivateKey.PublicKey
 	privateKey, publicKey = btcec.PrivKeyFromBytes(pk)
 
 	certmagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
