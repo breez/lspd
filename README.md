@@ -60,17 +60,31 @@ In order to run the integration tests, you need:
 - Docker running
 - python3 installed
 - A development build of lightningd v22.11
-- lnd v0.15.4
-- bitcoind v23.0
-- bitcoin-cli v23.0
+- lnd v0.15.4 lsp version https://github.com/breez/lnd/tree/breez-node-v0.15.4
+- lnd v0.15.3 breez client version https://github.com/breez/lnd/commit/e1570b327b5de52d03817ad516d0bdfa71797c64
+- bitcoind (tested with v23.0)
+- bitcoin-cli (tested with v23.0)
 - build of lspd
 
 To run the integration tests, run the following command from the lspd root directory (replacing the appropriate paths). 
 
 ```
-go test -v ./itest --lightningdexec /full/path/to/lightningd --lndexec /full/path/to/lnd --bitcoindexec /full/path/to/bitcoind --bitcoincliexec /full/path/to/bitcoin-cli --lspdexec /full/path/to/lspd --lspdmigrationsdir /full/path/to/lspd/postgresql/migrations --testdir /path/to/test/output/dir
+go test -v ./itest \
+  --lightningdexec /full/path/to/lightningd \
+  --lndexec /full/path/to/lnd \
+  --lndmobileexec /full/path/to/lnd \
+  --lspdexec /full/path/to/lspd \
+  --lspdmigrationsdir /full/path/to/lspd/postgresql/migrations
 ```
-- Optional: `--preservelogs` persists only the logs in the testing directory
-- Optional: `--preservestate` preserves all artifacts from the lightning nodes, miners, postgres container and startup scripts
 
-Alternatively, if `lightningd`, `lnd`, `bitcoind`, `bitcoin-cli` or `lspd` exec flags are omitted, these binaries are taken from `$PATH` instead if found.
+- Required: `--lightningdexec` Full path to lightningd development build executable. Defaults to `lightningd` in `$PATH`.
+- Required: `--lndexec` Full path to LSP LND executable. Defaults to `lnd` in `$PATH`. 
+- Required: `--lndmobileexec` Full path to Breez mobile client LND executable. No default.
+- Required: `--lspdexec` Full path to `lspd` executable to test. Defaults to `lspd` in `$PATH`.
+- Required: `--lspdmigrationsdir` Path to directory containing postgres migrations for lspd. (Should be `./postgresql/migrations`)
+- Recommended: `--bitcoindexec` Full path to `bitcoind`. Defaults to `bitcoind` in `$PATH`.
+- Recommended: `--bitcoincliexec` Full path to `bitcoin-cli`. Defaults to `bitcoin-cli` in `$PATH`.
+- Recommended: `--testdir` uses the testdir as root directory for test files. Recommended because the CLN `lightning-rpc` socket max path length is 104-108 characters. Defaults to a temp directory (which has a long path length usually).
+- Optional: `--preservelogs` persists only the logs in the testing directory.
+- Optional: `--preservestate` preserves all artifacts from the lightning nodes, miners, postgres container and startup scripts.
+- Optional: `--dumplogs` dumps all logs to the console after a test is complete.
