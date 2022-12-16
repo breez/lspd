@@ -25,3 +25,18 @@ func AssertChannelCapacity(
 ) {
 	assert.Equal(t, ((outerAmountMsat/1000)+100000)*1000, capacityMsat)
 }
+
+func calculateInnerAmountMsat(lsp LspNode, outerAmountMsat uint64) uint64 {
+	if lsp.SupportsChargingFees() {
+		fee := outerAmountMsat * 40 / 10_000 / 1_000 * 1_000
+		if fee < 2000000 {
+			fee = 2000000
+		}
+
+		return outerAmountMsat - fee
+	} else {
+		return outerAmountMsat
+	}
+}
+
+var publicChanAmount uint64 = 1000183

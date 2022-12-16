@@ -43,11 +43,12 @@ type LspNode interface {
 	Rpc() lspd.ChannelOpenerClient
 	NodeId() []byte
 	LightningNode() lntest.LightningNode
+	SupportsChargingFees() bool
 }
 
 type ClnLspNode struct {
 	harness         *lntest.TestHarness
-	lightningNode   *lntest.CoreLightningNode
+	lightningNode   *lntest.ClnNode
 	rpc             lspd.ChannelOpenerClient
 	publicKey       btcec.PublicKey
 	eciesPublicKey  ecies.PublicKey
@@ -72,11 +73,11 @@ func (c *ClnLspNode) Rpc() lspd.ChannelOpenerClient {
 
 func (l *ClnLspNode) TearDown() error {
 	// NOTE: The lightningnode will be torn down on its own.
-	return l.postgresBackend.Shutdown(l.harness.Ctx)
+	return l.postgresBackend.Shutdown(context.Background())
 }
 
 func (l *ClnLspNode) Cleanup() error {
-	return l.postgresBackend.Cleanup(l.harness.Ctx)
+	return l.postgresBackend.Cleanup(context.Background())
 }
 
 func (l *ClnLspNode) NodeId() []byte {
@@ -85,6 +86,10 @@ func (l *ClnLspNode) NodeId() []byte {
 
 func (l *ClnLspNode) LightningNode() lntest.LightningNode {
 	return l.lightningNode
+}
+
+func (l *ClnLspNode) SupportsChargingFees() bool {
+	return false
 }
 
 type LndLspNode struct {
@@ -113,6 +118,9 @@ func (c *LndLspNode) EciesPublicKey() *ecies.PublicKey {
 func (c *LndLspNode) Rpc() lspd.ChannelOpenerClient {
 	return c.rpc
 }
+func (l *LndLspNode) SupportsChargingFees() bool {
+	return true
+}
 
 func (l *LndLspNode) TearDown() error {
 	// NOTE: The lightningnode will be torn down on its own.
@@ -130,11 +138,11 @@ func (l *LndLspNode) TearDown() error {
 		}
 	}
 
-	return l.postgresBackend.Shutdown(l.harness.Ctx)
+	return l.postgresBackend.Shutdown(context.Background())
 }
 
 func (l *LndLspNode) Cleanup() error {
-	return l.postgresBackend.Cleanup(l.harness.Ctx)
+	return l.postgresBackend.Cleanup(context.Background())
 }
 
 func (l *LndLspNode) NodeId() []byte {
@@ -156,7 +164,7 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode
 		"--dev-allowdustreserve=true",
 	}
 
-	lightningNode := lntest.NewCoreLightningNode(h, m, name, args...)
+	lightningNode := lntest.NewClnNode(h, m, name, args...)
 
 	conn, err := grpc.Dial(
 		grpcAddress,
@@ -187,7 +195,7 @@ func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode
 		"--protocol.option-scid-alias",
 		"--requireinterceptor",
 		"--bitcoin.defaultchanconfs=0",
-		"--bitcoin.chanreservescript=\"0\"",
+		fmt.Sprintf("--bitcoin.chanreservescript=\"0 if (chanAmt != %d) else chanAmt/100\"", publicChanAmount),
 		fmt.Sprintf("--bitcoin.basefee=%d", lspBaseFeeMsat),
 		fmt.Sprintf("--bitcoin.feerate=%d", lspFeeRatePpm),
 		fmt.Sprintf("--bitcoin.timelockdelta=%d", lspCltvDelta),

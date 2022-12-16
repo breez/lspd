@@ -13,9 +13,9 @@ var defaultTimeout time.Duration = time.Second * 120
 
 func TestLspd(t *testing.T) {
 	testCases := allTestCases
-	// runTests(t, testCases, "LND-lspd", func(h *lntest.TestHarness, m *lntest.Miner) (LspNode, *breezClient) {
-	// 	return NewLndLspdNode(h, m, "lsp"), newLndBreezClient(h, m, "breez-client")
-	// })
+	runTests(t, testCases, "LND-lspd", func(h *lntest.TestHarness, m *lntest.Miner) (LspNode, *breezClient) {
+		return NewLndLspdNode(h, m, "lsp"), newLndBreezClient(h, m, "breez-client")
+	})
 
 	runTests(t, testCases, "CLN-lspd", func(h *lntest.TestHarness, m *lntest.Miner) (LspNode, *breezClient) {
 		return NewClnLspdNode(h, m, "lsp"), newClnBreezClient(h, m, "breez-client")

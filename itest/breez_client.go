@@ -3,11 +3,13 @@ package itest
 import (
 	"bufio"
 	"crypto/sha256"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/breez/lntest"
+	"github.com/breez/lntest/lnd"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -77,7 +79,7 @@ func newClnBreezClient(h *lntest.TestHarness, m *lntest.Miner, name string) *bre
 	lntest.CheckError(h.T, err)
 	pluginFile.Close()
 
-	node := lntest.NewCoreLightningNode(
+	node := lntest.NewClnNode(
 		h,
 		m,
 		name,
@@ -99,12 +101,48 @@ func newClnBreezClient(h *lntest.TestHarness, m *lntest.Miner, name string) *bre
 	}
 }
 
+var lndMobileExecutable = flag.String(
+	"lndmobileexec", "", "full path to lnd mobile binary",
+)
+
 func newLndBreezClient(h *lntest.TestHarness, m *lntest.Miner, name string) *breezClient {
-	lnd := lntest.NewLndNode(h, m, name)
+	lnd := lntest.NewLndNodeFromBinary(h, m, name, *lndMobileExecutable,
+		"--protocol.zero-conf",
+		"--protocol.option-scid-alias",
+		"--bitcoin.defaultchanconfs=0",
+	)
+
+	go startChannelAcceptor(h, lnd)
+
 	return &breezClient{
 		name:          name,
 		harness:       h,
 		lightningNode: lnd,
+	}
+}
+
+func startChannelAcceptor(h *lntest.TestHarness, n *lntest.LndNode) error {
+	client, err := n.LightningClient().ChannelAcceptor(h.Ctx)
+	lntest.CheckError(h.T, err)
+
+	for {
+		request, err := client.Recv()
+		if err != nil {
+			return err
+		}
+
+		private := request.ChannelFlags&uint32(lnwire.FFAnnounceChannel) == 0
+		resp := &lnd.ChannelAcceptResponse{
+			PendingChanId: request.PendingChanId,
+			Accept:        private,
+		}
+		if request.WantsZeroConf {
+			resp.MinAcceptDepth = 0
+			resp.ZeroConf = true
+		}
+
+		err = client.Send(resp)
+		lntest.CheckError(h.T, err)
 	}
 }
 

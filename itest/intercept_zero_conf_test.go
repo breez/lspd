@@ -2,26 +2,29 @@ package itest
 
 import (
 	"log"
+	"time"
 
 	"github.com/breez/lntest"
 	lspd "github.com/breez/lspd/rpc"
 	"github.com/stretchr/testify/assert"
 )
 
+var htlcInterceptorDelay = time.Second * 7
+
 func testOpenZeroConfChannelOnReceive(p *testParams) {
-	alice := lntest.NewCoreLightningNode(p.h, p.m, "Alice")
+	alice := lntest.NewClnNode(p.h, p.m, "Alice")
 	alice.Fund(10000000)
 	p.lsp.LightningNode().Fund(10000000)
 
 	log.Print("Opening channel between Alice and the lsp")
 	channel := alice.OpenChannel(p.lsp.LightningNode(), &lntest.OpenChannelOptions{
-		AmountSat: 1000000,
+		AmountSat: publicChanAmount,
 	})
 	alice.WaitForChannelReady(channel)
 
 	log.Printf("Adding bob's invoices")
 	outerAmountMsat := uint64(2100000)
-	innerAmountMsat := uint64(2100000)
+	innerAmountMsat := calculateInnerAmountMsat(p.lsp, outerAmountMsat)
 	description := "Please pay me"
 	innerInvoice, outerInvoice := p.BreezClient().GenerateInvoices(generateInvoicesRequest{
 		innerAmountMsat: innerAmountMsat,
@@ -44,12 +47,15 @@ func testOpenZeroConfChannelOnReceive(p *testParams) {
 		OutgoingAmountMsat: int64(pretendAmount),
 	})
 
+	// TODO: Fix race waiting for htlc interceptor.
+	log.Printf("Waiting %v to allow htlc interceptor to activate.", htlcInterceptorDelay)
+	<-time.After(htlcInterceptorDelay)
 	log.Printf("Alice paying")
 	payResp := alice.Pay(outerInvoice.bolt11)
 	bobInvoice := p.BreezClient().lightningNode.GetInvoice(payResp.PaymentHash)
 
 	assert.Equal(p.t, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
-	assert.Equal(p.t, outerAmountMsat, bobInvoice.AmountReceivedMsat)
+	assert.Equal(p.t, innerAmountMsat, bobInvoice.AmountReceivedMsat)
 
 	// Make sure capacity is correct
 	chans := p.BreezClient().lightningNode.GetChannels()
@@ -59,20 +65,20 @@ func testOpenZeroConfChannelOnReceive(p *testParams) {
 }
 
 func testOpenZeroConfSingleHtlc(p *testParams) {
-	alice := lntest.NewCoreLightningNode(p.h, p.m, "Alice")
+	alice := lntest.NewClnNode(p.h, p.m, "Alice")
 
 	alice.Fund(10000000)
 	p.lsp.LightningNode().Fund(10000000)
 
 	log.Print("Opening channel between Alice and the lsp")
 	channel := alice.OpenChannel(p.lsp.LightningNode(), &lntest.OpenChannelOptions{
-		AmountSat: 1000000,
+		AmountSat: publicChanAmount,
 	})
 	channelId := alice.WaitForChannelReady(channel)
 
 	log.Printf("Adding bob's invoices")
 	outerAmountMsat := uint64(2100000)
-	innerAmountMsat := uint64(2100000)
+	innerAmountMsat := calculateInnerAmountMsat(p.lsp, outerAmountMsat)
 	description := "Please pay me"
 	innerInvoice, outerInvoice := p.BreezClient().GenerateInvoices(generateInvoicesRequest{
 		innerAmountMsat: innerAmountMsat,
@@ -95,13 +101,16 @@ func testOpenZeroConfSingleHtlc(p *testParams) {
 		OutgoingAmountMsat: int64(pretendAmount),
 	})
 
+	// TODO: Fix race waiting for htlc interceptor.
+	log.Printf("Waiting %v to allow htlc interceptor to activate.", htlcInterceptorDelay)
+	<-time.After(htlcInterceptorDelay)
 	log.Printf("Alice paying")
 	route := constructRoute(p.lsp.LightningNode(), p.BreezClient().lightningNode, channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
 	payResp := alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
 	bobInvoice := p.BreezClient().lightningNode.GetInvoice(payResp.PaymentHash)
 
 	assert.Equal(p.t, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
-	assert.Equal(p.t, outerAmountMsat, bobInvoice.AmountReceivedMsat)
+	assert.Equal(p.t, innerAmountMsat, bobInvoice.AmountReceivedMsat)
 
 	// Make sure capacity is correct
 	chans := p.BreezClient().lightningNode.GetChannels()
