@@ -48,6 +48,7 @@ func testFailureBobOffline(p *testParams) {
 	})
 
 	// Kill the mobile client
+	log.Printf("Stopping breez client")
 	p.BreezClient().Stop()
 
 	// TODO: Fix race waiting for htlc interceptor.
@@ -58,4 +59,12 @@ func testFailureBobOffline(p *testParams) {
 	route := constructRoute(p.lsp.LightningNode(), p.BreezClient().Node(), channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
 	_, err := alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
 	assert.Contains(p.t, err.Error(), "WIRE_TEMPORARY_CHANNEL_FAILURE")
+
+	log.Printf("Starting breez client again")
+	p.BreezClient().Start()
+	p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
+
+	log.Printf("Alice paying again")
+	_, err = alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
+	assert.Nil(p.t, err)
 }
