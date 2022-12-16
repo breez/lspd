@@ -13,6 +13,7 @@ var htlcInterceptorDelay = time.Second * 7
 
 func testOpenZeroConfChannelOnReceive(p *testParams) {
 	alice := lntest.NewClnNode(p.h, p.m, "Alice")
+	alice.Start()
 	alice.Fund(10000000)
 	p.lsp.LightningNode().Fund(10000000)
 
@@ -26,15 +27,16 @@ func testOpenZeroConfChannelOnReceive(p *testParams) {
 	outerAmountMsat := uint64(2100000)
 	innerAmountMsat := calculateInnerAmountMsat(p.lsp, outerAmountMsat)
 	description := "Please pay me"
-	innerInvoice, outerInvoice := p.BreezClient().GenerateInvoices(generateInvoicesRequest{
-		innerAmountMsat: innerAmountMsat,
-		outerAmountMsat: outerAmountMsat,
-		description:     description,
-		lsp:             p.lsp,
-	})
+	innerInvoice, outerInvoice := GenerateInvoices(p.BreezClient(),
+		generateInvoicesRequest{
+			innerAmountMsat: innerAmountMsat,
+			outerAmountMsat: outerAmountMsat,
+			description:     description,
+			lsp:             p.lsp,
+		})
 
 	log.Print("Connecting bob to lspd")
-	p.BreezClient().lightningNode.ConnectPeer(p.lsp.LightningNode())
+	p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
 
 	// NOTE: We pretend to be paying fees to the lsp, but actually we won't.
 	log.Printf("Registering payment with lsp")
@@ -42,7 +44,7 @@ func testOpenZeroConfChannelOnReceive(p *testParams) {
 	RegisterPayment(p.lsp, &lspd.PaymentInformation{
 		PaymentHash:        innerInvoice.paymentHash,
 		PaymentSecret:      innerInvoice.paymentSecret,
-		Destination:        p.BreezClient().lightningNode.NodeId(),
+		Destination:        p.BreezClient().Node().NodeId(),
 		IncomingAmountMsat: int64(outerAmountMsat),
 		OutgoingAmountMsat: int64(pretendAmount),
 	})
@@ -52,13 +54,13 @@ func testOpenZeroConfChannelOnReceive(p *testParams) {
 	<-time.After(htlcInterceptorDelay)
 	log.Printf("Alice paying")
 	payResp := alice.Pay(outerInvoice.bolt11)
-	bobInvoice := p.BreezClient().lightningNode.GetInvoice(payResp.PaymentHash)
+	bobInvoice := p.BreezClient().Node().GetInvoice(payResp.PaymentHash)
 
 	assert.Equal(p.t, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
 	assert.Equal(p.t, innerAmountMsat, bobInvoice.AmountReceivedMsat)
 
 	// Make sure capacity is correct
-	chans := p.BreezClient().lightningNode.GetChannels()
+	chans := p.BreezClient().Node().GetChannels()
 	assert.Len(p.t, chans, 1)
 	c := chans[0]
 	AssertChannelCapacity(p.t, outerAmountMsat, c.CapacityMsat)
@@ -66,7 +68,7 @@ func testOpenZeroConfChannelOnReceive(p *testParams) {
 
 func testOpenZeroConfSingleHtlc(p *testParams) {
 	alice := lntest.NewClnNode(p.h, p.m, "Alice")
-
+	alice.Start()
 	alice.Fund(10000000)
 	p.lsp.LightningNode().Fund(10000000)
 
@@ -80,15 +82,16 @@ func testOpenZeroConfSingleHtlc(p *testParams) {
 	outerAmountMsat := uint64(2100000)
 	innerAmountMsat := calculateInnerAmountMsat(p.lsp, outerAmountMsat)
 	description := "Please pay me"
-	innerInvoice, outerInvoice := p.BreezClient().GenerateInvoices(generateInvoicesRequest{
-		innerAmountMsat: innerAmountMsat,
-		outerAmountMsat: outerAmountMsat,
-		description:     description,
-		lsp:             p.lsp,
-	})
+	innerInvoice, outerInvoice := GenerateInvoices(p.BreezClient(),
+		generateInvoicesRequest{
+			innerAmountMsat: innerAmountMsat,
+			outerAmountMsat: outerAmountMsat,
+			description:     description,
+			lsp:             p.lsp,
+		})
 
 	log.Print("Connecting bob to lspd")
-	p.BreezClient().lightningNode.ConnectPeer(p.lsp.LightningNode())
+	p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
 
 	// NOTE: We pretend to be paying fees to the lsp, but actually we won't.
 	log.Printf("Registering payment with lsp")
@@ -96,7 +99,7 @@ func testOpenZeroConfSingleHtlc(p *testParams) {
 	RegisterPayment(p.lsp, &lspd.PaymentInformation{
 		PaymentHash:        innerInvoice.paymentHash,
 		PaymentSecret:      innerInvoice.paymentSecret,
-		Destination:        p.BreezClient().lightningNode.NodeId(),
+		Destination:        p.BreezClient().Node().NodeId(),
 		IncomingAmountMsat: int64(outerAmountMsat),
 		OutgoingAmountMsat: int64(pretendAmount),
 	})
@@ -105,15 +108,15 @@ func testOpenZeroConfSingleHtlc(p *testParams) {
 	log.Printf("Waiting %v to allow htlc interceptor to activate.", htlcInterceptorDelay)
 	<-time.After(htlcInterceptorDelay)
 	log.Printf("Alice paying")
-	route := constructRoute(p.lsp.LightningNode(), p.BreezClient().lightningNode, channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
+	route := constructRoute(p.lsp.LightningNode(), p.BreezClient().Node(), channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
 	payResp := alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
-	bobInvoice := p.BreezClient().lightningNode.GetInvoice(payResp.PaymentHash)
+	bobInvoice := p.BreezClient().Node().GetInvoice(payResp.PaymentHash)
 
 	assert.Equal(p.t, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)
 	assert.Equal(p.t, innerAmountMsat, bobInvoice.AmountReceivedMsat)
 
 	// Make sure capacity is correct
-	chans := p.BreezClient().lightningNode.GetChannels()
+	chans := p.BreezClient().Node().GetChannels()
 	assert.Len(p.t, chans, 1)
 	c := chans[0]
 	AssertChannelCapacity(p.t, outerAmountMsat, c.CapacityMsat)

@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/breez/lntest"
 	lspd "github.com/breez/lspd/rpc"
@@ -17,8 +16,6 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 var (
@@ -37,6 +34,8 @@ var (
 )
 
 type LspNode interface {
+	Start()
+	Stop() error
 	Harness() *lntest.TestHarness
 	PublicKey() *btcec.PublicKey
 	EciesPublicKey() *ecies.PublicKey
@@ -46,228 +45,43 @@ type LspNode interface {
 	SupportsChargingFees() bool
 }
 
-type ClnLspNode struct {
+type lspBase struct {
 	harness         *lntest.TestHarness
-	lightningNode   *lntest.ClnNode
-	rpc             lspd.ChannelOpenerClient
-	publicKey       btcec.PublicKey
-	eciesPublicKey  ecies.PublicKey
+	name            string
+	binary          string
+	env             []string
+	scriptFilePath  string
+	grpcAddress     string
+	pubkey          *secp256k1.PublicKey
+	eciesPubkey     *ecies.PublicKey
 	postgresBackend *PostgresContainer
 }
 
-func (c *ClnLspNode) Harness() *lntest.TestHarness {
-	return c.harness
-}
-
-func (c *ClnLspNode) PublicKey() *btcec.PublicKey {
-	return &c.publicKey
-}
-
-func (c *ClnLspNode) EciesPublicKey() *ecies.PublicKey {
-	return &c.eciesPublicKey
-}
-
-func (c *ClnLspNode) Rpc() lspd.ChannelOpenerClient {
-	return c.rpc
-}
-
-func (l *ClnLspNode) TearDown() error {
-	// NOTE: The lightningnode will be torn down on its own.
-	return l.postgresBackend.Shutdown(context.Background())
-}
-
-func (l *ClnLspNode) Cleanup() error {
-	return l.postgresBackend.Cleanup(context.Background())
-}
-
-func (l *ClnLspNode) NodeId() []byte {
-	return l.lightningNode.NodeId()
-}
-
-func (l *ClnLspNode) LightningNode() lntest.LightningNode {
-	return l.lightningNode
-}
-
-func (l *ClnLspNode) SupportsChargingFees() bool {
-	return false
-}
-
-type LndLspNode struct {
-	harness         *lntest.TestHarness
-	lightningNode   *lntest.LndNode
-	rpc             lspd.ChannelOpenerClient
-	publicKey       btcec.PublicKey
-	eciesPublicKey  ecies.PublicKey
-	postgresBackend *PostgresContainer
-	logFile         *os.File
-	lspdCmd         *exec.Cmd
-}
-
-func (c *LndLspNode) Harness() *lntest.TestHarness {
-	return c.harness
-}
-
-func (c *LndLspNode) PublicKey() *btcec.PublicKey {
-	return &c.publicKey
-}
-
-func (c *LndLspNode) EciesPublicKey() *ecies.PublicKey {
-	return &c.eciesPublicKey
-}
-
-func (c *LndLspNode) Rpc() lspd.ChannelOpenerClient {
-	return c.rpc
-}
-func (l *LndLspNode) SupportsChargingFees() bool {
-	return true
-}
-
-func (l *LndLspNode) TearDown() error {
-	// NOTE: The lightningnode will be torn down on its own.
-	if l.lspdCmd != nil && l.lspdCmd.Process != nil {
-		err := l.lspdCmd.Process.Kill()
-		if err != nil {
-			log.Printf("error stopping lspd process: %v", err)
-		}
-	}
-
-	if l.logFile != nil {
-		err := l.logFile.Close()
-		if err != nil {
-			log.Printf("error closing logfile: %v", err)
-		}
-	}
-
-	return l.postgresBackend.Shutdown(context.Background())
-}
-
-func (l *LndLspNode) Cleanup() error {
-	return l.postgresBackend.Cleanup(context.Background())
-}
-
-func (l *LndLspNode) NodeId() []byte {
-	return l.lightningNode.NodeId()
-}
-
-func (l *LndLspNode) LightningNode() lntest.LightningNode {
-	return l.lightningNode
-}
-
-func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode {
-	scriptFilePath, grpcAddress, publ, eciesPubl, postgresBackend := setupLspd(h, name, "RUN_CLN=true")
-	args := []string{
-		fmt.Sprintf("--plugin=%s", scriptFilePath),
-		fmt.Sprintf("--fee-base=%d", lspBaseFeeMsat),
-		fmt.Sprintf("--fee-per-satoshi=%d", lspFeeRatePpm),
-		fmt.Sprintf("--cltv-delta=%d", lspCltvDelta),
-		"--max-concurrent-htlcs=30",
-		"--dev-allowdustreserve=true",
-	}
-
-	lightningNode := lntest.NewClnNode(h, m, name, args...)
-
-	conn, err := grpc.Dial(
-		grpcAddress,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithPerRPCCredentials(&token{token: "hello"}),
-	)
-	lntest.CheckError(h.T, err)
-
-	client := lspd.NewChannelOpenerClient(conn)
-
-	lspNode := &ClnLspNode{
-		harness:         h,
-		lightningNode:   lightningNode,
-		rpc:             client,
-		publicKey:       *publ,
-		eciesPublicKey:  *eciesPubl,
-		postgresBackend: postgresBackend,
-	}
-
-	h.AddStoppable(lspNode)
-	h.AddCleanable(lspNode)
-	return lspNode
-}
-
-func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode {
-	args := []string{
-		"--protocol.zero-conf",
-		"--protocol.option-scid-alias",
-		"--requireinterceptor",
-		"--bitcoin.defaultchanconfs=0",
-		fmt.Sprintf("--bitcoin.chanreservescript=\"0 if (chanAmt != %d) else chanAmt/100\"", publicChanAmount),
-		fmt.Sprintf("--bitcoin.basefee=%d", lspBaseFeeMsat),
-		fmt.Sprintf("--bitcoin.feerate=%d", lspFeeRatePpm),
-		fmt.Sprintf("--bitcoin.timelockdelta=%d", lspCltvDelta),
-	}
-
-	lightningNode := lntest.NewLndNode(h, m, name, args...)
-	tlsCert := strings.Replace(string(lightningNode.TlsCert()), "\n", "\\n", -1)
-	scriptFilePath, grpcAddress, publ, eciesPubl, postgresBackend := setupLspd(h, name,
-		"RUN_LND=true",
-		fmt.Sprintf("LND_CERT=\"%s\"", tlsCert),
-		fmt.Sprintf("LND_ADDRESS=%s", lightningNode.GrpcHost()),
-		fmt.Sprintf("LND_MACAROON_HEX=%x", lightningNode.Macaroon()),
-	)
-	scriptDir := filepath.Dir(scriptFilePath)
-	logFilePath := filepath.Join(scriptDir, "lspd.log")
-	h.RegisterLogfile(logFilePath, fmt.Sprintf("lspd-%s", name))
-
-	lspdCmd := exec.CommandContext(h.Ctx, scriptFilePath)
-	logFile, err := os.Create(logFilePath)
-	lntest.CheckError(h.T, err)
-
-	lspdCmd.Stdout = logFile
-	lspdCmd.Stderr = logFile
-
-	log.Printf("%s: starting lspd %s", name, scriptFilePath)
-	err = lspdCmd.Start()
-	lntest.CheckError(h.T, err)
-
-	conn, err := grpc.Dial(
-		grpcAddress,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithPerRPCCredentials(&token{token: "hello"}),
-	)
-	lntest.CheckError(h.T, err)
-
-	client := lspd.NewChannelOpenerClient(conn)
-
-	lspNode := &LndLspNode{
-		harness:         h,
-		lightningNode:   lightningNode,
-		rpc:             client,
-		publicKey:       *publ,
-		eciesPublicKey:  *eciesPubl,
-		postgresBackend: postgresBackend,
-		logFile:         logFile,
-		lspdCmd:         lspdCmd,
-	}
-
-	h.AddStoppable(lspNode)
-	h.AddCleanable(lspNode)
-	return lspNode
-}
-
-func setupLspd(h *lntest.TestHarness, name string, envExt ...string) (string, string, *secp256k1.PublicKey, *ecies.PublicKey, *PostgresContainer) {
+func newLspd(h *lntest.TestHarness, name string, envExt ...string) (*lspBase, error) {
 	scriptDir := h.GetDirectory(fmt.Sprintf("lspd-%s", name))
 	log.Printf("%s: Creating LSPD in dir %s", name, scriptDir)
-	migrationsDir, err := getMigrationsDir()
-	lntest.CheckError(h.T, err)
 
 	pgLogfile := filepath.Join(scriptDir, "postgres.log")
 	h.RegisterLogfile(pgLogfile, fmt.Sprintf("%s-postgres", name))
-	postgresBackend := StartPostgresContainer(h.T, h.Ctx, pgLogfile)
-	postgresBackend.RunMigrations(h.T, h.Ctx, migrationsDir)
+	postgresBackend, err := NewPostgresContainer(pgLogfile)
+	if err != nil {
+		return nil, err
+	}
 
 	lspdBinary, err := getLspdBinary()
-	lntest.CheckError(h.T, err)
+	if err != nil {
+		return nil, err
+	}
 
 	lspdPort, err := lntest.GetPort()
-	lntest.CheckError(h.T, err)
+	if err != nil {
+		return nil, err
+	}
 
 	lspdPrivateKeyBytes, err := GenerateRandomBytes(32)
-	lntest.CheckError(h.T, err)
+	if err != nil {
+		return nil, err
+	}
 
 	_, publ := btcec.PrivKeyFromBytes(lspdPrivateKeyBytes)
 	eciesPubl := ecies.NewPrivateKeyFromBytes(lspdPrivateKeyBytes).PublicKey
@@ -286,27 +100,91 @@ func setupLspd(h *lntest.TestHarness, name string, envExt ...string) (string, st
 	env = append(env, envExt...)
 
 	scriptFilePath := filepath.Join(scriptDir, "start-lspd.sh")
-	log.Printf("%s: Creating lspd startup script at %s", name, scriptFilePath)
-	scriptFile, err := os.OpenFile(scriptFilePath, os.O_CREATE|os.O_WRONLY, 0755)
-	lntest.CheckError(h.T, err)
 
-	writer := bufio.NewWriter(scriptFile)
-	_, err = writer.WriteString("#!/bin/bash\n")
-	lntest.CheckError(h.T, err)
+	l := &lspBase{
+		harness:         h,
+		name:            name,
+		env:             env,
+		binary:          lspdBinary,
+		scriptFilePath:  scriptFilePath,
+		grpcAddress:     grpcAddress,
+		pubkey:          publ,
+		eciesPubkey:     eciesPubl,
+		postgresBackend: postgresBackend,
+	}
+	h.AddStoppable(l)
+	h.AddCleanable(l)
+	return l, nil
+}
 
-	for _, str := range env {
-		_, err = writer.WriteString("export " + str + "\n")
-		lntest.CheckError(h.T, err)
+func (l *lspBase) Stop() error {
+	return l.postgresBackend.Stop(context.Background())
+}
+
+func (l *lspBase) Cleanup() error {
+	return l.postgresBackend.Cleanup(context.Background())
+}
+
+func (l *lspBase) Initialize() error {
+	var cleanups []*lntest.Cleanup
+	migrationsDir, err := getMigrationsDir()
+	if err != nil {
+		return err
 	}
 
-	_, err = writer.WriteString(lspdBinary + "\n")
-	lntest.CheckError(h.T, err)
+	err = l.postgresBackend.Start(l.harness.Ctx)
+	if err != nil {
+		return err
+	}
+
+	cleanups = append(cleanups, &lntest.Cleanup{
+		Name: fmt.Sprintf("%s: postgres container", l.name),
+		Fn: func() error {
+			return l.postgresBackend.Stop(context.Background())
+		},
+	})
+	err = l.postgresBackend.RunMigrations(l.harness.Ctx, migrationsDir)
+	if err != nil {
+		lntest.PerformCleanup(cleanups)
+		return err
+	}
+
+	log.Printf("%s: Creating lspd startup script at %s", l.name, l.scriptFilePath)
+	scriptFile, err := os.OpenFile(l.scriptFilePath, os.O_CREATE|os.O_WRONLY, 0755)
+	if err != nil {
+		lntest.PerformCleanup(cleanups)
+		return err
+	}
+
+	defer scriptFile.Close()
+	writer := bufio.NewWriter(scriptFile)
+	_, err = writer.WriteString("#!/bin/bash\n")
+	if err != nil {
+		lntest.PerformCleanup(cleanups)
+		return err
+	}
+
+	for _, str := range l.env {
+		_, err = writer.WriteString("export " + str + "\n")
+		if err != nil {
+			lntest.PerformCleanup(cleanups)
+			return err
+		}
+	}
+
+	_, err = writer.WriteString(l.binary + "\n")
+	if err != nil {
+		lntest.PerformCleanup(cleanups)
+		return err
+	}
 
 	err = writer.Flush()
-	lntest.CheckError(h.T, err)
-	scriptFile.Close()
+	if err != nil {
+		lntest.PerformCleanup(cleanups)
+		return err
+	}
 
-	return scriptFilePath, grpcAddress, publ, eciesPubl, postgresBackend
+	return nil
 }
 
 func RegisterPayment(l LspNode, paymentInfo *lspd.PaymentInformation) {

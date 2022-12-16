@@ -3,6 +3,7 @@ package itest
 import (
 	"fmt"
 	"log"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,16 +14,16 @@ var defaultTimeout time.Duration = time.Second * 120
 
 func TestLspd(t *testing.T) {
 	testCases := allTestCases
-	runTests(t, testCases, "LND-lspd", func(h *lntest.TestHarness, m *lntest.Miner) (LspNode, *breezClient) {
+	runTests(t, testCases, "LND-lspd", func(h *lntest.TestHarness, m *lntest.Miner) (LspNode, BreezClient) {
 		return NewLndLspdNode(h, m, "lsp"), newLndBreezClient(h, m, "breez-client")
 	})
 
-	runTests(t, testCases, "CLN-lspd", func(h *lntest.TestHarness, m *lntest.Miner) (LspNode, *breezClient) {
+	runTests(t, testCases, "CLN-lspd", func(h *lntest.TestHarness, m *lntest.Miner) (LspNode, BreezClient) {
 		return NewClnLspdNode(h, m, "lsp"), newClnBreezClient(h, m, "breez-client")
 	})
 }
 
-func runTests(t *testing.T, testCases []*testCase, prefix string, nodesFunc func(h *lntest.TestHarness, m *lntest.Miner) (LspNode, *breezClient)) {
+func runTests(t *testing.T, testCases []*testCase, prefix string, nodesFunc func(h *lntest.TestHarness, m *lntest.Miner) (LspNode, BreezClient)) {
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.Run(fmt.Sprintf("%s: %s", prefix, testCase.name), func(t *testing.T) {
@@ -31,7 +32,7 @@ func runTests(t *testing.T, testCases []*testCase, prefix string, nodesFunc func
 	}
 }
 
-func runTest(t *testing.T, testCase *testCase, prefix string, nodesFunc func(h *lntest.TestHarness, m *lntest.Miner) (LspNode, *breezClient)) {
+func runTest(t *testing.T, testCase *testCase, prefix string, nodesFunc func(h *lntest.TestHarness, m *lntest.Miner) (LspNode, BreezClient)) {
 	log.Printf("%s: Running test case '%s'", prefix, testCase.name)
 	var dd time.Duration
 	to := testCase.timeout
@@ -47,8 +48,21 @@ func runTest(t *testing.T, testCase *testCase, prefix string, nodesFunc func(h *
 
 	log.Printf("Creating miner")
 	miner := lntest.NewMiner(h)
+	miner.Start()
 	log.Printf("Creating lsp")
 	lsp, c := nodesFunc(h, miner)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		lsp.Start()
+		wg.Done()
+	}()
+
+	go func() {
+		c.Start()
+		wg.Done()
+	}()
+	wg.Wait()
 	log.Printf("Run testcase")
 	testCase.test(&testParams{
 		t:   t,

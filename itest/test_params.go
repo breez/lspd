@@ -10,7 +10,7 @@ type testParams struct {
 	t   *testing.T
 	h   *lntest.TestHarness
 	m   *lntest.Miner
-	c   *breezClient
+	c   BreezClient
 	lsp LspNode
 }
 
@@ -30,6 +30,6 @@ func (h *testParams) Harness() *lntest.TestHarness {
 	return h.h
 }
 
-func (h *testParams) BreezClient() *breezClient {
+func (h *testParams) BreezClient() BreezClient {
 	return h.c
 }
