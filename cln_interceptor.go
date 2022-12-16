@@ -95,17 +95,15 @@ func (i *ClnHtlcInterceptor) OnHtlcAccepted(event *glightning.HtlcAcceptedEvent)
 	paymentHashBytes, err := hex.DecodeString(event.Htlc.PaymentHash)
 	if err != nil {
 		log.Printf("hex.DecodeString(%v) error: %v", event.Htlc.PaymentHash, err)
-		return event.Fail(uint16(FAILURE_TEMPORARY_CHANNEL_FAILURE)), nil
+		return event.Fail(i.mapFailureCode(FAILURE_TEMPORARY_CHANNEL_FAILURE)), nil
 	}
 
 	interceptResult := intercept(paymentHashBytes, onion.ForwardAmount, uint32(event.Htlc.CltvExpiry))
 	switch interceptResult.action {
 	case INTERCEPT_RESUME_WITH_ONION:
 		return i.resumeWithOnion(event, interceptResult), nil
-	case INTERCEPT_FAIL_HTLC:
-		return event.Fail(uint16(FAILURE_TEMPORARY_CHANNEL_FAILURE)), nil
 	case INTERCEPT_FAIL_HTLC_WITH_CODE:
-		return event.Fail(uint16(interceptResult.failureCode)), nil
+		return event.Fail(i.mapFailureCode(interceptResult.failureCode)), nil
 	case INTERCEPT_RESUME:
 		fallthrough
 	default:
@@ -118,7 +116,7 @@ func (i *ClnHtlcInterceptor) resumeWithOnion(event *glightning.HtlcAcceptedEvent
 	newPayload, err := encodePayloadWithNextHop(event.Onion.Payload, interceptResult.channelId)
 	if err != nil {
 		log.Printf("encodePayloadWithNextHop error: %v", err)
-		return event.Fail(uint16(FAILURE_TEMPORARY_CHANNEL_FAILURE))
+		return event.Fail(i.mapFailureCode(FAILURE_TEMPORARY_CHANNEL_FAILURE))
 	}
 
 	chanId := lnwire.NewChanIDFromOutPoint(interceptResult.channelPoint)
@@ -175,4 +173,18 @@ func encodePayloadWithNextHop(payloadHex string, channelId uint64) (string, erro
 		return "", fmt.Errorf("encode error: %v", err)
 	}
 	return hex.EncodeToString(newPayloadBuf.Bytes()), nil
+}
+
+func (i *ClnHtlcInterceptor) mapFailureCode(original interceptFailureCode) string {
+	switch original {
+	case FAILURE_TEMPORARY_CHANNEL_FAILURE:
+		return "1007"
+	case FAILURE_TEMPORARY_NODE_FAILURE:
+		return "2002"
+	case FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
+		return "4015"
+	default:
+		log.Printf("Unknown failure code %v, default to temporary channel failure.", original)
+		return "1007" // temporary channel failure
+	}
 }

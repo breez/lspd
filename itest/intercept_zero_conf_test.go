@@ -109,7 +109,8 @@ func testOpenZeroConfSingleHtlc(p *testParams) {
 	<-time.After(htlcInterceptorDelay)
 	log.Printf("Alice paying")
 	route := constructRoute(p.lsp.LightningNode(), p.BreezClient().Node(), channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
-	payResp := alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
+	payResp, err := alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
+	lntest.CheckError(p.t, err)
 	bobInvoice := p.BreezClient().Node().GetInvoice(payResp.PaymentHash)
 
 	assert.Equal(p.t, payResp.PaymentPreimage, bobInvoice.PaymentPreimage)

@@ -3,7 +3,6 @@ package itest
 import (
 	"fmt"
 	"log"
-	"sync"
 	"testing"
 	"time"
 
@@ -51,18 +50,8 @@ func runTest(t *testing.T, testCase *testCase, prefix string, nodesFunc func(h *
 	miner.Start()
 	log.Printf("Creating lsp")
 	lsp, c := nodesFunc(h, miner)
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		lsp.Start()
-		wg.Done()
-	}()
-
-	go func() {
-		c.Start()
-		wg.Done()
-	}()
-	wg.Wait()
+	lsp.Start()
+	c.Start()
 	log.Printf("Run testcase")
 	testCase.test(&testParams{
 		t:   t,
@@ -91,5 +80,9 @@ var allTestCases = []*testCase{
 	{
 		name: "testZeroReserve",
 		test: testZeroReserve,
+	},
+	{
+		name: "testFailureBobOffline",
+		test: testFailureBobOffline,
 	},
 }

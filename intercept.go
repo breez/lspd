@@ -22,14 +22,14 @@ type interceptAction int
 const (
 	INTERCEPT_RESUME              interceptAction = 0
 	INTERCEPT_RESUME_WITH_ONION   interceptAction = 1
-	INTERCEPT_FAIL_HTLC           interceptAction = 2
-	INTERCEPT_FAIL_HTLC_WITH_CODE interceptAction = 3
+	INTERCEPT_FAIL_HTLC_WITH_CODE interceptAction = 2
 )
 
 type interceptFailureCode uint16
 
 var (
 	FAILURE_TEMPORARY_CHANNEL_FAILURE            interceptFailureCode = 0x1007
+	FAILURE_TEMPORARY_NODE_FAILURE               interceptFailureCode = 0x2002
 	FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS interceptFailureCode = 0x4015
 )
 
@@ -52,7 +52,8 @@ func intercept(reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingE
 		if err != nil {
 			log.Printf("paymentInfo(%x) error: %v", reqPaymentHash, err)
 			return interceptResult{
-				action: INTERCEPT_FAIL_HTLC,
+				action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				failureCode: FAILURE_TEMPORARY_NODE_FAILURE,
 			}, nil
 		}
 		log.Printf("paymentHash:%x\npaymentSecret:%x\ndestination:%x\nincomingAmountMsat:%v\noutgoingAmountMsat:%v",
@@ -69,7 +70,8 @@ func intercept(reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingE
 				if err != nil {
 					log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
 					return interceptResult{
-						action: INTERCEPT_FAIL_HTLC,
+						action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+						failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 					}, nil
 				}
 			} else { //probing
@@ -90,7 +92,8 @@ func intercept(reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingE
 		if err != nil {
 			log.Printf("btcec.ParsePubKey(%x): %v", destination, err)
 			return interceptResult{
-				action: INTERCEPT_FAIL_HTLC,
+				action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 			}, nil
 		}
 
@@ -98,7 +101,8 @@ func intercept(reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingE
 		if err != nil {
 			log.Printf("btcec.NewPrivateKey(): %v", err)
 			return interceptResult{
-				action: INTERCEPT_FAIL_HTLC,
+				action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 			}, nil
 		}
 
@@ -119,7 +123,8 @@ func intercept(reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingE
 		if err != nil {
 			log.Printf("hop.PackHopPayload(): %v", err)
 			return interceptResult{
-				action: INTERCEPT_FAIL_HTLC,
+				action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 			}, nil
 		}
 
@@ -127,7 +132,8 @@ func intercept(reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingE
 		if err != nil {
 			log.Printf("sphinx.NewHopPayload(): %v", err)
 			return interceptResult{
-				action: INTERCEPT_FAIL_HTLC,
+				action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 			}, nil
 		}
 
@@ -143,7 +149,8 @@ func intercept(reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingE
 		if err != nil {
 			log.Printf("sphinx.NewOnionPacket(): %v", err)
 			return interceptResult{
-				action: INTERCEPT_FAIL_HTLC,
+				action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 			}, nil
 		}
 		var onionBlob bytes.Buffer
@@ -151,7 +158,8 @@ func intercept(reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingE
 		if err != nil {
 			log.Printf("sphinxPacket.Encode(): %v", err)
 			return interceptResult{
-				action: INTERCEPT_FAIL_HTLC,
+				action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 			}, nil
 		}
 
