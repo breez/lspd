@@ -23,7 +23,7 @@ func testFailureBobOffline(p *testParams) {
 
 	log.Printf("Adding bob's invoices")
 	outerAmountMsat := uint64(2100000)
-	innerAmountMsat := calculateInnerAmountMsat(p.lsp, outerAmountMsat)
+	innerAmountMsat, lspAmountMsat := calculateInnerAmountMsat(p.lsp, outerAmountMsat)
 	description := "Please pay me"
 	innerInvoice, outerInvoice := GenerateInvoices(p.BreezClient(),
 		generateInvoicesRequest{
@@ -36,15 +36,13 @@ func testFailureBobOffline(p *testParams) {
 	log.Print("Connecting bob to lspd")
 	p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
 
-	// NOTE: We pretend to be paying fees to the lsp, but actually we won't.
 	log.Printf("Registering payment with lsp")
-	pretendAmount := outerAmountMsat - 2000000
 	RegisterPayment(p.lsp, &lspd.PaymentInformation{
 		PaymentHash:        innerInvoice.paymentHash,
 		PaymentSecret:      innerInvoice.paymentSecret,
 		Destination:        p.BreezClient().Node().NodeId(),
 		IncomingAmountMsat: int64(outerAmountMsat),
-		OutgoingAmountMsat: int64(pretendAmount),
+		OutgoingAmountMsat: int64(lspAmountMsat),
 	})
 
 	// Kill the mobile client

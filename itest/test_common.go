@@ -26,16 +26,21 @@ func AssertChannelCapacity(
 	assert.Equal(t, ((outerAmountMsat/1000)+100000)*1000, capacityMsat)
 }
 
-func calculateInnerAmountMsat(lsp LspNode, outerAmountMsat uint64) uint64 {
-	if lsp.SupportsChargingFees() {
-		fee := outerAmountMsat * 40 / 10_000 / 1_000 * 1_000
-		if fee < 2000000 {
-			fee = 2000000
-		}
+func calculateInnerAmountMsat(lsp LspNode, outerAmountMsat uint64) (uint64, uint64) {
+	fee := outerAmountMsat * 40 / 10_000 / 1_000 * 1_000
+	if fee < 2000000 {
+		fee = 2000000
+	}
 
-		return outerAmountMsat - fee
+	inner := outerAmountMsat - fee
+
+	// NOTE: If the LSP does not support charging fees (the CLN version doesn't)
+	// We have to pretend in the registerpayment call that the LSP WILL charge
+	// fees. If we update the CLN lsp to charge fees, this check can be removed.
+	if lsp.SupportsChargingFees() {
+		return inner, inner
 	} else {
-		return outerAmountMsat
+		return outerAmountMsat, inner
 	}
 }
 
