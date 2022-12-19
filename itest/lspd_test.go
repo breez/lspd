@@ -89,4 +89,8 @@ var allTestCases = []*testCase{
 		name: "testNoBalance",
 		test: testNoBalance,
 	},
+	{
+		name: "testRegularForward",
+		test: testRegularForward,
+	},
 }
