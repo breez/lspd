@@ -85,4 +85,8 @@ var allTestCases = []*testCase{
 		name: "testFailureBobOffline",
 		test: testFailureBobOffline,
 	},
+	{
+		name: "testNoBalance",
+		test: testNoBalance,
+	},
 }
