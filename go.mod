@@ -176,4 +176,4 @@ require (
 
 replace github.com/lightningnetwork/lnd v0.15.4-beta => github.com/breez/lnd v0.15.0-beta.rc6.0.20220831104847-00b86a81e57a
 
-replace github.com/niftynei/glightning v0.8.2 => github.com/breez/glightning v0.0.0-20221216194006-8e9b65bdcbfc
+replace github.com/niftynei/glightning v0.8.2 => github.com/breez/glightning v0.0.0-20221219103549-0e2a13b9b3ed
