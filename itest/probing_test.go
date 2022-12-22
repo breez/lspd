@@ -59,8 +59,8 @@ func testProbing(p *testParams) {
 	route := constructRoute(p.lsp.LightningNode(), p.BreezClient().Node(), channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
 	_, err := alice.PayViaRoute(outerAmountMsat, fakePaymentHash, outerInvoice.paymentSecret, route)
 
-	// Expect temporary channel failure if the peer is online
-	assert.Contains(p.t, err.Error(), "WIRE_TEMPORARY_CHANNEL_FAILURE")
+	// Expect incorrect or unknown payment details if the peer is online
+	assert.Contains(p.t, err.Error(), "WIRE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS")
 
 	// Kill the mobile client
 	log.Printf("Stopping breez client")
@@ -69,6 +69,6 @@ func testProbing(p *testParams) {
 	log.Printf("Alice paying with fake payment hash with Bob offline %x", fakePaymentHash)
 	_, err = alice.PayViaRoute(outerAmountMsat, fakePaymentHash, outerInvoice.paymentSecret, route)
 
-	// Expect incorrect or unknown payment details if the peer is offline
-	assert.Contains(p.t, err.Error(), "WIRE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS")
+	// Expect temporary channel failure if the peer is offline
+	assert.Contains(p.t, err.Error(), "WIRE_TEMPORARY_CHANNEL_FAILURE")
 }

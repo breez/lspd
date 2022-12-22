@@ -77,7 +77,7 @@ func intercept(reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingE
 			} else { //probing
 				failureCode := FAILURE_TEMPORARY_CHANNEL_FAILURE
 				isConnected, _ := client.IsConnected(destination)
-				if err != nil || !isConnected {
+				if isConnected {
 					failureCode = FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
 				}
 
