@@ -60,7 +60,7 @@ In order to run the integration tests, you need:
 - Docker running
 - python3 installed
 - A development build of lightningd v22.11
-- lnd v0.15.4 lsp version https://github.com/breez/lnd/tree/breez-node-v0.15.4
+- lnd v0.15.4 lsp version https://github.com/breez/lnd/commit/6ee6b89e3a4e3f2776643a75a9100d13a2090725
 - lnd v0.15.3 breez client version https://github.com/breez/lnd/commit/e1570b327b5de52d03817ad516d0bdfa71797c64
 - bitcoind (tested with v23.0)
 - bitcoin-cli (tested with v23.0)
