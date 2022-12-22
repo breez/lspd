@@ -40,7 +40,8 @@ func testRegularForward(p *testParams) {
 	log.Printf("Adding bob's invoice")
 	amountMsat := uint64(2100000)
 	bobInvoice := p.BreezClient().Node().CreateBolt11Invoice(&lntest.CreateInvoiceOptions{
-		AmountMsat: amountMsat,
+		AmountMsat:      amountMsat,
+		IncludeHopHints: true,
 	})
 	log.Printf(bobInvoice.Bolt11)
 
