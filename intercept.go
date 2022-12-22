@@ -75,15 +75,9 @@ func intercept(reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingE
 					}, nil
 				}
 			} else { //probing
-				failureCode := FAILURE_TEMPORARY_CHANNEL_FAILURE
-				isConnected, _ := client.IsConnected(destination)
-				if isConnected {
-					failureCode = FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
-				}
-
 				return interceptResult{
 					action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-					failureCode: failureCode,
+					failureCode: FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
 				}, nil
 			}
 		}

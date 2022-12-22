@@ -70,5 +70,5 @@ func testProbing(p *testParams) {
 	_, err = alice.PayViaRoute(outerAmountMsat, fakePaymentHash, outerInvoice.paymentSecret, route)
 
 	// Expect temporary channel failure if the peer is offline
-	assert.Contains(p.t, err.Error(), "WIRE_TEMPORARY_CHANNEL_FAILURE")
+	assert.Contains(p.t, err.Error(), "WIRE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS")
 }
