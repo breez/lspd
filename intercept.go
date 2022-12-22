@@ -30,7 +30,7 @@ type interceptFailureCode uint16
 var (
 	FAILURE_TEMPORARY_CHANNEL_FAILURE            interceptFailureCode = 0x1007
 	FAILURE_TEMPORARY_NODE_FAILURE               interceptFailureCode = 0x2002
-	FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS interceptFailureCode = 0x4015
+	FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS interceptFailureCode = 0x400F
 )
 
 var payHashGroup singleflight.Group

@@ -182,7 +182,7 @@ func (i *ClnHtlcInterceptor) mapFailureCode(original interceptFailureCode) strin
 	case FAILURE_TEMPORARY_NODE_FAILURE:
 		return "2002"
 	case FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
-		return "4015"
+		return "400F"
 	default:
 		log.Printf("Unknown failure code %v, default to temporary channel failure.", original)
 		return "1007" // temporary channel failure
