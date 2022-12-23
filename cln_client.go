@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/breez/lspd/basetypes"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/niftynei/glightning/glightning"
@@ -121,12 +122,12 @@ func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetC
 	for _, c := range peer.Channels {
 		log.Printf("getChannel destination: %s, Short channel id: %v, local alias: %v , FundingTxID:%v, State:%v ", pubkey, c.ShortChannelId, c.Alias.Local, c.FundingTxId, c.State)
 		if slices.Contains(OPEN_STATUSES, c.State) && c.FundingTxId == fundingTxID {
-			confirmedChanID, err := NewShortChannelIDFromString(c.ShortChannelId)
+			confirmedChanID, err := basetypes.NewShortChannelIDFromString(c.ShortChannelId)
 			if err != nil {
 				fmt.Printf("NewShortChannelIDFromString %v error: %v", c.ShortChannelId, err)
 				return nil, err
 			}
-			initialChanID, err := NewShortChannelIDFromString(c.Alias.Local)
+			initialChanID, err := basetypes.NewShortChannelIDFromString(c.Alias.Local)
 			if err != nil {
 				fmt.Printf("NewShortChannelIDFromString %v error: %v", c.Alias.Local, err)
 				return nil, err
@@ -176,7 +177,7 @@ func (c *ClnClient) GetClosedChannels(nodeID string, channelPoints map[string]ui
 	lookup := make(map[string]uint64)
 	for _, c := range peer.Channels {
 		if slices.Contains(CLOSING_STATUSES, c.State) {
-			cid, err := NewShortChannelIDFromString(c.ShortChannelId)
+			cid, err := basetypes.NewShortChannelIDFromString(c.ShortChannelId)
 			if err != nil {
 				log.Printf("CLN: GetClosedChannels NewShortChannelIDFromString(%v) error: %v", c.ShortChannelId, err)
 				continue

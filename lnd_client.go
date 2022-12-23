@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/breez/lspd/basetypes"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/htlcswitch/hop"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -140,8 +141,8 @@ func (c *LndClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetC
 				}
 			}
 			return &GetChannelResult{
-				InitialChannelID:   ShortChannelID(c.ChanId),
-				ConfirmedChannelID: ShortChannelID(confirmedChanId),
+				InitialChannelID:   basetypes.ShortChannelID(c.ChanId),
+				ConfirmedChannelID: basetypes.ShortChannelID(confirmedChanId),
 			}, nil
 		}
 	}

@@ -1,6 +1,9 @@
 package main
 
-import "github.com/btcsuite/btcd/wire"
+import (
+	"github.com/breez/lspd/basetypes"
+	"github.com/btcsuite/btcd/wire"
+)
 
 type GetInfoResult struct {
 	Alias  string
@@ -8,8 +11,8 @@ type GetInfoResult struct {
 }
 
 type GetChannelResult struct {
-	InitialChannelID   ShortChannelID
-	ConfirmedChannelID ShortChannelID
+	InitialChannelID   basetypes.ShortChannelID
+	ConfirmedChannelID basetypes.ShortChannelID
 }
 
 type OpenChannelRequest struct {
