@@ -1,0 +1,46 @@
+syntax = "proto3";
+option go_package="github.com/breez/lspd/cln_plugin";
+
+service ClnPlugin {
+    rpc HtlcStream(stream HtlcResolution) returns (stream HtlcAccepted);
+}
+
+message HtlcAccepted {
+    uint64 correlationid = 1;
+    Onion onion = 2;
+    HtlcOffer htlc = 3;
+}
+
+message Onion {
+    bytes payload = 1;
+    uint64 short_channel_id = 2;
+    uint64 forward_amount_msat = 3;
+}
+
+message HtlcOffer {
+    uint64 amount_msat = 2;
+    uint32 cltv_expiry_relative = 3;
+    uint32 cltv_expiry = 4;
+    bytes payment_hash = 5;
+}
+
+message HtlcResolution {
+    uint64 correlationid = 1;
+    oneof outcome {
+        HtlcFail fail = 2;
+        HtlcContinue continue = 3;
+        HtlcContinueWith continue_with = 4;
+    }
+}
+
+message HtlcFail {
+    bytes failure_message = 1;
+}
+
+message HtlcContinue {
+}
+
+message HtlcContinueWith {
+    bytes channel_id = 1;
+    bytes payload = 2;
+}
