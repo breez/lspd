@@ -36,19 +36,25 @@ func (cfe *copyFromEvents) Err() error {
 	return cfe.err
 }
 
-func channelsSynchronize(client *LndClient) {
+func channelsSynchronize(ctx context.Context, client *LndClient) {
 	lastSync := time.Now().Add(-6 * time.Minute)
 	for {
-		cancellableCtx, cancel := context.WithCancel(context.Background())
-		stream, err := client.chainNotifierClient.RegisterBlockEpochNtfn(cancellableCtx, &chainrpc.BlockEpoch{})
+		if ctx.Err() != nil {
+			return
+		}
+
+		stream, err := client.chainNotifierClient.RegisterBlockEpochNtfn(ctx, &chainrpc.BlockEpoch{})
 		if err != nil {
 			log.Printf("chainNotifierClient.RegisterBlockEpochNtfn(): %v", err)
-			cancel()
 			<-time.After(time.Second)
 			continue
 		}
 
 		for {
+			if ctx.Err() != nil {
+				return
+			}
+
 			_, err := stream.Recv()
 			if err != nil {
 				log.Printf("stream.Recv: %v", err)
@@ -56,13 +62,16 @@ func channelsSynchronize(client *LndClient) {
 				break
 			}
 			if lastSync.Add(5 * time.Minute).Before(time.Now()) {
-				<-time.After(30 * time.Second)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(1 * time.Minute):
+				}
 				err = channelsSynchronizeOnce(client)
 				lastSync = time.Now()
 				log.Printf("channelsSynchronizeOnce() err: %v", err)
 			}
 		}
-		cancel()
 	}
 }
 
@@ -99,11 +108,18 @@ func channelsSynchronizeOnce(client *LndClient) error {
 	return nil
 }
 
-func forwardingHistorySynchronize(client *LndClient) {
+func forwardingHistorySynchronize(ctx context.Context, client *LndClient) {
 	for {
+		if ctx.Err() != nil {
+			return
+		}
+
 		err := forwardingHistorySynchronizeOnce(client)
 		log.Printf("forwardingHistorySynchronizeOnce() err: %v", err)
-		<-time.After(1 * time.Minute)
+		select {
+		case <-time.After(1 * time.Minute):
+		case <-ctx.Done():
+		}
 	}
 }
 

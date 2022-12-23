@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 
@@ -153,12 +152,20 @@ func (c *LndLspNode) Start() {
 		Name: fmt.Sprintf("%s: cmd", c.lspBase.name),
 		Fn: func() error {
 			proc := cmd.Process
-			if proc != nil {
-				if runtime.GOOS == "windows" {
-					return proc.Signal(os.Kill)
-				}
+			if proc == nil {
+				return nil
+			}
 
-				return proc.Signal(os.Interrupt)
+			proc.Kill()
+
+			log.Printf("About to wait for lspd to exit")
+			status, err := proc.Wait()
+			if err != nil {
+				log.Printf("waiting for lspd process error: %v, status: %v", err, status)
+			}
+			err = cmd.Wait()
+			if err != nil {
+				log.Printf("waiting for lspd cmd error: %v", err)
 			}
 
 			return nil

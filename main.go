@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 )
@@ -84,6 +86,15 @@ func main() {
 
 		interceptor.Stop()
 		wg.Done()
+	}()
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	go func() {
+		sig := <-c
+		log.Printf("Received stop signal %v. Stopping.", sig)
+		s.Stop()
+		interceptor.Stop()
 	}()
 
 	wg.Wait()
