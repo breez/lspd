@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/breez/lspd/basetypes"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -23,7 +24,9 @@ var (
 	CLOSED_STATUSES  = []string{"CLOSED"}
 )
 
-func NewClnClient(rpcFile string, lightningDir string) *ClnClient {
+func NewClnClient() *ClnClient {
+	rpcFile := os.Getenv("CLN_SOCKET_NAME")
+	lightningDir := os.Getenv("CLN_SOCKET_DIR")
 	client := glightning.NewLightning()
 	client.SetTimeout(60)
 	client.StartUp(rpcFile, lightningDir)

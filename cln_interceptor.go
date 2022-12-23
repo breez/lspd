@@ -2,56 +2,159 @@ package main
 
 import (
 	"bytes"
-	"encoding/hex"
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"sync"
+	"time"
 
+	"github.com/breez/lspd/cln_plugin"
 	sphinx "github.com/lightningnetwork/lightning-onion"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/record"
 	"github.com/lightningnetwork/lnd/tlv"
-	"github.com/niftynei/glightning/glightning"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 type ClnHtlcInterceptor struct {
-	client *ClnClient
-	plugin *glightning.Plugin
-	initWg sync.WaitGroup
+	pluginAddress string
+	client        *ClnClient
+	pluginClient  cln_plugin.ClnPluginClient
+	initWg        sync.WaitGroup
+	doneWg        sync.WaitGroup
+	ctx           context.Context
+	cancel        context.CancelFunc
 }
 
 func NewClnHtlcInterceptor() *ClnHtlcInterceptor {
-	i := &ClnHtlcInterceptor{}
+	i := &ClnHtlcInterceptor{
+		pluginAddress: os.Getenv("CLN_PLUGIN_ADDRESS"),
+		client:        NewClnClient(),
+	}
 
 	i.initWg.Add(1)
 	return i
 }
 
 func (i *ClnHtlcInterceptor) Start() error {
-	//c-lightning plugin initiate
-	plugin := glightning.NewPlugin(i.onInit)
-	i.plugin = plugin
-	plugin.RegisterHooks(&glightning.Hooks{
-		HtlcAccepted: i.OnHtlcAccepted,
-	})
-
-	err := plugin.Start(os.Stdin, os.Stdout)
+	ctx, cancel := context.WithCancel(context.Background())
+	log.Printf("Dialing cln plugin on '%s'", i.pluginAddress)
+	conn, err := grpc.DialContext(ctx, i.pluginAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Printf("Plugin error: %v", err)
+		log.Printf("grpc.Dial error: %v", err)
+		cancel()
 		return err
 	}
 
-	return nil
+	i.pluginClient = cln_plugin.NewClnPluginClient(conn)
+	i.ctx = ctx
+	i.cancel = cancel
+	return i.intercept()
+}
+
+func (i *ClnHtlcInterceptor) intercept() error {
+	inited := false
+
+	defer func() {
+		if !inited {
+			i.initWg.Done()
+		}
+		log.Printf("CLN intercept(): stopping. Waiting for in-progress interceptions to complete.")
+		i.doneWg.Wait()
+	}()
+
+	for {
+		if i.ctx.Err() != nil {
+			return i.ctx.Err()
+		}
+
+		log.Printf("Connecting CLN HTLC interceptor.")
+		interceptorClient, err := i.pluginClient.HtlcStream(i.ctx)
+		if err != nil {
+			log.Printf("pluginClient.HtlcStream(): %v", err)
+			<-time.After(time.Second)
+			continue
+		}
+
+		for {
+			if i.ctx.Err() != nil {
+				return i.ctx.Err()
+			}
+
+			if !inited {
+				inited = true
+				i.initWg.Done()
+			}
+
+			request, err := interceptorClient.Recv()
+			if err != nil {
+				// If it is  just the error result of the context cancellation
+				// the we exit silently.
+				status, ok := status.FromError(err)
+				if ok && status.Code() == codes.Canceled {
+					log.Printf("Got code canceled. Break.")
+					break
+				}
+
+				// Otherwise it an unexpected error, we fail the test.
+				log.Printf("unexpected error in interceptor.Recv() %v", err)
+				break
+			}
+
+			log.Printf("correlationid: %v\nhtlc: %v\nchanID: %v\nincoming amount: %v\noutgoing amount: %v\nincoming expiry: %v\noutgoing expiry: %v\npaymentHash: %v\nonionBlob: %v\n\n",
+				request.Correlationid,
+				request.Htlc,
+				request.Onion.ShortChannelId,
+				request.Htlc.AmountMsat, //with fees
+				request.Onion.ForwardAmountMsat,
+				request.Htlc.CltvExpiryRelative,
+				request.Htlc.CltvExpiry,
+				request.Htlc.PaymentHash,
+				request,
+			)
+
+			i.doneWg.Add(1)
+			go func() {
+				interceptResult := intercept(request.Htlc.PaymentHash, request.Onion.ForwardAmountMsat, request.Htlc.CltvExpiry)
+				switch interceptResult.action {
+				case INTERCEPT_RESUME_WITH_ONION:
+					interceptorClient.Send(i.resumeWithOnion(request, interceptResult))
+				case INTERCEPT_FAIL_HTLC_WITH_CODE:
+					interceptorClient.Send(&cln_plugin.HtlcResolution{
+						Correlationid: request.Correlationid,
+						Outcome: &cln_plugin.HtlcResolution_Fail{
+							Fail: &cln_plugin.HtlcFail{
+								FailureMessage: i.mapFailureCode(interceptResult.failureCode),
+							},
+						},
+					})
+				case INTERCEPT_RESUME:
+					fallthrough
+				default:
+					interceptorClient.Send(&cln_plugin.HtlcResolution{
+						Correlationid: request.Correlationid,
+						Outcome: &cln_plugin.HtlcResolution_Continue{
+							Continue: &cln_plugin.HtlcContinue{},
+						},
+					})
+				}
+
+				i.doneWg.Done()
+			}()
+		}
+
+		<-time.After(time.Second)
+	}
 }
 
 func (i *ClnHtlcInterceptor) Stop() error {
-	plugin := i.plugin
-	if plugin != nil {
-		plugin.Stop()
-	}
-
+	i.cancel()
+	i.doneWg.Wait()
 	return nil
 }
 
@@ -60,98 +163,57 @@ func (i *ClnHtlcInterceptor) WaitStarted() LightningClient {
 	return i.client
 }
 
-func (i *ClnHtlcInterceptor) onInit(plugin *glightning.Plugin, options map[string]glightning.Option, config *glightning.Config) {
-	log.Printf("successfully init'd! %v\n", config.RpcFile)
-
-	//lightning server
-	clientcln := glightning.NewLightning()
-	clientcln.SetTimeout(60)
-	clientcln.StartUp(config.RpcFile, config.LightningDir)
-
-	i.client = &ClnClient{
-		client: clientcln,
-	}
-
-	log.Printf("successfull clientcln.StartUp")
-	i.initWg.Done()
-}
-
-func (i *ClnHtlcInterceptor) OnHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAcceptedResponse, error) {
-	log.Printf("htlc_accepted called\n")
-	onion := event.Onion
-
-	log.Printf("htlc: %v\nchanID: %v\nincoming amount: %v\noutgoing amount: %v\nincoming expiry: %v\noutgoing expiry: %v\npaymentHash: %v\nonionBlob: %v\n\n",
-		event.Htlc,
-		onion.ShortChannelId,
-		event.Htlc.AmountMilliSatoshi, //with fees
-		onion.ForwardAmount,
-		event.Htlc.CltvExpiryRelative,
-		event.Htlc.CltvExpiry,
-		event.Htlc.PaymentHash,
-		onion,
-	)
-
-	// fail htlc in case payment hash is not valid.
-	paymentHashBytes, err := hex.DecodeString(event.Htlc.PaymentHash)
-	if err != nil {
-		log.Printf("hex.DecodeString(%v) error: %v", event.Htlc.PaymentHash, err)
-		return event.Fail(i.mapFailureCode(FAILURE_TEMPORARY_CHANNEL_FAILURE)), nil
-	}
-
-	interceptResult := intercept(paymentHashBytes, onion.ForwardAmount, uint32(event.Htlc.CltvExpiry))
-	switch interceptResult.action {
-	case INTERCEPT_RESUME_WITH_ONION:
-		return i.resumeWithOnion(event, interceptResult), nil
-	case INTERCEPT_FAIL_HTLC_WITH_CODE:
-		return event.Fail(i.mapFailureCode(interceptResult.failureCode)), nil
-	case INTERCEPT_RESUME:
-		fallthrough
-	default:
-		return event.Continue(), nil
-	}
-}
-
-func (i *ClnHtlcInterceptor) resumeWithOnion(event *glightning.HtlcAcceptedEvent, interceptResult interceptResult) *glightning.HtlcAcceptedResponse {
+func (i *ClnHtlcInterceptor) resumeWithOnion(request *cln_plugin.HtlcAccepted, interceptResult interceptResult) *cln_plugin.HtlcResolution {
 	//decoding and encoding onion with alias in type 6 record.
-	newPayload, err := encodePayloadWithNextHop(event.Onion.Payload, interceptResult.channelId)
+	newPayload, err := encodePayloadWithNextHop(request.Onion.Payload, interceptResult.channelId)
 	if err != nil {
 		log.Printf("encodePayloadWithNextHop error: %v", err)
-		return event.Fail(i.mapFailureCode(FAILURE_TEMPORARY_CHANNEL_FAILURE))
+		return &cln_plugin.HtlcResolution{
+			Correlationid: request.Correlationid,
+			Outcome: &cln_plugin.HtlcResolution_Fail{
+				Fail: &cln_plugin.HtlcFail{
+					FailureMessage: i.mapFailureCode(FAILURE_TEMPORARY_CHANNEL_FAILURE),
+				},
+			},
+		}
 	}
 
 	chanId := lnwire.NewChanIDFromOutPoint(interceptResult.channelPoint)
 	log.Printf("forwarding htlc to the destination node and a new private channel was opened")
-	return event.ContinueWith(chanId.String(), newPayload)
+	return &cln_plugin.HtlcResolution{
+		Correlationid: request.Correlationid,
+		Outcome: &cln_plugin.HtlcResolution_ContinueWith{
+			ContinueWith: &cln_plugin.HtlcContinueWith{
+				ChannelId: chanId[:],
+				Payload:   newPayload,
+			},
+		},
+	}
 }
 
-func encodePayloadWithNextHop(payloadHex string, channelId uint64) (string, error) {
-	payload, err := hex.DecodeString(payloadHex)
-	if err != nil {
-		log.Printf("failed to decode types. error: %v", err)
-		return "", err
-	}
+func encodePayloadWithNextHop(payload []byte, channelId uint64) ([]byte, error) {
 	bufReader := bytes.NewBuffer(payload)
 	var b [8]byte
 	varInt, err := sphinx.ReadVarInt(bufReader, &b)
 	if err != nil {
-		return "", fmt.Errorf("failed to read payload length %v: %v", payloadHex, err)
+		return nil, fmt.Errorf("failed to read payload length %x: %v", payload, err)
 	}
 
 	innerPayload := make([]byte, varInt)
 	if _, err := io.ReadFull(bufReader, innerPayload[:]); err != nil {
-		return "", fmt.Errorf("failed to decode payload %x: %v", innerPayload[:], err)
+		return nil, fmt.Errorf("failed to decode payload %x: %v", innerPayload[:], err)
 	}
 
 	s, _ := tlv.NewStream()
 	tlvMap, err := s.DecodeWithParsedTypes(bytes.NewReader(innerPayload))
 	if err != nil {
-		return "", fmt.Errorf("DecodeWithParsedTypes failed for %x: %v", innerPayload[:], err)
+		return nil, fmt.Errorf("DecodeWithParsedTypes failed for %x: %v", innerPayload[:], err)
 	}
 
 	tt := record.NewNextHopIDRecord(&channelId)
 	buf := bytes.NewBuffer([]byte{})
 	if err := tt.Encode(buf); err != nil {
-		return "", fmt.Errorf("failed to encode nexthop %x: %v", innerPayload[:], err)
+		return nil, fmt.Errorf("failed to encode nexthop %x: %v", innerPayload[:], err)
 	}
 
 	uTlvMap := make(map[uint64][]byte)
@@ -165,26 +227,26 @@ func encodePayloadWithNextHop(payloadHex string, channelId uint64) (string, erro
 	tlvRecords := tlv.MapToRecords(uTlvMap)
 	s, err = tlv.NewStream(tlvRecords...)
 	if err != nil {
-		return "", fmt.Errorf("tlv.NewStream(%x) error: %v", tlvRecords, err)
+		return nil, fmt.Errorf("tlv.NewStream(%x) error: %v", tlvRecords, err)
 	}
 	var newPayloadBuf bytes.Buffer
 	err = s.Encode(&newPayloadBuf)
 	if err != nil {
-		return "", fmt.Errorf("encode error: %v", err)
+		return nil, fmt.Errorf("encode error: %v", err)
 	}
-	return hex.EncodeToString(newPayloadBuf.Bytes()), nil
+	return newPayloadBuf.Bytes(), nil
 }
 
-func (i *ClnHtlcInterceptor) mapFailureCode(original interceptFailureCode) string {
+func (i *ClnHtlcInterceptor) mapFailureCode(original interceptFailureCode) []byte {
 	switch original {
 	case FAILURE_TEMPORARY_CHANNEL_FAILURE:
-		return "1007"
+		return []byte{0x10, 0x07}
 	case FAILURE_TEMPORARY_NODE_FAILURE:
-		return "2002"
+		return []byte{0x20, 0x02}
 	case FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
-		return "400F"
+		return []byte{0x40, 0x0F}
 	default:
 		log.Printf("Unknown failure code %v, default to temporary channel failure.", original)
-		return "1007" // temporary channel failure
+		return []byte{0x10, 0x07} // temporary channel failure
 	}
 }

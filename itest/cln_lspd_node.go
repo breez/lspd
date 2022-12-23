@@ -1,7 +1,12 @@
 package itest
 
 import (
+	"flag"
 	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"sync"
 
 	"github.com/breez/lntest"
@@ -12,28 +17,42 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+var clnPluginExec = flag.String(
+	"clnpluginexec", "", "full path to cln plugin wrapper binary",
+)
+
 type ClnLspNode struct {
 	harness       *lntest.TestHarness
 	lightningNode *lntest.ClnNode
 	lspBase       *lspBase
+	logFilePath   string
 	runtime       *clnLspNodeRuntime
 	isInitialized bool
 	mtx           sync.Mutex
+	pluginBinary  string
+	pluginFile    string
+	pluginAddress string
 }
 
 type clnLspNodeRuntime struct {
+	logFile  *os.File
+	cmd      *exec.Cmd
 	rpc      lspd.ChannelOpenerClient
 	cleanups []*lntest.Cleanup
 }
 
 func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode {
-	lspbase, err := newLspd(h, name, "RUN_CLN=true")
+	scriptDir := h.GetDirectory("lspd")
+	pluginFile := filepath.Join(scriptDir, "htlc.sh")
+	pluginBinary := *clnPluginExec
+	pluginPort, err := lntest.GetPort()
 	if err != nil {
-		h.T.Fatalf("failed to initialize lspd")
+		h.T.Fatalf("failed to get port for the htlc interceptor plugin.")
 	}
+	pluginAddress := fmt.Sprintf("127.0.0.1:%d", pluginPort)
 
 	args := []string{
-		fmt.Sprintf("--plugin=%s", lspbase.scriptFilePath),
+		fmt.Sprintf("--plugin=%s", pluginFile),
 		fmt.Sprintf("--fee-base=%d", lspBaseFeeMsat),
 		fmt.Sprintf("--fee-per-satoshi=%d", lspFeeRatePpm),
 		fmt.Sprintf("--cltv-delta=%d", lspCltvDelta),
@@ -41,11 +60,27 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode
 		"--dev-allowdustreserve=true",
 	}
 	lightningNode := lntest.NewClnNode(h, m, name, args...)
+	lspbase, err := newLspd(h, name,
+		"RUN_CLN=true",
+		fmt.Sprintf("CLN_PLUGIN_ADDRESS=%s", pluginAddress),
+		fmt.Sprintf("CLN_SOCKET_DIR=%s", lightningNode.SocketDir()),
+		fmt.Sprintf("CLN_SOCKET_NAME=%s", lightningNode.SocketFile()),
+	)
+	if err != nil {
+		h.T.Fatalf("failed to initialize lspd")
+	}
+
+	logFilePath := filepath.Join(scriptDir, "lspd.log")
+	h.RegisterLogfile(logFilePath, fmt.Sprintf("lspd-%s", name))
 
 	lspNode := &ClnLspNode{
 		harness:       h,
 		lightningNode: lightningNode,
+		logFilePath:   logFilePath,
 		lspBase:       lspbase,
+		pluginBinary:  pluginBinary,
+		pluginFile:    pluginFile,
+		pluginAddress: pluginAddress,
 	}
 
 	h.AddStoppable(lspNode)
@@ -67,6 +102,16 @@ func (c *ClnLspNode) Start() {
 			Name: fmt.Sprintf("%s: lsp base", c.lspBase.name),
 			Fn:   c.lspBase.Stop,
 		})
+
+		pluginContent := fmt.Sprintf(`#!/bin/bash
+export LISTEN_ADDRESS=%s
+%s`, c.pluginAddress, c.pluginBinary)
+
+		err = os.WriteFile(c.pluginFile, []byte(pluginContent), 0755)
+		if err != nil {
+			lntest.PerformCleanup(cleanups)
+			c.harness.T.Fatalf("failed create lsp cln plugin file: %v", err)
+		}
 	}
 
 	c.lightningNode.Start()
@@ -74,6 +119,51 @@ func (c *ClnLspNode) Start() {
 		Name: fmt.Sprintf("%s: lightning node", c.lspBase.name),
 		Fn:   c.lightningNode.Stop,
 	})
+
+	cmd := exec.CommandContext(c.harness.Ctx, c.lspBase.scriptFilePath)
+	logFile, err := os.Create(c.logFilePath)
+	if err != nil {
+		lntest.PerformCleanup(cleanups)
+		c.harness.T.Fatalf("failed create lsp logfile: %v", err)
+	}
+	cleanups = append(cleanups, &lntest.Cleanup{
+		Name: fmt.Sprintf("%s: logfile", c.lspBase.name),
+		Fn:   logFile.Close,
+	})
+
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+
+	log.Printf("%s: starting lspd %s", c.lspBase.name, c.lspBase.scriptFilePath)
+	err = cmd.Start()
+	if err != nil {
+		lntest.PerformCleanup(cleanups)
+		c.harness.T.Fatalf("failed to start lspd: %v", err)
+	}
+	cleanups = append(cleanups, &lntest.Cleanup{
+		Name: fmt.Sprintf("%s: cmd", c.lspBase.name),
+		Fn: func() error {
+			proc := cmd.Process
+			if proc == nil {
+				return nil
+			}
+
+			proc.Kill()
+
+			log.Printf("About to wait for lspd to exit")
+			status, err := proc.Wait()
+			if err != nil {
+				log.Printf("waiting for lspd process error: %v, status: %v", err, status)
+			}
+			err = cmd.Wait()
+			if err != nil {
+				log.Printf("waiting for lspd cmd error: %v", err)
+			}
+
+			return nil
+		},
+	})
+
 	conn, err := grpc.Dial(
 		c.lspBase.grpcAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -81,11 +171,17 @@ func (c *ClnLspNode) Start() {
 	)
 	if err != nil {
 		lntest.PerformCleanup(cleanups)
-		c.harness.T.Fatalf("%s: failed to create grpc connection: %v", c.lspBase.name, err)
+		c.harness.T.Fatalf("failed to create grpc connection: %v", err)
 	}
+	cleanups = append(cleanups, &lntest.Cleanup{
+		Name: fmt.Sprintf("%s: grpc conn", c.lspBase.name),
+		Fn:   conn.Close,
+	})
 
 	client := lspd.NewChannelOpenerClient(conn)
 	c.runtime = &clnLspNodeRuntime{
+		logFile:  logFile,
+		cmd:      cmd,
 		rpc:      client,
 		cleanups: cleanups,
 	}
