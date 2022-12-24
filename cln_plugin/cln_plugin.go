@@ -54,13 +54,6 @@ func (c *ClnPlugin) onInit(plugin *glightning.Plugin, options map[string]glightn
 			log.Printf("ERROR Server stopped with error: %v", err)
 		}
 	}()
-
-	//lightning server
-	clientcln := glightning.NewLightning()
-	clientcln.SetTimeout(60)
-	clientcln.StartUp(config.RpcFile, config.LightningDir)
-
-	log.Printf("successfull clientcln.StartUp")
 }
 
 func (c *ClnPlugin) onHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAcceptedResponse, error) {

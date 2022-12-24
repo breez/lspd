@@ -26,7 +26,6 @@ type server struct {
 	subscription  *subscription
 	newSubscriber chan struct{}
 	done          chan struct{}
-	err           chan error
 	correlations  map[uint64]chan *HtlcResolution
 	index         uint64
 }
@@ -35,8 +34,6 @@ func NewServer(listenAddress string) *server {
 	return &server{
 		listenAddress: listenAddress,
 		newSubscriber: make(chan struct{}, 1),
-		done:          make(chan struct{}),
-		err:           make(chan error, 1),
 		correlations:  make(map[uint64]chan *HtlcResolution),
 		index:         0,
 	}
@@ -56,6 +53,7 @@ func (s *server) Start() error {
 		return err
 	}
 
+	s.done = make(chan struct{})
 	s.grpcServer = grpc.NewServer()
 	s.startMtx.Unlock()
 	RegisterClnPluginServer(s.grpcServer, s)
@@ -110,18 +108,13 @@ func (s *server) HtlcStream(stream ClnPlugin_HtlcStreamServer) error {
 		s.startMtx.Unlock()
 	}()
 
-	for {
-		select {
-		case <-s.done:
-			log.Printf("HTLC server signalled done. Return EOF.")
-			return io.EOF
-		case err := <-s.err:
-			log.Printf("HTLC server signalled error: %v", err)
-			return err
-		case <-sb.done:
-			log.Printf("HTLC stream signalled done. Return EOF.")
-			return io.EOF
-		}
+	select {
+	case <-s.done:
+		log.Printf("HTLC server signalled done. Return EOF.")
+		return io.EOF
+	case <-sb.done:
+		log.Printf("HTLC stream signalled done. Return EOF.")
+		return io.EOF
 	}
 }
 
@@ -189,7 +182,12 @@ func (s *server) recv() *HtlcResolution {
 
 		// TODO: close the subscription??
 		log.Printf("Recv() errored, waiting %v: %v", receiveWaitDelay, err)
-		<-time.After(receiveWaitDelay)
+		select {
+		case <-s.done:
+			log.Printf("Done signalled, stopping receive.")
+			return s.defaultResolution()
+		case <-time.After(receiveWaitDelay):
+		}
 	}
 }
 
@@ -198,9 +196,6 @@ func (s *server) listenHtlcResponses() {
 		select {
 		case <-s.done:
 			log.Printf("listenHtlcResponses received done. Stopping listening.")
-			return
-		case err := <-s.err:
-			log.Printf("listenHtlcResponses received error %v. Stopping listening.", err)
 			return
 		default:
 			response := s.recv()
