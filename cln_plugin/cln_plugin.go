@@ -1,110 +1,488 @@
 package cln_plugin
 
 import (
-	"encoding/hex"
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"os"
+	"strings"
+	"sync"
+	"time"
+)
 
-	"github.com/breez/lspd/basetypes"
-	"github.com/niftynei/glightning/glightning"
+const (
+	SubscriberTimeoutOption = "lsp.subscribertimeout"
+	ListenAddressOption     = "lsp.listen"
+)
+
+var (
+	DefaultSubscriberTimeout = "1m"
+)
+
+const (
+	MaxIntakeBuffer = 500 * 1024 * 1023
+)
+
+const (
+	SpecVersion    = "2.0"
+	ParseError     = -32700
+	InvalidRequest = -32600
+	MethodNotFound = -32601
+	InvalidParams  = -32603
+	InternalErr    = -32603
+)
+
+var (
+	TwoNewLines = []byte("\n\n")
 )
 
 type ClnPlugin struct {
-	server *server
-	plugin *glightning.Plugin
+	done     chan struct{}
+	server   *server
+	in       *os.File
+	out      *bufio.Writer
+	writeMtx sync.Mutex
 }
 
-func NewClnPlugin(server *server) *ClnPlugin {
+func NewClnPlugin(in, out *os.File) *ClnPlugin {
 	c := &ClnPlugin{
-		server: server,
+		done: make(chan struct{}),
+		in:   in,
+		out:  bufio.NewWriter(out),
 	}
-
-	c.plugin = glightning.NewPlugin(c.onInit)
-	c.plugin.RegisterHooks(&glightning.Hooks{
-		HtlcAccepted: c.onHtlcAccepted,
-	})
 
 	return c
 }
 
-func (c *ClnPlugin) Start() error {
-	err := c.plugin.Start(os.Stdin, os.Stdout)
-	if err != nil {
-		log.Printf("Plugin error: %v", err)
-		return err
-	}
-
-	return nil
+// Starts the cln plugin.
+// NOTE: The grpc server is started in the handleInit function.
+func (c *ClnPlugin) Start() {
+	c.setupLogging()
+	go c.listen()
+	<-c.done
 }
 
-func (c *ClnPlugin) Stop() {
-	c.plugin.Stop()
-	c.server.Stop()
-}
+func (c *ClnPlugin) setupLogging() {
+	in, out := io.Pipe()
+	go func(in io.Reader) {
+		// everytime we get a new message, log it thru c-lightning
+		scanner := bufio.NewScanner(in)
+		for {
+			select {
+			case <-c.done:
+				return
+			default:
+				if !scanner.Scan() {
+					if err := scanner.Err(); err != nil {
+						log.Fatalf(
+							"can't print out to std err, killing: %v",
+							err,
+						)
+					}
+				}
 
-func (c *ClnPlugin) onInit(plugin *glightning.Plugin, options map[string]glightning.Option, config *glightning.Config) {
-	log.Printf("successfully init'd! %v\n", config.RpcFile)
-
-	log.Printf("Starting htlc grpc server.")
-	go func() {
-		err := c.server.Start()
-		if err == nil {
-			log.Printf("WARNING server stopped.")
-		} else {
-			log.Printf("ERROR Server stopped with error: %v", err)
+				for _, line := range strings.Split(scanner.Text(), "\n") {
+					c.log("info", line)
+				}
+			}
 		}
-	}()
+
+	}(in)
+	log.SetFlags(log.Ltime | log.Lshortfile)
+	log.SetOutput(out)
 }
 
-func (c *ClnPlugin) onHtlcAccepted(event *glightning.HtlcAcceptedEvent) (*glightning.HtlcAcceptedResponse, error) {
-	payload, err := hex.DecodeString(event.Onion.Payload)
-	if err != nil {
-		log.Printf("ERROR failed to decode payload %s: %v", event.Onion.Payload, err)
-		return nil, err
+// Stops the cln plugin. Drops any remaining work immediately.
+// Pending htlcs will be replayed when cln starts again.
+func (c *ClnPlugin) Stop() {
+	close(c.done)
+
+	s := c.server
+	if s != nil {
+		s.Stop()
 	}
-	scid, err := basetypes.NewShortChannelIDFromString(event.Onion.ShortChannelId)
-	if err != nil {
-		log.Printf("ERROR failed to decode short channel id %s: %v", event.Onion.ShortChannelId, err)
-		return nil, err
+}
+
+// listens stdout for requests from cln and sends the requests to the
+// appropriate handler in fifo order.
+func (c *ClnPlugin) listen() error {
+	scanner := bufio.NewScanner(c.in)
+	buf := make([]byte, 1024)
+	scanner.Buffer(buf, MaxIntakeBuffer)
+
+	// cln messages are split by a double newline.
+	scanner.Split(scanDoubleNewline)
+	for {
+		select {
+		case <-c.done:
+			return nil
+		default:
+			if !scanner.Scan() {
+				if err := scanner.Err(); err != nil {
+					log.Fatal(err)
+					return err
+				}
+
+				return nil
+			}
+
+			msg := scanner.Bytes()
+			// TODO: Pipe logs to the proper place.
+			log.Println(string(msg))
+			// pass down a copy so things stay sane
+			msg_buf := make([]byte, len(msg))
+			copy(msg_buf, msg)
+
+			// NOTE: processMsg is synchronous, so it should only do quick work.
+			c.processMsg(msg_buf)
+		}
 	}
-	ph, err := hex.DecodeString(event.Htlc.PaymentHash)
-	if err != nil {
-		log.Printf("ERROR failed to decode payment hash %s: %v", event.Onion.ShortChannelId, err)
-		return nil, err
+}
+
+// processes a single message from cln. Sends the message to the appropriate
+// handler.
+func (c *ClnPlugin) processMsg(msg []byte) {
+	if len(msg) == 0 {
+		c.sendError(nil, InvalidRequest, "Invalid Request")
+		return
 	}
 
-	resp := c.server.Send(&HtlcAccepted{
-		Onion: &Onion{
-			Payload:           payload,
-			ShortChannelId:    uint64(*scid),
-			ForwardAmountMsat: event.Onion.ForwardAmount,
-		},
-		Htlc: &HtlcOffer{
-			AmountMsat:         event.Htlc.AmountMilliSatoshi,
-			CltvExpiryRelative: uint32(event.Htlc.CltvExpiryRelative),
-			CltvExpiry:         uint32(event.Htlc.CltvExpiry),
-			PaymentHash:        ph,
+	// Right now we don't handle arrays of requests...
+	if msg[0] == '[' {
+		var requests []*Request
+		err := json.Unmarshal(msg, &requests)
+		if err != nil {
+			c.sendError(
+				nil,
+				ParseError,
+				fmt.Sprintf("Parse error:%s [%s]", err.Error(), msg),
+			)
+			return
+		}
+
+		for _, request := range requests {
+			c.processRequest(request)
+		}
+
+		return
+	}
+
+	// Parse the received buffer into a request object.
+	var request Request
+	err := json.Unmarshal(msg, &request)
+	if err != nil {
+		log.Printf("failed to unmarshal request: %v", err)
+		c.sendError(
+			nil,
+			ParseError,
+			fmt.Sprintf("Parse error:%s [%s]", err.Error(), msg),
+		)
+		return
+	}
+
+	c.processRequest(&request)
+}
+
+func (c *ClnPlugin) processRequest(request *Request) {
+	// Make sure the spec version is expected.
+	if request.JsonRpc != SpecVersion {
+		c.sendError(
+			request.Id,
+			InvalidRequest,
+			fmt.Sprintf(
+				`Invalid jsonrpc, expected '%s' got '%s'`,
+				SpecVersion,
+				request.JsonRpc,
+			),
+		)
+		return
+	}
+
+	// Send the message to the appropriate handler.
+	switch request.Method {
+	case "getmanifest":
+		c.handleGetManifest(request)
+	case "init":
+		c.handleInit(request)
+	case "shutdown":
+		c.handleShutdown(request)
+	case "htlc_accepted":
+		c.handleHtlcAccepted(request)
+	default:
+		c.sendError(
+			request.Id,
+			MethodNotFound,
+			fmt.Sprintf("Method '%s' not found", request.Method),
+		)
+	}
+}
+
+// Returns this plugin's manifest to cln.
+func (c *ClnPlugin) handleGetManifest(request *Request) {
+	c.sendToCln(&Response{
+		Id:      request.Id,
+		JsonRpc: SpecVersion,
+		Result: &Manifest{
+			Options: []Option{
+				{
+					Name: ListenAddressOption,
+					Type: "string",
+					Description: "listen address for the htlc_accepted lsp " +
+						"grpc server",
+				},
+				{
+					Name: SubscriberTimeoutOption,
+					Type: "string",
+					Description: "htlc timeout duration when there is no " +
+						"subscriber to the grpc server. golang duration " +
+						"string.",
+					Default: &DefaultSubscriberTimeout,
+				},
+			},
+			RpcMethods: []*RpcMethod{},
+			Dynamic:    true,
+			Hooks: []Hook{
+				{
+					Name: "htlc_accepted",
+				},
+			},
+			NonNumericIds: true,
+			Subscriptions: []string{
+				"shutdown",
+			},
 		},
 	})
+}
 
-	_, ok := resp.Outcome.(*HtlcResolution_Continue)
-	if ok {
-		return event.Continue(), nil
+// Handles plugin initialization. Parses startup options and starts the grpc
+// server.
+func (c *ClnPlugin) handleInit(request *Request) {
+	// Deserialize the init message.
+	var initMsg InitMessage
+	err := json.Unmarshal(request.Params, &initMsg)
+	if err != nil {
+		c.sendError(
+			request.Id,
+			ParseError,
+			fmt.Sprintf(
+				"Error parsing init params:%s [%s]",
+				err.Error(),
+				request.Params,
+			),
+		)
+		return
 	}
 
-	cont, ok := resp.Outcome.(*HtlcResolution_ContinueWith)
-	if ok {
-		chanId := hex.EncodeToString(cont.ContinueWith.ChannelId)
-		pl := hex.EncodeToString(cont.ContinueWith.Payload)
-		return event.ContinueWith(chanId, pl), nil
+	// Get the listen address option.
+	l, ok := initMsg.Options[ListenAddressOption]
+	if !ok {
+		c.sendError(
+			request.Id,
+			InvalidParams,
+			fmt.Sprintf("Missing option '%s'", ListenAddressOption),
+		)
+		return
 	}
 
-	fail, ok := resp.Outcome.(*HtlcResolution_Fail)
-	if ok {
-		fm := hex.EncodeToString(fail.Fail.FailureMessage)
-		return event.Fail(fm), err
+	addr, ok := l.(string)
+	if !ok || addr == "" {
+		c.sendError(
+			request.Id,
+			InvalidParams,
+			fmt.Sprintf(
+				"Invalid value '%v' for option '%s'",
+				l,
+				ListenAddressOption,
+			),
+		)
+		return
 	}
 
-	log.Printf("Unexpected htlc resolution type %T: %+v", resp.Outcome, resp.Outcome)
-	return event.Fail("1007"), nil // temporary channel failure
+	// Get the subscriber timeout option.
+	t, ok := initMsg.Options[SubscriberTimeoutOption]
+	if !ok {
+		c.sendError(
+			request.Id,
+			InvalidParams,
+			fmt.Sprintf("Missing option '%s'", SubscriberTimeoutOption),
+		)
+		return
+	}
+
+	s, ok := t.(string)
+	if !ok || s == "" {
+		c.sendError(
+			request.Id,
+			InvalidParams,
+			fmt.Sprintf(
+				"Invalid value '%v' for option '%s'",
+				t,
+				SubscriberTimeoutOption,
+			),
+		)
+		return
+	}
+
+	subscriberTimeout, err := time.ParseDuration(s)
+	if err != nil {
+		c.sendError(
+			request.Id,
+			InvalidParams,
+			fmt.Sprintf(
+				"Invalid value '%v' for option '%s'",
+				s,
+				SubscriberTimeoutOption,
+			),
+		)
+		return
+	}
+
+	// Start the grpc server.
+	c.server = NewServer(addr, subscriberTimeout)
+	go c.server.Start()
+	err = c.server.WaitStarted()
+	if err != nil {
+		c.sendError(
+			request.Id,
+			InternalErr,
+			fmt.Sprintf("Failed to start server: %s", err.Error()),
+		)
+		return
+	}
+
+	// Listen for responses from the grpc server.
+	go c.listenServer()
+
+	// Let cln know the plugin is initialized.
+	c.sendToCln(&Response{
+		Id:      request.Id,
+		JsonRpc: SpecVersion,
+	})
+}
+
+// Listens to responses to htlc_accepted requests from the grpc server.
+func (c *ClnPlugin) listenServer() {
+	for {
+		select {
+		case <-c.done:
+			return
+		default:
+			id, result := c.server.Receive()
+
+			// The server may return nil if it is stopped.
+			if result == nil {
+				continue
+			}
+
+			serid, _ := json.Marshal(&id)
+			c.sendToCln(&Response{
+				Id:      serid,
+				JsonRpc: SpecVersion,
+				Result:  result,
+			})
+		}
+	}
+}
+
+// Handles the shutdown message. Stops any work immediately.
+func (c *ClnPlugin) handleShutdown(request *Request) {
+	c.Stop()
+}
+
+// Sends a htlc_accepted message to the grpc server.
+func (c *ClnPlugin) handleHtlcAccepted(request *Request) {
+	var htlc HtlcAccepted
+	err := json.Unmarshal(request.Params, &htlc)
+	if err != nil {
+		c.sendError(
+			request.Id,
+			ParseError,
+			fmt.Sprintf(
+				"Error parsing htlc_accepted params:%s [%s]",
+				err.Error(),
+				request.Params,
+			),
+		)
+		return
+	}
+
+	c.server.Send(c.idToString(request.Id), &htlc)
+}
+
+// Sends an error to cln.
+func (c *ClnPlugin) sendError(id json.RawMessage, code int, message string) {
+	resp := &Response{
+		JsonRpc: SpecVersion,
+		Error: &RpcError{
+			Code:    code,
+			Message: message,
+		},
+	}
+
+	if len(id) > 0 {
+		resp.Id = id
+	}
+
+	c.sendToCln(resp)
+}
+
+// converts a raw cln id to string. The CLN id can either be an integer or a
+// string. if it's a string, the quotes are removed.
+func (c *ClnPlugin) idToString(id json.RawMessage) string {
+	if len(id) == 0 {
+		return ""
+	}
+
+	str := string(id)
+	str = strings.TrimSpace(str)
+	str = strings.Trim(str, "\"")
+	str = strings.Trim(str, "'")
+	return str
+}
+
+// Sends a message to cln.
+func (c *ClnPlugin) sendToCln(msg interface{}) {
+	c.writeMtx.Lock()
+	defer c.writeMtx.Unlock()
+
+	// TODO: log
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Println(err.Error())
+		return
+	}
+
+	data = append(data, TwoNewLines...)
+	c.out.Write(data)
+	c.out.Flush()
+}
+
+func (c *ClnPlugin) log(level string, message string) {
+	params, _ := json.Marshal(&LogNotification{
+		Level:   level,
+		Message: message,
+	})
+
+	c.sendToCln(&Request{
+		Method:  "log",
+		JsonRpc: SpecVersion,
+		Params:  params,
+	})
+}
+
+// Helper method for the bufio scanner to split messages on double newlines.
+func scanDoubleNewline(
+	data []byte,
+	atEOF bool,
+) (advance int, token []byte, err error) {
+	for i := 0; i < len(data); i++ {
+		if data[i] == '\n' && (i+1) < len(data) && data[i+1] == '\n' {
+			return i + 2, data[:i], nil
+		}
+	}
+	// this trashes anything left over in
+	// the buffer if we're at EOF, with no /n/n present
+	return 0, nil, nil
 }

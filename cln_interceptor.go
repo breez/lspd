@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -10,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/breez/lspd/cln_plugin"
+	"github.com/breez/lspd/cln_plugin/proto"
 	sphinx "github.com/lightningnetwork/lightning-onion"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/record"
@@ -24,7 +25,7 @@ import (
 type ClnHtlcInterceptor struct {
 	pluginAddress string
 	client        *ClnClient
-	pluginClient  cln_plugin.ClnPluginClient
+	pluginClient  proto.ClnPluginClient
 	initWg        sync.WaitGroup
 	doneWg        sync.WaitGroup
 	ctx           context.Context
@@ -51,7 +52,7 @@ func (i *ClnHtlcInterceptor) Start() error {
 		return err
 	}
 
-	i.pluginClient = cln_plugin.NewClnPluginClient(conn)
+	i.pluginClient = proto.NewClnPluginClient(conn)
 	i.ctx = ctx
 	i.cancel = cancel
 	return i.intercept()
@@ -111,7 +112,7 @@ func (i *ClnHtlcInterceptor) intercept() error {
 				request.Htlc,
 				request.Onion.ShortChannelId,
 				request.Htlc.AmountMsat, //with fees
-				request.Onion.ForwardAmountMsat,
+				request.Onion.ForwardMsat,
 				request.Htlc.CltvExpiryRelative,
 				request.Htlc.CltvExpiry,
 				request.Htlc.PaymentHash,
@@ -120,28 +121,25 @@ func (i *ClnHtlcInterceptor) intercept() error {
 
 			i.doneWg.Add(1)
 			go func() {
-				interceptResult := intercept(request.Htlc.PaymentHash, request.Onion.ForwardAmountMsat, request.Htlc.CltvExpiry)
+				paymentHash, err := hex.DecodeString(request.Htlc.PaymentHash)
+				if err != nil {
+					interceptorClient.Send(i.defaultResolution(request))
+					i.doneWg.Done()
+				}
+				interceptResult := intercept(paymentHash, request.Onion.ForwardMsat, request.Htlc.CltvExpiry)
 				switch interceptResult.action {
 				case INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(i.resumeWithOnion(request, interceptResult))
 				case INTERCEPT_FAIL_HTLC_WITH_CODE:
-					interceptorClient.Send(&cln_plugin.HtlcResolution{
-						Correlationid: request.Correlationid,
-						Outcome: &cln_plugin.HtlcResolution_Fail{
-							Fail: &cln_plugin.HtlcFail{
-								FailureMessage: i.mapFailureCode(interceptResult.failureCode),
-							},
-						},
-					})
+					interceptorClient.Send(
+						i.failWithCode(request, interceptResult.failureCode),
+					)
 				case INTERCEPT_RESUME:
 					fallthrough
 				default:
-					interceptorClient.Send(&cln_plugin.HtlcResolution{
-						Correlationid: request.Correlationid,
-						Outcome: &cln_plugin.HtlcResolution_Continue{
-							Continue: &cln_plugin.HtlcContinue{},
-						},
-					})
+					interceptorClient.Send(
+						i.defaultResolution(request),
+					)
 				}
 
 				i.doneWg.Done()
@@ -163,29 +161,51 @@ func (i *ClnHtlcInterceptor) WaitStarted() LightningClient {
 	return i.client
 }
 
-func (i *ClnHtlcInterceptor) resumeWithOnion(request *cln_plugin.HtlcAccepted, interceptResult interceptResult) *cln_plugin.HtlcResolution {
+func (i *ClnHtlcInterceptor) resumeWithOnion(request *proto.HtlcAccepted, interceptResult interceptResult) *proto.HtlcResolution {
 	//decoding and encoding onion with alias in type 6 record.
-	newPayload, err := encodePayloadWithNextHop(request.Onion.Payload, interceptResult.channelId)
+	payload, err := hex.DecodeString(request.Onion.Payload)
+	if err != nil {
+		log.Printf("resumeWithOnion: hex.DecodeString(%v) error: %v", request.Onion.Payload, err)
+		return i.failWithCode(request, FAILURE_TEMPORARY_CHANNEL_FAILURE)
+	}
+	newPayload, err := encodePayloadWithNextHop(payload, interceptResult.channelId)
 	if err != nil {
 		log.Printf("encodePayloadWithNextHop error: %v", err)
-		return &cln_plugin.HtlcResolution{
-			Correlationid: request.Correlationid,
-			Outcome: &cln_plugin.HtlcResolution_Fail{
-				Fail: &cln_plugin.HtlcFail{
-					FailureMessage: i.mapFailureCode(FAILURE_TEMPORARY_CHANNEL_FAILURE),
-				},
-			},
-		}
+		return i.failWithCode(request, FAILURE_TEMPORARY_CHANNEL_FAILURE)
 	}
 
-	chanId := lnwire.NewChanIDFromOutPoint(interceptResult.channelPoint)
+	newPayloadStr := hex.EncodeToString(newPayload)
+
+	chanId := lnwire.NewChanIDFromOutPoint(interceptResult.channelPoint).String()
 	log.Printf("forwarding htlc to the destination node and a new private channel was opened")
-	return &cln_plugin.HtlcResolution{
+	return &proto.HtlcResolution{
 		Correlationid: request.Correlationid,
-		Outcome: &cln_plugin.HtlcResolution_ContinueWith{
-			ContinueWith: &cln_plugin.HtlcContinueWith{
-				ChannelId: chanId[:],
-				Payload:   newPayload,
+		Outcome: &proto.HtlcResolution_Continue{
+			Continue: &proto.HtlcContinue{
+				ForwardTo: &chanId,
+				Payload:   &newPayloadStr,
+			},
+		},
+	}
+}
+
+func (i *ClnHtlcInterceptor) defaultResolution(request *proto.HtlcAccepted) *proto.HtlcResolution {
+	return &proto.HtlcResolution{
+		Correlationid: request.Correlationid,
+		Outcome: &proto.HtlcResolution_Continue{
+			Continue: &proto.HtlcContinue{},
+		},
+	}
+}
+
+func (i *ClnHtlcInterceptor) failWithCode(request *proto.HtlcAccepted, code interceptFailureCode) *proto.HtlcResolution {
+	return &proto.HtlcResolution{
+		Correlationid: request.Correlationid,
+		Outcome: &proto.HtlcResolution_Fail{
+			Fail: &proto.HtlcFail{
+				Failure: &proto.HtlcFail_FailureMessage{
+					FailureMessage: i.mapFailureCode(code),
+				},
 			},
 		},
 	}
@@ -237,16 +257,16 @@ func encodePayloadWithNextHop(payload []byte, channelId uint64) ([]byte, error) 
 	return newPayloadBuf.Bytes(), nil
 }
 
-func (i *ClnHtlcInterceptor) mapFailureCode(original interceptFailureCode) []byte {
+func (i *ClnHtlcInterceptor) mapFailureCode(original interceptFailureCode) string {
 	switch original {
 	case FAILURE_TEMPORARY_CHANNEL_FAILURE:
-		return []byte{0x10, 0x07}
+		return "1007"
 	case FAILURE_TEMPORARY_NODE_FAILURE:
-		return []byte{0x20, 0x02}
+		return "2002"
 	case FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
-		return []byte{0x40, 0x0F}
+		return "400F"
 	default:
 		log.Printf("Unknown failure code %v, default to temporary channel failure.", original)
-		return []byte{0x10, 0x07} // temporary channel failure
+		return "1007" // temporary channel failure
 	}
 }

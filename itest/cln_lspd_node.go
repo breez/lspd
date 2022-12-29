@@ -30,7 +30,6 @@ type ClnLspNode struct {
 	isInitialized bool
 	mtx           sync.Mutex
 	pluginBinary  string
-	pluginFile    string
 	pluginAddress string
 }
 
@@ -43,7 +42,6 @@ type clnLspNodeRuntime struct {
 
 func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode {
 	scriptDir := h.GetDirectory("lspd")
-	pluginFile := filepath.Join(scriptDir, "htlc.sh")
 	pluginBinary := *clnPluginExec
 	pluginPort, err := lntest.GetPort()
 	if err != nil {
@@ -52,7 +50,8 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode
 	pluginAddress := fmt.Sprintf("127.0.0.1:%d", pluginPort)
 
 	args := []string{
-		fmt.Sprintf("--plugin=%s", pluginFile),
+		fmt.Sprintf("--plugin=%s", pluginBinary),
+		fmt.Sprintf("--lsp.listen=%s", pluginAddress),
 		fmt.Sprintf("--fee-base=%d", lspBaseFeeMsat),
 		fmt.Sprintf("--fee-per-satoshi=%d", lspFeeRatePpm),
 		fmt.Sprintf("--cltv-delta=%d", lspCltvDelta),
@@ -79,7 +78,6 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode
 		logFilePath:   logFilePath,
 		lspBase:       lspbase,
 		pluginBinary:  pluginBinary,
-		pluginFile:    pluginFile,
 		pluginAddress: pluginAddress,
 	}
 
@@ -102,16 +100,6 @@ func (c *ClnLspNode) Start() {
 			Name: fmt.Sprintf("%s: lsp base", c.lspBase.name),
 			Fn:   c.lspBase.Stop,
 		})
-
-		pluginContent := fmt.Sprintf(`#!/bin/bash
-export LISTEN_ADDRESS=%s
-%s`, c.pluginAddress, c.pluginBinary)
-
-		err = os.WriteFile(c.pluginFile, []byte(pluginContent), 0755)
-		if err != nil {
-			lntest.PerformCleanup(cleanups)
-			c.harness.T.Fatalf("failed create lsp cln plugin file: %v", err)
-		}
 	}
 
 	c.lightningNode.Start()

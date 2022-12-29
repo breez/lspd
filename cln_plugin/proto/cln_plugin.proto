@@ -1,46 +1,56 @@
 syntax = "proto3";
-option go_package="github.com/breez/lspd/cln_plugin";
+option go_package="github.com/breez/lspd/cln_plugin/proto";
 
 service ClnPlugin {
     rpc HtlcStream(stream HtlcResolution) returns (stream HtlcAccepted);
 }
 
 message HtlcAccepted {
-    uint64 correlationid = 1;
+    string correlationid = 1;
     Onion onion = 2;
-    HtlcOffer htlc = 3;
+    Htlc htlc = 3;
+    string forward_to = 4;
 }
 
 message Onion {
-    bytes payload = 1;
-    uint64 short_channel_id = 2;
-    uint64 forward_amount_msat = 3;
+    string payload = 1;
+    string short_channel_id = 2;
+    uint64 forward_msat = 3;
+    uint32 outgoing_cltv_value = 4;
+    string shared_secret = 5;
+    string next_onion = 6;
 }
 
-message HtlcOffer {
-    uint64 amount_msat = 2;
-    uint32 cltv_expiry_relative = 3;
+message Htlc {
+    string short_channel_id = 1;
+    uint64 id = 2;
+    uint64 amount_msat = 3;
     uint32 cltv_expiry = 4;
-    bytes payment_hash = 5;
+    uint32 cltv_expiry_relative = 5;
+    string payment_hash = 6;
 }
 
 message HtlcResolution {
-    uint64 correlationid = 1;
+    string correlationid = 1;
     oneof outcome {
         HtlcFail fail = 2;
         HtlcContinue continue = 3;
-        HtlcContinueWith continue_with = 4;
+        HtlcResolve resolve = 4;
     }
 }
 
-message HtlcFail {
-    bytes failure_message = 1;
-}
-
 message HtlcContinue {
+    optional string payload = 1;
+    optional string forward_to = 2;
 }
 
-message HtlcContinueWith {
-    bytes channel_id = 1;
-    bytes payload = 2;
+message HtlcFail {
+    oneof failure {
+        string failure_message = 1;
+        string failure_onion = 2;
+    } 
+}
+
+message HtlcResolve {
+    string payment_key = 1;
 }
