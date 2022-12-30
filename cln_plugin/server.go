@@ -23,7 +23,7 @@ type subscription struct {
 type htlcAcceptedMsg struct {
 	id      string
 	htlc    *HtlcAccepted
-	timeout <-chan time.Time
+	timeout time.Time
 }
 
 // Internal htlc result message meant for the recvQueue.
@@ -53,10 +53,14 @@ func NewServer(listenAddress string, subscriberTimeout time.Duration) *server {
 	return &server{
 		listenAddress:     listenAddress,
 		subscriberTimeout: subscriberTimeout,
-		sendQueue:         make(chan *htlcAcceptedMsg, 10000),
-		recvQueue:         make(chan *htlcResultMsg, 10000),
-		started:           make(chan struct{}),
-		startError:        make(chan error, 1),
+		// The send queue exists to buffer messages until a subscriber is active.
+		sendQueue: make(chan *htlcAcceptedMsg, 10000),
+		// The receive queue exists mainly to allow returning timeouts to the
+		// cln plugin. If there is no subscriber active within the subscriber
+		// timeout period these results can be put directly on the receive queue.
+		recvQueue:  make(chan *htlcResultMsg, 10000),
+		started:    make(chan struct{}),
+		startError: make(chan error, 1),
 	}
 }
 
@@ -113,16 +117,20 @@ func (s *server) Stop() {
 	close(s.done)
 	s.grpcServer.Stop()
 	s.grpcServer = nil
+	log.Printf("Server stopped.")
 }
 
 // Grpc method that is called when a new client subscribes. There can only be
 // one subscriber active at a time. If there is an error receiving or sending
 // from or to the subscriber, the subscription is closed.
 func (s *server) HtlcStream(stream proto.ClnPlugin_HtlcStreamServer) error {
-	log.Printf("Got HTLC stream subscription request.")
 	s.mtx.Lock()
-	if s.subscription != nil {
+	if s.subscription == nil {
+		log.Printf("Got a new HTLC stream subscription request.")
+	} else {
 		s.mtx.Unlock()
+		log.Printf("Got a HTLC stream subscription request, but subscription " +
+			"was already active.")
 		return fmt.Errorf("already subscribed")
 	}
 
@@ -140,10 +148,17 @@ func (s *server) HtlcStream(stream proto.ClnPlugin_HtlcStreamServer) error {
 	s.mtx.Unlock()
 
 	defer func() {
+		// When the HtlcStream function returns, that means the subscriber will
+		// be gone. Cleanup the subscription so we'll be ready to accept a new
+		// one later.
 		s.removeSubscriptionIfUnchanged(sb, nil)
 	}()
 
 	go func() {
+		// If the context is done, there will be no more connection with the
+		// client. Listen for context done and clean up the subscriber.
+		// Cleaning up the subscriber will make the HtlcStream function exit.
+		// (sb.done or sb.err)
 		<-stream.Context().Done()
 		log.Printf("HtlcStream context is done. Removing subscriber: %v", stream.Context().Err())
 		s.removeSubscriptionIfUnchanged(sb, stream.Context().Err())
@@ -167,13 +182,14 @@ func (s *server) Send(id string, h *HtlcAccepted) {
 	s.sendQueue <- &htlcAcceptedMsg{
 		id:      id,
 		htlc:    h,
-		timeout: time.After(s.subscriberTimeout),
+		timeout: time.Now().Add(s.subscriberTimeout),
 	}
 }
 
 // Receives the next htlc resolution message from the grpc client. Returns id
 // and message. Blocks until a message is available. Returns a nil message if
-// the server is done.
+// the server is done. This function effectively waits until a subscriber is
+// active and has sent a message.
 func (s *server) Receive() (string, interface{}) {
 	select {
 	case <-s.done:
@@ -181,63 +197,6 @@ func (s *server) Receive() (string, interface{}) {
 	case msg := <-s.recvQueue:
 		return msg.id, msg.result
 	}
-}
-
-// Helper function that blocks until a message from a grpc client is received
-// or the server stops. Either returns a received message, or nil if the server
-// has stopped.
-func (s *server) recv() *proto.HtlcResolution {
-	for {
-		// make a copy of the used fields, to make sure state updates don't
-		// surprise us. The newSubscriber chan is swapped whenever a new
-		// subscriber arrives.
-		s.mtx.Lock()
-		sb := s.subscription
-		ns := s.newSubscriber
-		s.mtx.Unlock()
-
-		if sb == nil {
-			log.Printf("Got no subscribers for receive. Waiting for subscriber.")
-			select {
-			case <-s.done:
-				log.Printf("Done signalled, stopping receive.")
-				return nil
-			case <-ns:
-				log.Printf("New subscription available for receive, continue receive.")
-				continue
-			}
-		}
-
-		// There is a subscription active. Attempt to receive a message.
-		r, err := sb.stream.Recv()
-		if err == nil {
-			log.Printf("Received HtlcResolution %+v", r)
-			return r
-		}
-
-		// Receiving the message failed, so the subscription is broken. Remove
-		// it if it hasn't been updated already. We'll try receiving again in
-		// the next iteration of the for loop.
-		log.Printf("Recv() errored, removing subscription: %v", err)
-		s.removeSubscriptionIfUnchanged(sb, err)
-	}
-}
-
-// Stops and removes the subscription if this is the currently active
-// subscription. If the subscription was changed in the meantime, this function
-// does nothing.
-func (s *server) removeSubscriptionIfUnchanged(sb *subscription, err error) {
-	s.mtx.Lock()
-	// If the subscription reference hasn't changed yet in the meantime, kill it.
-	if s.subscription == sb {
-		if err == nil {
-			close(sb.done)
-		} else {
-			sb.err <- err
-		}
-		s.subscription = nil
-	}
-	s.mtx.Unlock()
 }
 
 // Listens to sendQueue for htlc_accepted requests from cln. The message will be
@@ -274,7 +233,7 @@ func (s *server) handleHtlcAccepted(msg *htlcAcceptedMsg) {
 			case <-ns:
 				log.Printf("got a new subscriber. continue handleHtlcAccepted.")
 				continue
-			case <-msg.timeout:
+			case <-time.After(time.Until(msg.timeout)):
 				log.Printf(
 					"WARNING: htlc with id '%s' timed out after '%v' waiting "+
 						"for grpc subscriber: %+v",
@@ -343,6 +302,67 @@ func (s *server) listenHtlcResponses() {
 			}
 		}
 	}
+}
+
+// Helper function that blocks until a message from a grpc client is received
+// or the server stops. Either returns a received message, or nil if the server
+// has stopped.
+func (s *server) recv() *proto.HtlcResolution {
+	for {
+		// make a copy of the used fields, to make sure state updates don't
+		// surprise us. The newSubscriber chan is swapped whenever a new
+		// subscriber arrives.
+		s.mtx.Lock()
+		sb := s.subscription
+		ns := s.newSubscriber
+		s.mtx.Unlock()
+
+		if sb == nil {
+			log.Printf("Got no subscribers for receive. Waiting for subscriber.")
+			select {
+			case <-s.done:
+				log.Printf("Done signalled, stopping receive.")
+				return nil
+			case <-ns:
+				log.Printf("New subscription available for receive, continue receive.")
+				continue
+			}
+		}
+
+		// There is a subscription active. Attempt to receive a message.
+		r, err := sb.stream.Recv()
+		if err == nil {
+			log.Printf("Received HtlcResolution %+v", r)
+			return r
+		}
+
+		// Receiving the message failed, so the subscription is broken. Remove
+		// it if it hasn't been updated already. We'll try receiving again in
+		// the next iteration of the for loop.
+		log.Printf("Recv() errored, removing subscription: %v", err)
+		s.removeSubscriptionIfUnchanged(sb, err)
+	}
+}
+
+// Stops and removes the subscription if this is the currently active
+// subscription. If the subscription was changed in the meantime, this function
+// does nothing.
+func (s *server) removeSubscriptionIfUnchanged(sb *subscription, err error) {
+	s.mtx.Lock()
+	// If the subscription reference hasn't changed yet in the meantime, kill it.
+	if s.subscription == sb {
+		if err == nil {
+			log.Printf("Removing active subscription without error.")
+			close(sb.done)
+		} else {
+			log.Printf("Removing active subscription with error: %v", err)
+			sb.err <- err
+		}
+		s.subscription = nil
+	} else {
+		log.Printf("removeSubscriptionIfUnchanged: Subscription already removed.")
+	}
+	s.mtx.Unlock()
 }
 
 // Maps a grpc result to the corresponding result for cln. The cln message

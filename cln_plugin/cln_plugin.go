@@ -60,43 +60,14 @@ func NewClnPlugin(in, out *os.File) *ClnPlugin {
 // NOTE: The grpc server is started in the handleInit function.
 func (c *ClnPlugin) Start() {
 	c.setupLogging()
-	go c.listen()
+	go c.listenRequests()
 	<-c.done
-}
-
-func (c *ClnPlugin) setupLogging() {
-	in, out := io.Pipe()
-	go func(in io.Reader) {
-		// everytime we get a new message, log it thru c-lightning
-		scanner := bufio.NewScanner(in)
-		for {
-			select {
-			case <-c.done:
-				return
-			default:
-				if !scanner.Scan() {
-					if err := scanner.Err(); err != nil {
-						log.Fatalf(
-							"can't print out to std err, killing: %v",
-							err,
-						)
-					}
-				}
-
-				for _, line := range strings.Split(scanner.Text(), "\n") {
-					c.log("info", line)
-				}
-			}
-		}
-
-	}(in)
-	log.SetFlags(log.Ltime | log.Lshortfile)
-	log.SetOutput(out)
 }
 
 // Stops the cln plugin. Drops any remaining work immediately.
 // Pending htlcs will be replayed when cln starts again.
 func (c *ClnPlugin) Stop() {
+	log.Printf("Stop called. Stopping plugin.")
 	close(c.done)
 
 	s := c.server
@@ -107,7 +78,7 @@ func (c *ClnPlugin) Stop() {
 
 // listens stdout for requests from cln and sends the requests to the
 // appropriate handler in fifo order.
-func (c *ClnPlugin) listen() error {
+func (c *ClnPlugin) listenRequests() error {
 	scanner := bufio.NewScanner(c.in)
 	buf := make([]byte, 1024)
 	scanner.Buffer(buf, MaxIntakeBuffer)
@@ -129,8 +100,10 @@ func (c *ClnPlugin) listen() error {
 			}
 
 			msg := scanner.Bytes()
-			// TODO: Pipe logs to the proper place.
+
+			// Always log the message json
 			log.Println(string(msg))
+
 			// pass down a copy so things stay sane
 			msg_buf := make([]byte, len(msg))
 			copy(msg_buf, msg)
@@ -141,15 +114,39 @@ func (c *ClnPlugin) listen() error {
 	}
 }
 
+// Listens to responses to htlc_accepted requests from the grpc server.
+func (c *ClnPlugin) listenServer() {
+	for {
+		select {
+		case <-c.done:
+			return
+		default:
+			id, result := c.server.Receive()
+
+			// The server may return nil if it is stopped.
+			if result == nil {
+				continue
+			}
+
+			serid, _ := json.Marshal(&id)
+			c.sendToCln(&Response{
+				Id:      serid,
+				JsonRpc: SpecVersion,
+				Result:  result,
+			})
+		}
+	}
+}
+
 // processes a single message from cln. Sends the message to the appropriate
 // handler.
 func (c *ClnPlugin) processMsg(msg []byte) {
 	if len(msg) == 0 {
-		c.sendError(nil, InvalidRequest, "Invalid Request")
+		c.sendError(nil, InvalidRequest, "Got an invalid zero length request")
 		return
 	}
 
-	// Right now we don't handle arrays of requests...
+	// Handle request batches.
 	if msg[0] == '[' {
 		var requests []*Request
 		err := json.Unmarshal(msg, &requests)
@@ -157,7 +154,7 @@ func (c *ClnPlugin) processMsg(msg []byte) {
 			c.sendError(
 				nil,
 				ParseError,
-				fmt.Sprintf("Parse error:%s [%s]", err.Error(), msg),
+				fmt.Sprintf("Failed to unmarshal request batch: %v", err),
 			)
 			return
 		}
@@ -173,11 +170,10 @@ func (c *ClnPlugin) processMsg(msg []byte) {
 	var request Request
 	err := json.Unmarshal(msg, &request)
 	if err != nil {
-		log.Printf("failed to unmarshal request: %v", err)
 		c.sendError(
 			nil,
 			ParseError,
-			fmt.Sprintf("Parse error:%s [%s]", err.Error(), msg),
+			fmt.Sprintf("failed to unmarshal request: %v", err),
 		)
 		return
 	}
@@ -188,15 +184,11 @@ func (c *ClnPlugin) processMsg(msg []byte) {
 func (c *ClnPlugin) processRequest(request *Request) {
 	// Make sure the spec version is expected.
 	if request.JsonRpc != SpecVersion {
-		c.sendError(
-			request.Id,
-			InvalidRequest,
-			fmt.Sprintf(
-				`Invalid jsonrpc, expected '%s' got '%s'`,
-				SpecVersion,
-				request.JsonRpc,
-			),
-		)
+		c.sendError(request.Id, InvalidRequest, fmt.Sprintf(
+			`Invalid jsonrpc, expected '%s' got '%s'`,
+			SpecVersion,
+			request.JsonRpc,
+		))
 		return
 	}
 
@@ -235,9 +227,8 @@ func (c *ClnPlugin) handleGetManifest(request *Request) {
 				{
 					Name: SubscriberTimeoutOption,
 					Type: "string",
-					Description: "htlc timeout duration when there is no " +
-						"subscriber to the grpc server. golang duration " +
-						"string.",
+					Description: "the maximum duration we will hold a htlc " +
+						"if no subscriber is active. golang duration string.",
 					Default: &DefaultSubscriberTimeout,
 				},
 			},
@@ -266,11 +257,7 @@ func (c *ClnPlugin) handleInit(request *Request) {
 		c.sendError(
 			request.Id,
 			ParseError,
-			fmt.Sprintf(
-				"Error parsing init params:%s [%s]",
-				err.Error(),
-				request.Params,
-			),
+			fmt.Sprintf("Failed to unmarshal init params: %v", err),
 		)
 		return
 	}
@@ -362,30 +349,6 @@ func (c *ClnPlugin) handleInit(request *Request) {
 	})
 }
 
-// Listens to responses to htlc_accepted requests from the grpc server.
-func (c *ClnPlugin) listenServer() {
-	for {
-		select {
-		case <-c.done:
-			return
-		default:
-			id, result := c.server.Receive()
-
-			// The server may return nil if it is stopped.
-			if result == nil {
-				continue
-			}
-
-			serid, _ := json.Marshal(&id)
-			c.sendToCln(&Response{
-				Id:      serid,
-				JsonRpc: SpecVersion,
-				Result:  result,
-			})
-		}
-	}
-}
-
 // Handles the shutdown message. Stops any work immediately.
 func (c *ClnPlugin) handleShutdown(request *Request) {
 	c.Stop()
@@ -400,7 +363,7 @@ func (c *ClnPlugin) handleHtlcAccepted(request *Request) {
 			request.Id,
 			ParseError,
 			fmt.Sprintf(
-				"Error parsing htlc_accepted params:%s [%s]",
+				"Failed to unmarshal htlc_accepted params:%s [%s]",
 				err.Error(),
 				request.Params,
 			),
@@ -408,11 +371,15 @@ func (c *ClnPlugin) handleHtlcAccepted(request *Request) {
 		return
 	}
 
-	c.server.Send(c.idToString(request.Id), &htlc)
+	c.server.Send(idToString(request.Id), &htlc)
 }
 
 // Sends an error to cln.
 func (c *ClnPlugin) sendError(id json.RawMessage, code int, message string) {
+	// Log the error to cln first.
+	c.log("error", message)
+
+	// Then create an error message.
 	resp := &Response{
 		JsonRpc: SpecVersion,
 		Error: &RpcError{
@@ -428,35 +395,50 @@ func (c *ClnPlugin) sendError(id json.RawMessage, code int, message string) {
 	c.sendToCln(resp)
 }
 
-// converts a raw cln id to string. The CLN id can either be an integer or a
-// string. if it's a string, the quotes are removed.
-func (c *ClnPlugin) idToString(id json.RawMessage) string {
-	if len(id) == 0 {
-		return ""
-	}
-
-	str := string(id)
-	str = strings.TrimSpace(str)
-	str = strings.Trim(str, "\"")
-	str = strings.Trim(str, "'")
-	return str
-}
-
 // Sends a message to cln.
 func (c *ClnPlugin) sendToCln(msg interface{}) {
 	c.writeMtx.Lock()
 	defer c.writeMtx.Unlock()
 
-	// TODO: log
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Println(err.Error())
+		log.Printf("Failed to marshal message for cln, ignoring message: %+v", msg)
 		return
 	}
 
 	data = append(data, TwoNewLines...)
 	c.out.Write(data)
 	c.out.Flush()
+}
+
+func (c *ClnPlugin) setupLogging() {
+	in, out := io.Pipe()
+	log.SetFlags(log.Ltime | log.Lshortfile)
+	log.SetOutput(out)
+	go func(in io.Reader) {
+		// everytime we get a new message, log it thru c-lightning
+		scanner := bufio.NewScanner(in)
+		for {
+			select {
+			case <-c.done:
+				return
+			default:
+				if !scanner.Scan() {
+					if err := scanner.Err(); err != nil {
+						log.Fatalf(
+							"can't print out to std err, killing: %v",
+							err,
+						)
+					}
+				}
+
+				for _, line := range strings.Split(scanner.Text(), "\n") {
+					c.log("info", line)
+				}
+			}
+		}
+
+	}(in)
 }
 
 func (c *ClnPlugin) log(level string, message string) {
@@ -485,4 +467,18 @@ func scanDoubleNewline(
 	// this trashes anything left over in
 	// the buffer if we're at EOF, with no /n/n present
 	return 0, nil, nil
+}
+
+// converts a raw cln id to string. The CLN id can either be an integer or a
+// string. if it's a string, the quotes are removed.
+func idToString(id json.RawMessage) string {
+	if len(id) == 0 {
+		return ""
+	}
+
+	str := string(id)
+	str = strings.TrimSpace(str)
+	str = strings.Trim(str, "\"")
+	str = strings.Trim(str, "'")
+	return str
 }

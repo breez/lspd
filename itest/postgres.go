@@ -41,6 +41,7 @@ func NewPostgresContainer(logfile string) (*PostgresContainer, error) {
 	return &PostgresContainer{
 		password: "pgpassword",
 		port:     port,
+		logfile:  logfile,
 	}, nil
 }
 
@@ -207,9 +208,9 @@ func (c *PostgresContainer) monitorLogs(ctx context.Context) {
 	}
 	defer i.Close()
 
-	file, err := os.OpenFile(c.logfile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+	file, err := os.Create(c.logfile)
 	if err != nil {
-		log.Printf("Could not create container log file: %v", err)
+		log.Printf("Could not create container log file %v: %v", c.logfile, err)
 		return
 	}
 	defer file.Close()
