@@ -1,3 +1,7 @@
+// The code in this plugin is highly inspired by and sometimes copied from
+// github.com/niftynei/glightning. Therefore pieces of this code are subject
+// to Copyright Lisa Neigut (Blockstream) 2019.
+
 package cln_plugin
 
 import (
