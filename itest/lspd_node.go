@@ -57,7 +57,7 @@ type lspBase struct {
 	postgresBackend *PostgresContainer
 }
 
-func newLspd(h *lntest.TestHarness, name string, envExt ...string) (*lspBase, error) {
+func newLspd(h *lntest.TestHarness, name string, lnd *string, cln *string, envExt ...string) (*lspBase, error) {
 	scriptDir := h.GetDirectory(fmt.Sprintf("lspd-%s", name))
 	log.Printf("%s: Creating LSPD in dir %s", name, scriptDir)
 
@@ -87,14 +87,28 @@ func newLspd(h *lntest.TestHarness, name string, envExt ...string) (*lspBase, er
 	eciesPubl := ecies.NewPrivateKeyFromBytes(lspdPrivateKeyBytes).PublicKey
 	host := "localhost"
 	grpcAddress := fmt.Sprintf("%s:%d", host, lspdPort)
+	var ext string
+	if lnd != nil {
+		ext = fmt.Sprintf(`"lnd": %s`, *lnd)
+	} else if cln != nil {
+		ext = fmt.Sprintf(`"cln": %s`, *cln)
+	} else {
+		h.T.Fatalf("%s: need either lnd or cln config", name)
+	}
+
+	nodes := fmt.Sprintf(
+		`NODES='[ { "lspdPrivateKey": "%x", "token": "hello", "host": "host:port",`+
+			` "publicChannelAmount": "1000183", "channelAmount": "100000", "channelPrivate": false,`+
+			` "targetConf": "6", "minHtlcMsat": "600", "baseFeeMsat": "1000", "feeRate": "0.000001",`+
+			` "timeLockDelta": "144", "channelFeePermyriad": "40", "channelMinimumFeeMsat": "2000000",`+
+			` "additionalChannelCapacity": "100000", "maxInactiveDuration": "3888000", %s}]'`,
+		lspdPrivateKeyBytes,
+		ext,
+	)
 	env := []string{
-		"NODE_NAME=lsp",
-		"NODE_PUBKEY=dunno",
-		"NODE_HOST=host:port",
-		"TOKEN=hello",
+		nodes,
 		fmt.Sprintf("DATABASE_URL=%s", postgresBackend.ConnectionString()),
 		fmt.Sprintf("LISTEN_ADDRESS=%s", grpcAddress),
-		fmt.Sprintf("LSPD_PRIVATE_KEY=%x", lspdPrivateKeyBytes),
 	}
 
 	env = append(env, envExt...)

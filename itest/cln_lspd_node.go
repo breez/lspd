@@ -59,12 +59,12 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode
 		"--dev-allowdustreserve=true",
 	}
 	lightningNode := lntest.NewClnNode(h, m, name, args...)
-	lspbase, err := newLspd(h, name,
-		"RUN_CLN=true",
-		fmt.Sprintf("CLN_PLUGIN_ADDRESS=%s", pluginAddress),
-		fmt.Sprintf("CLN_SOCKET_DIR=%s", lightningNode.SocketDir()),
-		fmt.Sprintf("CLN_SOCKET_NAME=%s", lightningNode.SocketFile()),
+	cln := fmt.Sprintf(
+		`{ "pluginAddress": "%s", "socketPath": "%s" }`,
+		pluginAddress,
+		filepath.Join(lightningNode.SocketDir(), lightningNode.SocketFile()),
 	)
+	lspbase, err := newLspd(h, name, nil, &cln)
 	if err != nil {
 		h.T.Fatalf("failed to initialize lspd")
 	}
