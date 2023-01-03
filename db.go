@@ -86,8 +86,8 @@ func insertChannel(initialChanID, confirmedChanId uint64, channelPoint string, n
 
 	query := `INSERT INTO
 	channels (initial_chanid, confirmed_chanid, channel_point, nodeid, last_update)
-	VALUES ($1, NULLIF($2, 0), $3, $4, $5)
-	ON CONFLICT (channel_point) DO UPDATE SET confirmed_chanid=NULLIF($2,0), last_update=$5`
+	VALUES ($1, NULLIF($2, 0::int8), $3, $4, $5)
+	ON CONFLICT (channel_point) DO UPDATE SET confirmed_chanid=NULLIF($2, 0::int8), last_update=$5`
 
 	c, err := pgxPool.Exec(context.Background(),
 		query, int64(initialChanID), int64(confirmedChanId), channelPoint, nodeID, lastUpdate)
