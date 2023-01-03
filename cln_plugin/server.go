@@ -154,16 +154,6 @@ func (s *server) HtlcStream(stream proto.ClnPlugin_HtlcStreamServer) error {
 		s.removeSubscriptionIfUnchanged(sb, nil)
 	}()
 
-	go func() {
-		// If the context is done, there will be no more connection with the
-		// client. Listen for context done and clean up the subscriber.
-		// Cleaning up the subscriber will make the HtlcStream function exit.
-		// (sb.done or sb.err)
-		<-stream.Context().Done()
-		log.Printf("HtlcStream context is done. Removing subscriber: %v", stream.Context().Err())
-		s.removeSubscriptionIfUnchanged(sb, stream.Context().Err())
-	}()
-
 	select {
 	case <-s.done:
 		log.Printf("HTLC server signalled done. Return EOF.")
@@ -174,6 +164,9 @@ func (s *server) HtlcStream(stream proto.ClnPlugin_HtlcStreamServer) error {
 	case err := <-sb.err:
 		log.Printf("HTLC stream signalled error. Return %v", err)
 		return err
+	case <-stream.Context().Done():
+		log.Printf("HtlcStream context is done. Return: %v", stream.Context().Err())
+		return stream.Context().Err()
 	}
 }
 
