@@ -7,14 +7,14 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
-	"strconv"
+	"strings"
 
 	"github.com/breez/lspd/btceclegacy"
 	lspdrpc "github.com/breez/lspd/rpc"
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -25,61 +25,61 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/caddyserver/certmagic"
 	"github.com/lightningnetwork/lnd/lnwire"
-	"golang.org/x/sync/singleflight"
-)
-
-const (
-	publicChannelAmount       = 1_000_183
-	targetConf                = 6
-	minHtlcMsat               = 600
-	baseFeeMsat               = 1000
-	feeRate                   = 0.000001
-	timeLockDelta             = 144
-	channelFeePermyriad       = 40
-	channelMinimumFeeMsat     = 2_000_000
-	additionalChannelCapacity = 100_000
-	maxInactiveDuration       = 45 * 24 * 3600
 )
 
 type server struct {
-	lis net.Listener
-	s   *grpc.Server
+	address         string
+	certmagicDomain string
+	lis             net.Listener
+	s               *grpc.Server
+	nodes           map[string]*node
 }
 
-var (
+type node struct {
 	client              LightningClient
-	openChannelReqGroup singleflight.Group
+	nodeName            string
+	nodePubkey          string
+	nodeConfig          *NodeConfig
 	privateKey          *btcec.PrivateKey
 	publicKey           *btcec.PublicKey
 	eciesPrivateKey     *ecies.PrivateKey
 	eciesPublicKey      *ecies.PublicKey
-	nodeName            = os.Getenv("NODE_NAME")
-	nodePubkey          = os.Getenv("NODE_PUBKEY")
-)
+	openChannelReqGroup singleflight.Group
+}
 
 func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInformationRequest) (*lspdrpc.ChannelInformationReply, error) {
+	node, err := getNode(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	return &lspdrpc.ChannelInformationReply{
-		Name:                  nodeName,
-		Pubkey:                nodePubkey,
-		Host:                  os.Getenv("NODE_HOST"),
-		ChannelCapacity:       publicChannelAmount,
-		TargetConf:            targetConf,
-		MinHtlcMsat:           minHtlcMsat,
-		BaseFeeMsat:           baseFeeMsat,
-		FeeRate:               feeRate,
-		TimeLockDelta:         timeLockDelta,
-		ChannelFeePermyriad:   channelFeePermyriad,
-		ChannelMinimumFeeMsat: channelMinimumFeeMsat,
-		LspPubkey:             publicKey.SerializeCompressed(),
-		MaxInactiveDuration:   maxInactiveDuration,
+		Name:                  node.nodeName,
+		Pubkey:                node.nodePubkey,
+		Host:                  node.nodeConfig.Host,
+		ChannelCapacity:       int64(node.nodeConfig.PublicChannelAmount),
+		TargetConf:            int32(node.nodeConfig.TargetConf),
+		MinHtlcMsat:           int64(node.nodeConfig.MinHtlcMsat),
+		BaseFeeMsat:           int64(node.nodeConfig.BaseFeeMsat),
+		FeeRate:               node.nodeConfig.FeeRate,
+		TimeLockDelta:         node.nodeConfig.TimeLockDelta,
+		ChannelFeePermyriad:   int64(node.nodeConfig.ChannelFeePermyriad),
+		ChannelMinimumFeeMsat: int64(node.nodeConfig.ChannelMinimumFeeMsat),
+		LspPubkey:             node.publicKey.SerializeCompressed(), // TODO: Is the publicKey different from the ecies public key?
+		MaxInactiveDuration:   int64(node.nodeConfig.MaxInactiveDuration),
 	}, nil
 }
 
 func (s *server) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymentRequest) (*lspdrpc.RegisterPaymentReply, error) {
-	data, err := ecies.Decrypt(eciesPrivateKey, in.Blob)
+	node, err := getNode(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := ecies.Decrypt(node.eciesPrivateKey, in.Blob)
 	if err != nil {
 		log.Printf("ecies.Decrypt(%x) error: %v", in.Blob, err)
-		data, err = btceclegacy.Decrypt(privateKey, in.Blob)
+		data, err = btceclegacy.Decrypt(node.privateKey, in.Blob)
 		if err != nil {
 			log.Printf("btcec.Decrypt(%x) error: %v", in.Blob, err)
 			return nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Blob, err)
@@ -94,7 +94,7 @@ func (s *server) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymen
 	}
 	log.Printf("RegisterPayment - Destination: %x, pi.PaymentHash: %x, pi.PaymentSecret: %x, pi.IncomingAmountMsat: %v, pi.OutgoingAmountMsat: %v",
 		pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat)
-	err = checkPayment(pi.IncomingAmountMsat, pi.OutgoingAmountMsat)
+	err = checkPayment(node.nodeConfig, pi.IncomingAmountMsat, pi.OutgoingAmountMsat)
 	if err != nil {
 		log.Printf("checkPayment(%v, %v) error: %v", pi.IncomingAmountMsat, pi.OutgoingAmountMsat, err)
 		return nil, fmt.Errorf("checkPayment(%v, %v) error: %v", pi.IncomingAmountMsat, pi.OutgoingAmountMsat, err)
@@ -108,36 +108,30 @@ func (s *server) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymen
 }
 
 func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest) (*lspdrpc.OpenChannelReply, error) {
-	r, err, _ := openChannelReqGroup.Do(in.Pubkey, func() (interface{}, error) {
+	node, err := getNode(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err, _ := node.openChannelReqGroup.Do(in.Pubkey, func() (interface{}, error) {
 		pubkey, err := hex.DecodeString(in.Pubkey)
 		if err != nil {
 			return nil, err
 		}
 
-		channelCount, err := client.GetNodeChannelCount(pubkey)
+		channelCount, err := node.client.GetNodeChannelCount(pubkey)
 		if err != nil {
 			return nil, err
 		}
-		channelAmount, err := strconv.ParseInt(os.Getenv("CHANNEL_AMOUNT"), 0, 64)
-		if err != nil || channelAmount <= 0 {
-			channelAmount = publicChannelAmount
-		}
-		log.Printf("os.Getenv(\"CHANNEL_AMOUNT\"): %v, channelAmount: %v, publicChannelAmount: %v, err: %v",
-			os.Getenv("CHANNEL_AMOUNT"), channelAmount, publicChannelAmount, err)
-		isPrivate, err := strconv.ParseBool(os.Getenv("CHANNEL_PRIVATE"))
-		if err != nil {
-			isPrivate = false
-		}
-		log.Printf("os.Getenv(\"CHANNEL_PRIVATE\"): %v, isPrivate: %v, err: %v",
-			os.Getenv("CHANNEL_PRIVATE"), isPrivate, err)
+
 		var outPoint *wire.OutPoint
 		if channelCount == 0 {
-			outPoint, err = client.OpenChannel(&OpenChannelRequest{
-				CapacitySat: uint64(channelAmount),
+			outPoint, err = node.client.OpenChannel(&OpenChannelRequest{
+				CapacitySat: node.nodeConfig.ChannelAmount,
 				Destination: pubkey,
-				TargetConf:  targetConf,
-				MinHtlcMsat: minHtlcMsat,
-				IsPrivate:   isPrivate,
+				TargetConf:  node.nodeConfig.TargetConf,
+				MinHtlcMsat: node.nodeConfig.MinHtlcMsat,
+				IsPrivate:   node.nodeConfig.ChannelPrivate,
 			})
 
 			if err != nil {
@@ -157,13 +151,13 @@ func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest
 	return r.(*lspdrpc.OpenChannelReply), err
 }
 
-func getSignedEncryptedData(in *lspdrpc.Encrypted) (string, []byte, bool, error) {
+func (n *node) getSignedEncryptedData(in *lspdrpc.Encrypted) (string, []byte, bool, error) {
 	usedEcies := true
-	signedBlob, err := ecies.Decrypt(eciesPrivateKey, in.Data)
+	signedBlob, err := ecies.Decrypt(n.eciesPrivateKey, in.Data)
 	if err != nil {
 		log.Printf("ecies.Decrypt(%x) error: %v", in.Data, err)
 		usedEcies = false
-		signedBlob, err = btceclegacy.Decrypt(privateKey, in.Data)
+		signedBlob, err = btceclegacy.Decrypt(n.privateKey, in.Data)
 		if err != nil {
 			log.Printf("btcec.Decrypt(%x) error: %v", in.Data, err)
 			return "", nil, usedEcies, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Data, err)
@@ -198,7 +192,12 @@ func getSignedEncryptedData(in *lspdrpc.Encrypted) (string, []byte, bool, error)
 }
 
 func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lspdrpc.Encrypted, error) {
-	nodeID, data, usedEcies, err := getSignedEncryptedData(in)
+	node, err := getNode(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	nodeID, data, usedEcies, err := node.getSignedEncryptedData(in)
 	if err != nil {
 		log.Printf("getSignedEncryptedData error: %v", err)
 		return nil, fmt.Errorf("getSignedEncryptedData error: %v", err)
@@ -214,7 +213,7 @@ func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lsp
 		log.Printf("getNotFakeChannels(%v) error: %v", checkChannelsRequest.FakeChannels, err)
 		return nil, fmt.Errorf("getNotFakeChannels(%v) error: %w", checkChannelsRequest.FakeChannels, err)
 	}
-	closedChannels, err := client.GetClosedChannels(nodeID, checkChannelsRequest.WaitingCloseChannels)
+	closedChannels, err := node.client.GetClosedChannels(nodeID, checkChannelsRequest.WaitingCloseChannels)
 	if err != nil {
 		log.Printf("GetClosedChannels(%v) error: %v", checkChannelsRequest.FakeChannels, err)
 		return nil, fmt.Errorf("GetClosedChannels(%v) error: %w", checkChannelsRequest.FakeChannels, err)
@@ -236,7 +235,7 @@ func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lsp
 
 	var encrypted []byte
 	if usedEcies {
-		encrypted, err = ecies.Encrypt(eciesPublicKey, dataReply)
+		encrypted, err = ecies.Encrypt(node.eciesPublicKey, dataReply)
 		if err != nil {
 			log.Printf("ecies.Encrypt() error: %v", err)
 			return nil, fmt.Errorf("ecies.Encrypt() error: %w", err)
@@ -269,35 +268,82 @@ func getNotFakeChannels(nodeID string, channelPoints map[string]uint64) (map[str
 	return r, nil
 }
 
-func NewGrpcServer() *server {
-	return &server{}
+func NewGrpcServer(configs []*NodeConfig, address string, certmagicDomain string) (*server, error) {
+	if len(configs) == 0 {
+		return nil, fmt.Errorf("no nodes supplied")
+	}
+
+	nodes := make(map[string]*node)
+	for _, config := range configs {
+		pk, err := hex.DecodeString(config.LspdPrivateKey)
+		if err != nil {
+			return nil, fmt.Errorf("hex.DecodeString(config.lspdPrivateKey=%v) error: %v", config.LspdPrivateKey, err)
+		}
+
+		eciesPrivateKey := ecies.NewPrivateKeyFromBytes(pk)
+		eciesPublicKey := eciesPrivateKey.PublicKey
+		privateKey, publicKey := btcec.PrivKeyFromBytes(pk)
+
+		// TODO: Set nodename & nodepubkey
+		node := &node{
+			nodeConfig:      config,
+			privateKey:      privateKey,
+			publicKey:       publicKey,
+			eciesPrivateKey: eciesPrivateKey,
+			eciesPublicKey:  eciesPublicKey,
+		}
+
+		if config.Lnd == nil && config.Cln == nil {
+			return nil, fmt.Errorf("node has to be either cln or lnd")
+		}
+
+		if config.Lnd != nil && config.Cln != nil {
+			return nil, fmt.Errorf("node cannot be both cln and lnd")
+		}
+
+		if config.Lnd != nil {
+			node.client, err = NewLndClient(config.Lnd)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if config.Cln != nil {
+			node.client, err = NewClnClient(config.Cln.SocketPath)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		_, exists := nodes[config.Token]
+		if exists {
+			return nil, fmt.Errorf("cannot have multiple nodes with the same token")
+		}
+
+		nodes[config.Token] = node
+	}
+
+	return &server{
+		address:         address,
+		certmagicDomain: certmagicDomain,
+		nodes:           nodes,
+	}, nil
 }
 
 func (s *server) Start() error {
-	pk, err := hex.DecodeString(os.Getenv("LSPD_PRIVATE_KEY"))
-	if err != nil {
-		log.Fatalf("hex.DecodeString(os.Getenv(\"LSPD_PRIVATE_KEY\")=%v) error: %v", os.Getenv("LSPD_PRIVATE_KEY"), err)
-	}
-
-	eciesPrivateKey = ecies.NewPrivateKeyFromBytes(pk)
-	eciesPublicKey = eciesPrivateKey.PublicKey
-	privateKey, publicKey = btcec.PrivKeyFromBytes(pk)
-
-	certmagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
-	address := os.Getenv("LISTEN_ADDRESS")
 	var lis net.Listener
-	if certmagicDomain == "" {
+	if s.certmagicDomain == "" {
 		var err error
-		lis, err = net.Listen("tcp", address)
+		lis, err = net.Listen("tcp", s.address)
 		if err != nil {
 			log.Fatalf("failed to listen: %v", err)
 		}
 	} else {
-		tlsConfig, err := certmagic.TLS([]string{certmagicDomain})
+		tlsConfig, err := certmagic.TLS([]string{s.certmagicDomain})
 		if err != nil {
 			log.Fatalf("failed to run certmagic: %v", err)
 		}
-		lis, err = tls.Listen("tcp", address, tlsConfig)
+		lis, err = tls.Listen("tcp", s.address, tlsConfig)
 		if err != nil {
 			log.Fatalf("failed to listen: %v", err)
 		}
@@ -307,9 +353,17 @@ func (s *server) Start() error {
 		grpc_middleware.WithUnaryServerChain(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 			if md, ok := metadata.FromIncomingContext(ctx); ok {
 				for _, auth := range md.Get("authorization") {
-					if auth == "Bearer "+os.Getenv("TOKEN") {
-						return handler(ctx, req)
+					if !strings.HasPrefix(auth, "Bearer ") {
+						continue
 					}
+
+					token := strings.Replace(auth, "Bearer ", "", 1)
+					node, ok := s.nodes[token]
+					if !ok {
+						continue
+					}
+
+					return handler(context.WithValue(ctx, "node", node), req)
 				}
 			}
 			return nil, status.Errorf(codes.PermissionDenied, "Not authorized")
@@ -331,4 +385,18 @@ func (s *server) Stop() {
 	if srv != nil {
 		srv.GracefulStop()
 	}
+}
+
+func getNode(ctx context.Context) (*node, error) {
+	n := ctx.Value("node")
+	if n == nil {
+		return nil, status.Errorf(codes.PermissionDenied, "Not authorized")
+	}
+
+	node, ok := n.(*node)
+	if !ok || node == nil {
+		return nil, status.Errorf(codes.PermissionDenied, "Not authorized")
+	}
+
+	return node, nil
 }

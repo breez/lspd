@@ -14,6 +14,7 @@ import (
 )
 
 type LndHtlcInterceptor struct {
+	config *NodeConfig
 	client *LndClient
 	initWg sync.WaitGroup
 	doneWg sync.WaitGroup
@@ -21,14 +22,22 @@ type LndHtlcInterceptor struct {
 	cancel context.CancelFunc
 }
 
-func NewLndHtlcInterceptor() *LndHtlcInterceptor {
+func NewLndHtlcInterceptor(conf *NodeConfig) (*LndHtlcInterceptor, error) {
+	if conf.Lnd == nil {
+		return nil, fmt.Errorf("missing lnd configuration")
+	}
+	client, err := NewLndClient(conf.Lnd)
+	if err != nil {
+		return nil, err
+	}
 	i := &LndHtlcInterceptor{
-		client: NewLndClient(),
+		config: conf,
+		client: client,
 	}
 
 	i.initWg.Add(1)
 
-	return i
+	return i, nil
 }
 
 func (i *LndHtlcInterceptor) Start() error {
@@ -47,9 +56,8 @@ func (i *LndHtlcInterceptor) Stop() error {
 	return nil
 }
 
-func (i *LndHtlcInterceptor) WaitStarted() LightningClient {
+func (i *LndHtlcInterceptor) WaitStarted() {
 	i.initWg.Wait()
-	return i.client
 }
 
 func (i *LndHtlcInterceptor) intercept() error {
@@ -113,7 +121,7 @@ func (i *LndHtlcInterceptor) intercept() error {
 
 			i.doneWg.Add(1)
 			go func() {
-				interceptResult := intercept(request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry)
+				interceptResult := intercept(i.client, i.config, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry)
 				switch interceptResult.action {
 				case INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{

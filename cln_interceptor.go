@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"sync"
 	"time"
 
@@ -24,6 +23,7 @@ import (
 )
 
 type ClnHtlcInterceptor struct {
+	config        *NodeConfig
 	pluginAddress string
 	client        *ClnClient
 	pluginClient  proto.ClnPluginClient
@@ -33,14 +33,23 @@ type ClnHtlcInterceptor struct {
 	cancel        context.CancelFunc
 }
 
-func NewClnHtlcInterceptor() *ClnHtlcInterceptor {
+func NewClnHtlcInterceptor(conf *NodeConfig) (*ClnHtlcInterceptor, error) {
+	if conf.Cln == nil {
+		return nil, fmt.Errorf("missing cln config")
+	}
+
+	client, err := NewClnClient(conf.Cln.SocketPath)
+	if err != nil {
+		return nil, err
+	}
 	i := &ClnHtlcInterceptor{
-		pluginAddress: os.Getenv("CLN_PLUGIN_ADDRESS"),
-		client:        NewClnClient(),
+		config:        conf,
+		pluginAddress: conf.Cln.PluginAddress,
+		client:        client,
 	}
 
 	i.initWg.Add(1)
-	return i
+	return i, nil
 }
 
 func (i *ClnHtlcInterceptor) Start() error {
@@ -135,7 +144,7 @@ func (i *ClnHtlcInterceptor) intercept() error {
 					interceptorClient.Send(i.defaultResolution(request))
 					i.doneWg.Done()
 				}
-				interceptResult := intercept(paymentHash, request.Onion.ForwardMsat, request.Htlc.CltvExpiry)
+				interceptResult := intercept(i.client, i.config, paymentHash, request.Onion.ForwardMsat, request.Htlc.CltvExpiry)
 				switch interceptResult.action {
 				case INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(i.resumeWithOnion(request, interceptResult))
@@ -165,9 +174,8 @@ func (i *ClnHtlcInterceptor) Stop() error {
 	return nil
 }
 
-func (i *ClnHtlcInterceptor) WaitStarted() LightningClient {
+func (i *ClnHtlcInterceptor) WaitStarted() {
 	i.initWg.Wait()
-	return i.client
 }
 
 func (i *ClnHtlcInterceptor) resumeWithOnion(request *proto.HtlcAccepted, interceptResult interceptResult) *proto.HtlcResolution {

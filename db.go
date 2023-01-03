@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
@@ -18,11 +17,11 @@ var (
 	pgxPool *pgxpool.Pool
 )
 
-func pgConnect() error {
+func pgConnect(databaseUrl string) error {
 	var err error
-	pgxPool, err = pgxpool.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+	pgxPool, err = pgxpool.Connect(context.Background(), databaseUrl)
 	if err != nil {
-		return fmt.Errorf("pgxpool.Connect(%v): %w", os.Getenv("DATABASE_URL"), err)
+		return fmt.Errorf("pgxpool.Connect(%v): %w", databaseUrl, err)
 	}
 	return nil
 }

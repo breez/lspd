@@ -3,11 +3,10 @@ package main
 import (
 	"context"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"log"
-	"os"
-	"strings"
 
 	"github.com/breez/lspd/basetypes"
 	"github.com/btcsuite/btcd/wire"
@@ -17,7 +16,6 @@ import (
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
 )
 
 type LndClient struct {
@@ -27,18 +25,28 @@ type LndClient struct {
 	conn                *grpc.ClientConn
 }
 
-func NewLndClient() *LndClient {
+func NewLndClient(conf *LndConfig) (*LndClient, error) {
+	cert, err := base64.StdEncoding.DecodeString(conf.Cert)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode cert: %w", err)
+	}
+
+	_, err = hex.DecodeString(conf.Macaroon)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode macaroon: %w", err)
+	}
+
 	// Creds file to connect to LND gRPC
 	cp := x509.NewCertPool()
-	if !cp.AppendCertsFromPEM([]byte(strings.Replace(os.Getenv("LND_CERT"), "\\n", "\n", -1))) {
-		log.Fatalf("credentials: failed to append certificates")
+	if !cp.AppendCertsFromPEM(cert) {
+		return nil, fmt.Errorf("credentials: failed to append certificates")
 	}
 	creds := credentials.NewClientTLSFromCert(cp, "")
-	macCred := NewMacaroonCredential(os.Getenv("LND_MACAROON_HEX"))
+	macCred := NewMacaroonCredential(conf.Macaroon)
 
 	// Address of an LND instance
 	conn, err := grpc.Dial(
-		os.Getenv("LND_ADDRESS"),
+		conf.Address,
 		grpc.WithTransportCredentials(creds),
 		grpc.WithPerRPCCredentials(macCred),
 	)
@@ -54,7 +62,7 @@ func NewLndClient() *LndClient {
 		routerClient:        routerClient,
 		chainNotifierClient: chainNotifierClient,
 		conn:                conn,
-	}
+	}, nil
 }
 
 func (c *LndClient) Close() {
@@ -152,13 +160,12 @@ func (c *LndClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetC
 
 func (c *LndClient) GetNodeChannelCount(nodeID []byte) (int, error) {
 	nodeIDStr := hex.EncodeToString(nodeID)
-	clientCtx := metadata.AppendToOutgoingContext(context.Background(), "macaroon", os.Getenv("LND_MACAROON_HEX"))
-	listResponse, err := c.client.ListChannels(clientCtx, &lnrpc.ListChannelsRequest{})
+	listResponse, err := c.client.ListChannels(context.Background(), &lnrpc.ListChannelsRequest{})
 	if err != nil {
 		return 0, err
 	}
 
-	pendingResponse, err := c.client.PendingChannels(clientCtx, &lnrpc.PendingChannelsRequest{})
+	pendingResponse, err := c.client.PendingChannels(context.Background(), &lnrpc.PendingChannelsRequest{})
 	if err != nil {
 		return 0, err
 	}

@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"os"
+	"path/filepath"
 
 	"github.com/breez/lspd/basetypes"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -24,15 +24,22 @@ var (
 	CLOSED_STATUSES  = []string{"CLOSED"}
 )
 
-func NewClnClient() *ClnClient {
-	rpcFile := os.Getenv("CLN_SOCKET_NAME")
-	lightningDir := os.Getenv("CLN_SOCKET_DIR")
+func NewClnClient(socketPath string) (*ClnClient, error) {
+	rpcFile := filepath.Base(socketPath)
+	if rpcFile == "" || rpcFile == "." {
+		return nil, fmt.Errorf("invalid socketPath '%s'", socketPath)
+	}
+	lightningDir := filepath.Dir(socketPath)
+	if lightningDir == "" || lightningDir == "." {
+		return nil, fmt.Errorf("invalid socketPath '%s'", socketPath)
+	}
+
 	client := glightning.NewLightning()
 	client.SetTimeout(60)
 	client.StartUp(rpcFile, lightningDir)
 	return &ClnClient{
 		client: client,
-	}
+	}, nil
 }
 
 func (c *ClnClient) GetInfo() (*GetInfoResult, error) {
