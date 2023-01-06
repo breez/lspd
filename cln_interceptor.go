@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 )
 
@@ -45,7 +46,15 @@ func NewClnHtlcInterceptor() *ClnHtlcInterceptor {
 func (i *ClnHtlcInterceptor) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	log.Printf("Dialing cln plugin on '%s'", i.pluginAddress)
-	conn, err := grpc.DialContext(ctx, i.pluginAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.DialContext(
+		ctx,
+		i.pluginAddress,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:    time.Duration(10) * time.Second,
+			Timeout: time.Duration(10) * time.Second,
+		}),
+	)
 	if err != nil {
 		log.Printf("grpc.Dial error: %v", err)
 		cancel()

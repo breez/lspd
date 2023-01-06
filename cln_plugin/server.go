@@ -9,6 +9,7 @@ import (
 
 	"github.com/breez/lspd/cln_plugin/proto"
 	grpc "google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 )
 
 // Internal htlc_accepted message meant for the sendQueue.
@@ -76,7 +77,15 @@ func (s *server) Start() error {
 
 	s.done = make(chan struct{})
 	s.newSubscriber = make(chan struct{})
-	s.grpcServer = grpc.NewServer()
+	s.grpcServer = grpc.NewServer(
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			Time:    time.Duration(1) * time.Second,
+			Timeout: time.Duration(10) * time.Second,
+		}),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime: time.Duration(1) * time.Second,
+		}),
+	)
 	s.mtx.Unlock()
 	proto.RegisterClnPluginServer(s.grpcServer, s)
 
