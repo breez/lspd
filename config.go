@@ -1,6 +1,8 @@
 package main
 
 type NodeConfig struct {
+	Name                      string     `json:name,omitempty`
+	NodePubkey                string     `json:nodePubkey,omitempty`
 	LspdPrivateKey            string     `json:"lspdPrivateKey"`
 	Token                     string     `json:"token"`
 	Host                      string     `json:"host"`

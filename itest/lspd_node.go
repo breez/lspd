@@ -97,11 +97,12 @@ func newLspd(h *lntest.TestHarness, name string, lnd *string, cln *string, envEx
 	}
 
 	nodes := fmt.Sprintf(
-		`NODES='[ { "lspdPrivateKey": "%x", "token": "hello", "host": "host:port",`+
+		`NODES='[ { "name": "%s", "lspdPrivateKey": "%x", "token": "hello", "host": "host:port",`+
 			` "publicChannelAmount": "1000183", "channelAmount": "100000", "channelPrivate": false,`+
 			` "targetConf": "6", "minHtlcMsat": "600", "baseFeeMsat": "1000", "feeRate": "0.000001",`+
 			` "timeLockDelta": "144", "channelFeePermyriad": "40", "channelMinimumFeeMsat": "2000000",`+
 			` "additionalChannelCapacity": "100000", "maxInactiveDuration": "3888000", %s}]'`,
+		name,
 		lspdPrivateKeyBytes,
 		ext,
 	)

@@ -37,8 +37,6 @@ type server struct {
 
 type node struct {
 	client              LightningClient
-	nodeName            string
-	nodePubkey          string
 	nodeConfig          *NodeConfig
 	privateKey          *btcec.PrivateKey
 	publicKey           *btcec.PublicKey
@@ -54,8 +52,8 @@ func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInfo
 	}
 
 	return &lspdrpc.ChannelInformationReply{
-		Name:                  node.nodeName,
-		Pubkey:                node.nodePubkey,
+		Name:                  node.nodeConfig.Name,
+		Pubkey:                node.nodeConfig.NodePubkey,
 		Host:                  node.nodeConfig.Host,
 		ChannelCapacity:       int64(node.nodeConfig.PublicChannelAmount),
 		TargetConf:            int32(node.nodeConfig.TargetConf),
@@ -284,7 +282,6 @@ func NewGrpcServer(configs []*NodeConfig, address string, certmagicDomain string
 		eciesPublicKey := eciesPrivateKey.PublicKey
 		privateKey, publicKey := btcec.PrivKeyFromBytes(pk)
 
-		// TODO: Set nodename & nodepubkey
 		node := &node{
 			nodeConfig:      config,
 			privateKey:      privateKey,
@@ -331,6 +328,23 @@ func NewGrpcServer(configs []*NodeConfig, address string, certmagicDomain string
 }
 
 func (s *server) Start() error {
+	// Make sure all nodes are available and set name and pubkey if not set
+	// in config.
+	for _, n := range s.nodes {
+		info, err := n.client.GetInfo()
+		if err != nil {
+			return fmt.Errorf("failed to get info from host %s", n.nodeConfig.Host)
+		}
+
+		if n.nodeConfig.Name == "" {
+			n.nodeConfig.Name = info.Alias
+		}
+
+		if n.nodeConfig.NodePubkey == "" {
+			n.nodeConfig.NodePubkey = info.Pubkey
+		}
+	}
+
 	var lis net.Listener
 	if s.certmagicDomain == "" {
 		var err error
