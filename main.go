@@ -112,7 +112,7 @@ func main() {
 	}()
 
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		sig := <-c
 		log.Printf("Received stop signal %v. Stopping.", sig)
