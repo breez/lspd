@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -26,19 +25,14 @@ type LndClient struct {
 }
 
 func NewLndClient(conf *LndConfig) (*LndClient, error) {
-	cert, err := base64.StdEncoding.DecodeString(conf.Cert)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode cert: %w", err)
-	}
-
-	_, err = hex.DecodeString(conf.Macaroon)
+	_, err := hex.DecodeString(conf.Macaroon)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode macaroon: %w", err)
 	}
 
 	// Creds file to connect to LND gRPC
 	cp := x509.NewCertPool()
-	if !cp.AppendCertsFromPEM(cert) {
+	if !cp.AppendCertsFromPEM([]byte(conf.Cert)) {
 		return nil, fmt.Errorf("credentials: failed to append certificates")
 	}
 	creds := credentials.NewClientTLSFromCert(cp, "")

@@ -1,7 +1,8 @@
 package itest
 
 import (
-	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -48,12 +49,11 @@ func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode
 	}
 
 	lightningNode := lntest.NewLndNode(h, m, name, args...)
-	lnd := fmt.Sprintf(
-		`{ "address": "%s", "cert": "%s", "macaroon": "%x" }`,
-		lightningNode.GrpcHost(),
-		base64.StdEncoding.EncodeToString(lightningNode.TlsCert()),
-		lightningNode.Macaroon(),
-	)
+	j, _ := json.Marshal(map[string]string{
+		"address":  lightningNode.GrpcHost(),
+		"cert":     lightningNode.TlsCert(),
+		"macaroon": hex.EncodeToString(lightningNode.Macaroon())})
+	lnd := string(j)
 	lspBase, err := newLspd(h, name, &lnd, nil)
 	if err != nil {
 		h.T.Fatalf("failed to initialize lspd")
@@ -113,12 +113,11 @@ func (c *LndLspNode) Start() {
 		split := strings.Split(string(scriptFile), "\n")
 		for i, s := range split {
 			if strings.HasPrefix(s, "export NODES") {
-				ext := fmt.Sprintf(
-					`"lnd": { "address": "%s", "cert": "%s", "macaroon": "%x" }}]'`,
-					c.lightningNode.GrpcHost(),
-					base64.StdEncoding.EncodeToString(c.lightningNode.TlsCert()),
-					c.lightningNode.Macaroon(),
-				)
+				j, _ := json.Marshal(map[string]string{
+					"address":  c.lightningNode.GrpcHost(),
+					"cert":     c.lightningNode.TlsCert(),
+					"macaroon": hex.EncodeToString(c.lightningNode.Macaroon())})
+				ext := fmt.Sprintf(`"lnd": %s}]`, string(j))
 				start, _, _ := strings.Cut(s, `"lnd"`)
 
 				split[i] = start + ext
