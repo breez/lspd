@@ -14,12 +14,13 @@ import (
 )
 
 type LndHtlcInterceptor struct {
-	config *NodeConfig
-	client *LndClient
-	initWg sync.WaitGroup
-	doneWg sync.WaitGroup
-	ctx    context.Context
-	cancel context.CancelFunc
+	config        *NodeConfig
+	client        *LndClient
+	stopRequested bool
+	initWg        sync.WaitGroup
+	doneWg        sync.WaitGroup
+	ctx           context.Context
+	cancel        context.CancelFunc
 }
 
 func NewLndHtlcInterceptor(conf *NodeConfig) (*LndHtlcInterceptor, error) {
@@ -44,6 +45,7 @@ func (i *LndHtlcInterceptor) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	i.ctx = ctx
 	i.cancel = cancel
+	i.stopRequested = false
 	go forwardingHistorySynchronize(ctx, i.client)
 	go channelsSynchronize(ctx, i.client)
 
@@ -51,8 +53,14 @@ func (i *LndHtlcInterceptor) Start() error {
 }
 
 func (i *LndHtlcInterceptor) Stop() error {
-	i.cancel()
+	// Setting stopRequested to true will make the interceptor stop receiving.
+	i.stopRequested = true
+
+	// Wait until all already received htlcs are handled, responses sent back.
 	i.doneWg.Wait()
+
+	// Close the grpc connection.
+	i.cancel()
 	return nil
 }
 
@@ -91,6 +99,13 @@ func (i *LndHtlcInterceptor) intercept() error {
 			if !inited {
 				inited = true
 				i.initWg.Done()
+			}
+
+			// Stop receiving if stop if requested. The defer func on top of this
+			// function will assure all htlcs that are currently being processed
+			// will complete.
+			if i.stopRequested {
+				return nil
 			}
 
 			request, err := interceptorClient.Recv()

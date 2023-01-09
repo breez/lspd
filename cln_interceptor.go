@@ -29,6 +29,7 @@ type ClnHtlcInterceptor struct {
 	pluginClient  proto.ClnPluginClient
 	initWg        sync.WaitGroup
 	doneWg        sync.WaitGroup
+	stopRequested bool
 	ctx           context.Context
 	cancel        context.CancelFunc
 }
@@ -73,6 +74,7 @@ func (i *ClnHtlcInterceptor) Start() error {
 	i.pluginClient = proto.NewClnPluginClient(conn)
 	i.ctx = ctx
 	i.cancel = cancel
+	i.stopRequested = false
 	return i.intercept()
 }
 
@@ -108,6 +110,13 @@ func (i *ClnHtlcInterceptor) intercept() error {
 			if !inited {
 				inited = true
 				i.initWg.Done()
+			}
+
+			// Stop receiving if stop if requested. The defer func on top of this
+			// function will assure all htlcs that are currently being processed
+			// will complete.
+			if i.stopRequested {
+				return nil
 			}
 
 			request, err := interceptorClient.Recv()
@@ -169,8 +178,14 @@ func (i *ClnHtlcInterceptor) intercept() error {
 }
 
 func (i *ClnHtlcInterceptor) Stop() error {
-	i.cancel()
+	// Setting stopRequested to true will make the interceptor stop receiving.
+	i.stopRequested = true
+
+	// Wait until all already received htlcs are handled, responses sent back.
 	i.doneWg.Wait()
+
+	// Close the grpc connection.
+	i.cancel()
 	return nil
 }
 
