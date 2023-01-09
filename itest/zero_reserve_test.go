@@ -54,7 +54,7 @@ func testZeroReserve(p *testParams) {
 
 	// Make sure balance is correct
 	chans := p.BreezClient().Node().GetChannels()
-	assert.Len(p.t, chans, 1)
+	assert.Equal(p.t, 1, len(chans))
 
 	c := chans[0]
 	assert.Equal(p.t, c.RemoteReserveMsat, c.CapacityMsat/100)

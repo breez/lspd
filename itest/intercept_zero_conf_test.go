@@ -59,7 +59,7 @@ func testOpenZeroConfChannelOnReceive(p *testParams) {
 
 	// Make sure capacity is correct
 	chans := p.BreezClient().Node().GetChannels()
-	assert.Len(p.t, chans, 1)
+	assert.Equal(p.t, 1, len(chans))
 	c := chans[0]
 	AssertChannelCapacity(p.t, outerAmountMsat, c.CapacityMsat)
 }
@@ -114,7 +114,7 @@ func testOpenZeroConfSingleHtlc(p *testParams) {
 
 	// Make sure capacity is correct
 	chans := p.BreezClient().Node().GetChannels()
-	assert.Len(p.t, chans, 1)
+	assert.Equal(p.t, 1, len(chans))
 	c := chans[0]
 	AssertChannelCapacity(p.t, outerAmountMsat, c.CapacityMsat)
 }
