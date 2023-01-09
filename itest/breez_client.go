@@ -2,6 +2,7 @@ package itest
 
 import (
 	"crypto/sha256"
+	"log"
 
 	"github.com/breez/lntest"
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -61,10 +62,24 @@ func GenerateInvoices(n BreezClient, req generateInvoicesRequest) (invoice, invo
 		},
 	})
 
+	log.Printf(
+		"Encoding outer invoice. privkey: '%x', invoice: '%+v', original bolt11: '%s'",
+		n.Node().PrivateKey().Serialize(),
+		outerInvoiceRaw,
+		innerInvoice.Bolt11,
+	)
 	outerInvoice, err := outerInvoiceRaw.Encode(zpay32.MessageSigner{
 		SignCompact: func(msg []byte) ([]byte, error) {
 			hash := sha256.Sum256(msg)
-			return ecdsa.SignCompact(n.Node().PrivateKey(), hash[:], true)
+			sig, err := ecdsa.SignCompact(n.Node().PrivateKey(), hash[:], true)
+			log.Printf(
+				"sign outer invoice. msg: '%x', hash: '%x', sig: '%x', err: %v",
+				msg,
+				hash,
+				sig,
+				err,
+			)
+			return sig, err
 		},
 	})
 	lntest.CheckError(n.Harness().T, err)
