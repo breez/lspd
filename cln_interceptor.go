@@ -133,11 +133,26 @@ func (i *ClnHtlcInterceptor) intercept() error {
 				log.Printf("unexpected error in interceptor.Recv() %v", err)
 				break
 			}
+			nextHop := "<unknown>"
+			channels, err := i.client.client.GetChannel(request.Onion.ShortChannelId)
+			if err != nil {
+				for _, c := range channels {
+					if c.Source == i.config.NodePubkey {
+						nextHop = c.Destination
+						break
+					}
+					if c.Destination == i.config.NodePubkey {
+						nextHop = c.Source
+						break
+					}
+				}
+			}
 
-			log.Printf("correlationid: %v\nhtlc: %v\nchanID: %v\nincoming amount: %v\noutgoing amount: %v\nincoming expiry: %v\noutgoing expiry: %v\npaymentHash: %v\nonionBlob: %v\n\n",
+			log.Printf("correlationid: %v\nhtlc: %v\nchanID: %v\nnextHop: %v\nincoming amount: %v\noutgoing amount: %v\nincoming expiry: %v\noutgoing expiry: %v\npaymentHash: %v\nonionBlob: %v\n\n",
 				request.Correlationid,
 				request.Htlc,
 				request.Onion.ShortChannelId,
+				nextHop,
 				request.Htlc.AmountMsat, //with fees
 				request.Onion.ForwardMsat,
 				request.Htlc.CltvExpiryRelative,
@@ -153,7 +168,7 @@ func (i *ClnHtlcInterceptor) intercept() error {
 					interceptorClient.Send(i.defaultResolution(request))
 					i.doneWg.Done()
 				}
-				interceptResult := intercept(i.client, i.config, paymentHash, request.Onion.ForwardMsat, request.Htlc.CltvExpiry)
+				interceptResult := intercept(i.client, i.config, nextHop, paymentHash, request.Onion.ForwardMsat, request.Htlc.CltvExpiry)
 				switch interceptResult.action {
 				case INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(i.resumeWithOnion(request, interceptResult))

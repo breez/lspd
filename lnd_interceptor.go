@@ -123,9 +123,21 @@ func (i *LndHtlcInterceptor) intercept() error {
 				break
 			}
 
-			fmt.Printf("htlc: %v\nchanID: %v\nincoming amount: %v\noutgoing amount: %v\nincomin expiry: %v\noutgoing expiry: %v\npaymentHash: %x\nonionBlob: %x\n\n",
+			nextHop := "<unknown>"
+			chanInfo, err := i.client.client.GetChanInfo(context.Background(), &lnrpc.ChanInfoRequest{ChanId: request.OutgoingRequestedChanId})
+			if err == nil && chanInfo != nil {
+				if chanInfo.Node1Pub == i.config.NodePubkey {
+					nextHop = chanInfo.Node2Pub
+				}
+				if chanInfo.Node2Pub == i.config.NodePubkey {
+					nextHop = chanInfo.Node1Pub
+				}
+			}
+
+			fmt.Printf("htlc: %v\nchanID: %v\nnextHop: %v\nincoming amount: %v\noutgoing amount: %v\nincomin expiry: %v\noutgoing expiry: %v\npaymentHash: %x\nonionBlob: %x\n\n",
 				request.IncomingCircuitKey.HtlcId,
 				request.IncomingCircuitKey.ChanId,
+				nextHop,
 				request.IncomingAmountMsat,
 				request.OutgoingAmountMsat,
 				request.IncomingExpiry,
@@ -136,7 +148,7 @@ func (i *LndHtlcInterceptor) intercept() error {
 
 			i.doneWg.Add(1)
 			go func() {
-				interceptResult := intercept(i.client, i.config, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry)
+				interceptResult := intercept(i.client, i.config, nextHop, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry)
 				switch interceptResult.action {
 				case INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
