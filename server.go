@@ -206,18 +206,13 @@ func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lsp
 		log.Printf("proto.Unmarshal(%x) error: %v", data, err)
 		return nil, fmt.Errorf("proto.Unmarshal(%x) error: %w", data, err)
 	}
-	notFakeChannels, err := getNotFakeChannels(nodeID, checkChannelsRequest.FakeChannels)
-	if err != nil {
-		log.Printf("getNotFakeChannels(%v) error: %v", checkChannelsRequest.FakeChannels, err)
-		return nil, fmt.Errorf("getNotFakeChannels(%v) error: %w", checkChannelsRequest.FakeChannels, err)
-	}
 	closedChannels, err := node.client.GetClosedChannels(nodeID, checkChannelsRequest.WaitingCloseChannels)
 	if err != nil {
 		log.Printf("GetClosedChannels(%v) error: %v", checkChannelsRequest.FakeChannels, err)
 		return nil, fmt.Errorf("GetClosedChannels(%v) error: %w", checkChannelsRequest.FakeChannels, err)
 	}
 	checkChannelsReply := lspdrpc.CheckChannelsReply{
-		NotFakeChannels: notFakeChannels,
+		NotFakeChannels: make(map[string]uint64),
 		ClosedChannels:  closedChannels,
 	}
 	dataReply, err := proto.Marshal(&checkChannelsReply)
@@ -247,23 +242,6 @@ func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lsp
 	}
 
 	return &lspdrpc.Encrypted{Data: encrypted}, nil
-}
-
-func getNotFakeChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error) {
-	r := make(map[string]uint64)
-	if len(channelPoints) == 0 {
-		return r, nil
-	}
-	channels, err := confirmedChannels(nodeID)
-	if err != nil {
-		return nil, err
-	}
-	for channelPoint, chanID := range channels {
-		if _, ok := channelPoints[channelPoint]; ok {
-			r[channelPoint] = chanID
-		}
-	}
-	return r, nil
 }
 
 func NewGrpcServer(configs []*NodeConfig, address string, certmagicDomain string) (*server, error) {

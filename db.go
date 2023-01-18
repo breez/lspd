@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"time"
@@ -99,35 +98,6 @@ func insertChannel(initialChanID, confirmedChanId uint64, channelPoint string, n
 	log.Printf("insertChannel(%v, %v, %x) result: %v",
 		initialChanID, confirmedChanId, nodeID, c.String())
 	return nil
-}
-
-func confirmedChannels(sNodeID string) (map[string]uint64, error) {
-	nodeID, err := hex.DecodeString(sNodeID)
-	if err != nil {
-		return nil, fmt.Errorf("hex.DecodeString(%v) error: %w", sNodeID, err)
-	}
-	rows, err := pgxPool.Query(context.Background(),
-		`SELECT confirmed_chanid, channel_point
-	  FROM channels
-	  WHERE nodeid=$1 AND confirmed_chanid IS NOT NULL`,
-		nodeID)
-	if err != nil {
-		return nil, fmt.Errorf("channels(%x) error: %w", nodeID, err)
-	}
-	defer rows.Close()
-	chans := make(map[string]uint64)
-	for rows.Next() {
-		var (
-			chanID       int64
-			channelPoint string
-		)
-		err = rows.Scan(&chanID, &channelPoint)
-		if err != nil {
-			return nil, fmt.Errorf("channels(%x) rows.Scan error: %w", nodeID, err)
-		}
-		chans[channelPoint] = uint64(chanID)
-	}
-	return chans, rows.Err()
 }
 
 func lastForwardingEvent() (int64, error) {
