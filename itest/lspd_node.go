@@ -45,7 +45,6 @@ type LspNode interface {
 	Rpc() lspd.ChannelOpenerClient
 	NodeId() []byte
 	LightningNode() lntest.LightningNode
-	SupportsChargingFees() bool
 	PostgresBackend() *PostgresContainer
 }
 

@@ -22,7 +22,7 @@ func testNoBalance(p *testParams) {
 
 	log.Printf("Adding bob's invoices")
 	outerAmountMsat := uint64(2100000)
-	innerAmountMsat, lspAmountMsat := calculateInnerAmountMsat(p.lsp, outerAmountMsat)
+	innerAmountMsat := calculateInnerAmountMsat(p.lsp, outerAmountMsat)
 	description := "Please pay me"
 	innerInvoice, outerInvoice := GenerateInvoices(p.BreezClient(),
 		generateInvoicesRequest{
@@ -31,6 +31,7 @@ func testNoBalance(p *testParams) {
 			description:     description,
 			lsp:             p.lsp,
 		})
+	p.BreezClient().SetHtlcAcceptor(innerAmountMsat)
 
 	log.Print("Connecting bob to lspd")
 	p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
@@ -41,7 +42,7 @@ func testNoBalance(p *testParams) {
 		PaymentSecret:      innerInvoice.paymentSecret,
 		Destination:        p.BreezClient().Node().NodeId(),
 		IncomingAmountMsat: int64(outerAmountMsat),
-		OutgoingAmountMsat: int64(lspAmountMsat),
+		OutgoingAmountMsat: int64(innerAmountMsat),
 	})
 
 	// TODO: Fix race waiting for htlc interceptor.

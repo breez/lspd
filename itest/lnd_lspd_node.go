@@ -230,10 +230,6 @@ func (c *LndLspNode) Rpc() lspd.ChannelOpenerClient {
 	return c.runtime.rpc
 }
 
-func (l *LndLspNode) SupportsChargingFees() bool {
-	return true
-}
-
 func (l *LndLspNode) NodeId() []byte {
 	return l.lightningNode.NodeId()
 }

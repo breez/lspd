@@ -18,6 +18,7 @@ type BreezClient interface {
 	Node() lntest.LightningNode
 	Start()
 	Stop() error
+	SetHtlcAcceptor(totalMsat uint64)
 }
 
 type generateInvoicesRequest struct {

@@ -211,7 +211,7 @@ func (i *ClnHtlcInterceptor) resumeWithOnion(request *proto.HtlcAccepted, interc
 		log.Printf("resumeWithOnion: hex.DecodeString(%v) error: %v", request.Onion.Payload, err)
 		return i.failWithCode(request, interceptor.FAILURE_TEMPORARY_CHANNEL_FAILURE)
 	}
-	newPayload, err := encodePayloadWithNextHop(payload, interceptResult.ChannelId)
+	newPayload, err := encodePayloadWithNextHop(payload, interceptResult.ChannelId, interceptResult.AmountMsat)
 	if err != nil {
 		log.Printf("encodePayloadWithNextHop error: %v", err)
 		return i.failWithCode(request, interceptor.FAILURE_TEMPORARY_CHANNEL_FAILURE)
@@ -254,7 +254,7 @@ func (i *ClnHtlcInterceptor) failWithCode(request *proto.HtlcAccepted, code inte
 	}
 }
 
-func encodePayloadWithNextHop(payload []byte, channelId uint64) ([]byte, error) {
+func encodePayloadWithNextHop(payload []byte, channelId uint64, amountToForward uint64) ([]byte, error) {
 	bufReader := bytes.NewBuffer(payload)
 	var b [8]byte
 	varInt, err := sphinx.ReadVarInt(bufReader, &b)
@@ -274,15 +274,26 @@ func encodePayloadWithNextHop(payload []byte, channelId uint64) ([]byte, error) 
 	}
 
 	tt := record.NewNextHopIDRecord(&channelId)
-	buf := bytes.NewBuffer([]byte{})
-	if err := tt.Encode(buf); err != nil {
+	ttbuf := bytes.NewBuffer([]byte{})
+	if err := tt.Encode(ttbuf); err != nil {
 		return nil, fmt.Errorf("failed to encode nexthop %x: %v", innerPayload[:], err)
+	}
+
+	amt := record.NewAmtToFwdRecord(&amountToForward)
+	amtbuf := bytes.NewBuffer([]byte{})
+	if err := amt.Encode(amtbuf); err != nil {
+		return nil, fmt.Errorf("failed to encode AmtToFwd %x: %v", innerPayload[:], err)
 	}
 
 	uTlvMap := make(map[uint64][]byte)
 	for t, b := range tlvMap {
 		if t == record.NextHopOnionType {
-			uTlvMap[uint64(t)] = buf.Bytes()
+			uTlvMap[uint64(t)] = ttbuf.Bytes()
+			continue
+		}
+
+		if t == record.AmtOnionType {
+			uTlvMap[uint64(t)] = amtbuf.Bytes()
 			continue
 		}
 		uTlvMap[uint64(t)] = b

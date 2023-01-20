@@ -214,9 +214,6 @@ func (l *ClnLspNode) LightningNode() lntest.LightningNode {
 	return l.lightningNode
 }
 
-func (l *ClnLspNode) SupportsChargingFees() bool {
-	return false
-}
 func (l *ClnLspNode) PostgresBackend() *PostgresContainer {
 	return l.lspBase.postgresBackend
 }
