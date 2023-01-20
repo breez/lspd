@@ -51,7 +51,7 @@ func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode
 	lightningNode := lntest.NewLndNode(h, m, name, args...)
 	j, _ := json.Marshal(map[string]string{
 		"address":  lightningNode.GrpcHost(),
-		"cert":     lightningNode.TlsCert(),
+		"cert":     string(lightningNode.TlsCert()),
 		"macaroon": hex.EncodeToString(lightningNode.Macaroon())})
 	lnd := string(j)
 	lspBase, err := newLspd(h, name, &lnd, nil)
@@ -115,9 +115,9 @@ func (c *LndLspNode) Start() {
 			if strings.HasPrefix(s, "export NODES") {
 				j, _ := json.Marshal(map[string]string{
 					"address":  c.lightningNode.GrpcHost(),
-					"cert":     c.lightningNode.TlsCert(),
+					"cert":     string(c.lightningNode.TlsCert()),
 					"macaroon": hex.EncodeToString(c.lightningNode.Macaroon())})
-				ext := fmt.Sprintf(`"lnd": %s}]`, string(j))
+				ext := fmt.Sprintf(`"lnd": %s}]'`, string(j))
 				start, _, _ := strings.Cut(s, `"lnd"`)
 
 				split[i] = start + ext
