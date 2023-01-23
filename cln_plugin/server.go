@@ -35,6 +35,7 @@ type server struct {
 	newSubscriber     chan struct{}
 	started           chan struct{}
 	done              chan struct{}
+	completed         chan struct{}
 	startError        chan error
 	sendQueue         chan *htlcAcceptedMsg
 	recvQueue         chan *htlcResultMsg
@@ -76,6 +77,7 @@ func (s *server) Start() error {
 	}
 
 	s.done = make(chan struct{})
+	s.completed = make(chan struct{})
 	s.newSubscriber = make(chan struct{})
 	s.grpcServer = grpc.NewServer(
 		grpc.KeepaliveParams(keepalive.ServerParameters{
@@ -93,7 +95,9 @@ func (s *server) Start() error {
 	go s.listenHtlcRequests()
 	go s.listenHtlcResponses()
 	close(s.started)
-	return s.grpcServer.Serve(lis)
+	err = s.grpcServer.Serve(lis)
+	close(s.completed)
+	return err
 }
 
 // Waits until the server has started, or errored during startup.
@@ -119,6 +123,7 @@ func (s *server) Stop() {
 	s.grpcServer = nil
 
 	close(s.done)
+	<-s.completed
 	log.Printf("Server stopped.")
 }
 

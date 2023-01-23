@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"syscall"
 
 	"github.com/breez/lntest"
 	lspd "github.com/breez/lspd/rpc"
@@ -109,6 +110,7 @@ func (c *ClnLspNode) Start() {
 	})
 
 	cmd := exec.CommandContext(c.harness.Ctx, c.lspBase.scriptFilePath)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	logFile, err := os.Create(c.logFilePath)
 	if err != nil {
 		lntest.PerformCleanup(cleanups)
@@ -136,7 +138,7 @@ func (c *ClnLspNode) Start() {
 				return nil
 			}
 
-			proc.Kill()
+			syscall.Kill(-proc.Pid, syscall.SIGINT)
 
 			log.Printf("About to wait for lspd to exit")
 			status, err := proc.Wait()

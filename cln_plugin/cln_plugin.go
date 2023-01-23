@@ -66,6 +66,10 @@ func (c *ClnPlugin) Start() {
 	c.setupLogging()
 	go c.listenRequests()
 	<-c.done
+	s := c.server
+	if s != nil {
+		<-s.completed
+	}
 }
 
 // Stops the cln plugin. Drops any remaining work immediately.
