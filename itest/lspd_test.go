@@ -97,4 +97,8 @@ var allTestCases = []*testCase{
 		name: "testProbing",
 		test: testProbing,
 	},
+	{
+		name: "testInvalidCltv",
+		test: testInvalidCltv,
+	},
 }

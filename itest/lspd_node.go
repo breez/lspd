@@ -30,7 +30,7 @@ var (
 var (
 	lspBaseFeeMsat uint32 = 1000
 	lspFeeRatePpm  uint32 = 1
-	lspCltvDelta   uint16 = 40
+	lspCltvDelta   uint16 = 144
 )
 
 type LspNode interface {

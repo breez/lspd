@@ -45,7 +45,7 @@ type interceptResult struct {
 	onionBlob    []byte
 }
 
-func intercept(client LightningClient, config *NodeConfig, nextHop string, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32) interceptResult {
+func intercept(client LightningClient, config *NodeConfig, nextHop string, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) interceptResult {
 	reqPaymentHashStr := hex.EncodeToString(reqPaymentHash)
 	resp, _, _ := payHashGroup.Do(reqPaymentHashStr, func() (interface{}, error) {
 		paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, channelPoint, err := paymentInfo(reqPaymentHash)
@@ -66,6 +66,13 @@ func intercept(client LightningClient, config *NodeConfig, nextHop string, reqPa
 
 		if channelPoint == nil {
 			if bytes.Equal(paymentHash, reqPaymentHash) {
+				if int64(reqIncomingExpiry)-int64(reqOutgoingExpiry) < int64(config.TimeLockDelta) {
+					return interceptResult{
+						action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+						failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					}, nil
+				}
+
 				channelPoint, err = openChannel(client, config, reqPaymentHash, destination, incomingAmountMsat)
 				if err != nil {
 					log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)

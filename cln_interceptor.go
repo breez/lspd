@@ -168,7 +168,7 @@ func (i *ClnHtlcInterceptor) intercept() error {
 					interceptorClient.Send(i.defaultResolution(request))
 					i.doneWg.Done()
 				}
-				interceptResult := intercept(i.client, i.config, nextHop, paymentHash, request.Onion.ForwardMsat, request.Htlc.CltvExpiry)
+				interceptResult := intercept(i.client, i.config, nextHop, paymentHash, request.Onion.ForwardMsat, request.Onion.OutgoingCltvValue, request.Htlc.CltvExpiry)
 				switch interceptResult.action {
 				case INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(i.resumeWithOnion(request, interceptResult))

@@ -148,7 +148,7 @@ func (i *LndHtlcInterceptor) intercept() error {
 
 			i.doneWg.Add(1)
 			go func() {
-				interceptResult := intercept(i.client, i.config, nextHop, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry)
+				interceptResult := intercept(i.client, i.config, nextHop, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry, request.IncomingExpiry)
 				switch interceptResult.action {
 				case INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
