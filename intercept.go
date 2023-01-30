@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"log"
 	"math/big"
 	"time"
 
+	"github.com/breez/lspd/chain"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
 	sphinx "github.com/lightningnetwork/lightning-onion"
@@ -34,6 +36,7 @@ var (
 )
 
 var payHashGroup singleflight.Group
+var feeEstimator chain.FeeEstimator
 
 type interceptResult struct {
 	action       interceptAction
@@ -236,12 +239,41 @@ func openChannel(client LightningClient, config *NodeConfig, paymentHash, destin
 	if capacity == config.PublicChannelAmount {
 		capacity++
 	}
+
+	var targetConf *uint32
+	confStr := "<nil>"
+	var feeEstimation *float64
+	feeStr := "<nil>"
+	if feeEstimator != nil {
+		fee, err := feeEstimator.EstimateFeeRate(
+			context.Background(),
+			chain.FeeStrategyMinimum,
+		)
+		if err == nil {
+			feeEstimation = &fee.SatPerVByte
+			feeStr = fmt.Sprintf("%.5f", *feeEstimation)
+		} else {
+			log.Printf("Error estimating chain fee, fallback to target conf: %v", err)
+			targetConf = &config.TargetConf
+			confStr = fmt.Sprintf("%v", *targetConf)
+		}
+	}
+
+	log.Printf(
+		"Opening zero conf channel. Destination: %x, capacity: %v, fee: %s, targetConf: %s",
+		destination,
+		capacity,
+		feeStr,
+		confStr,
+	)
 	channelPoint, err := client.OpenChannel(&OpenChannelRequest{
-		Destination: destination,
-		CapacitySat: uint64(capacity),
-		TargetConf:  6,
-		IsPrivate:   true,
-		IsZeroConf:  true,
+		Destination:    destination,
+		CapacitySat:    uint64(capacity),
+		MinConfs:       6,
+		IsPrivate:      true,
+		IsZeroConf:     true,
+		FeeSatPerVByte: feeEstimation,
+		TargetConf:     targetConf,
 	})
 	if err != nil {
 		log.Printf("client.OpenChannelSync(%x, %v) error: %v", destination, capacity, err)

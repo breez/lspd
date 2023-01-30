@@ -9,6 +9,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/breez/lspd/mempool"
 	"github.com/btcsuite/btcd/btcec/v2"
 )
 
@@ -31,6 +32,17 @@ func main() {
 
 	if len(nodes) == 0 {
 		log.Fatalf("need at least one node configured in NODES.")
+	}
+
+	useMempool := os.Getenv("USE_MEMPOOL_FEE_ESTIMATION") == "true"
+	if useMempool {
+		mempoolUrl := os.Getenv("MEMPOOL_API_BASE_URL")
+		feeEstimator, err = mempool.NewMempoolClient(mempoolUrl)
+		if err != nil {
+			log.Fatalf("failed to initialize mempool client: %v", err)
+		}
+
+		log.Printf("using mempool api for fee estimation: %v", mempoolUrl)
 	}
 
 	var interceptors []HtlcInterceptor

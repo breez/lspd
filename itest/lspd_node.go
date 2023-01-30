@@ -110,6 +110,8 @@ func newLspd(h *lntest.TestHarness, name string, lnd *string, cln *string, envEx
 		nodes,
 		fmt.Sprintf("DATABASE_URL=%s", postgresBackend.ConnectionString()),
 		fmt.Sprintf("LISTEN_ADDRESS=%s", grpcAddress),
+		fmt.Sprintf("USE_MEMPOOL_FEE_ESTIMATION=true"),
+		fmt.Sprintf("MEMPOOL_API_BASE_URL=https://mempool.space/api/v1/"),
 	}
 
 	env = append(env, envExt...)

@@ -16,12 +16,14 @@ type GetChannelResult struct {
 }
 
 type OpenChannelRequest struct {
-	Destination []byte
-	CapacitySat uint64
-	MinHtlcMsat uint64
-	TargetConf  uint32
-	IsPrivate   bool
-	IsZeroConf  bool
+	Destination    []byte
+	CapacitySat    uint64
+	MinHtlcMsat    uint64
+	IsPrivate      bool
+	IsZeroConf     bool
+	MinConfs       uint32
+	FeeSatPerVByte *float64
+	TargetConf     *uint32
 }
 
 type LightningClient interface {

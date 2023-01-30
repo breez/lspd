@@ -76,25 +76,41 @@ func (c *ClnClient) IsConnected(destination []byte) (bool, error) {
 
 func (c *ClnClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error) {
 	pubkey := hex.EncodeToString(req.Destination)
-	minConf := uint16(req.TargetConf)
-	if req.IsZeroConf {
-		minConf = 0
-	}
-
+	minConfs := uint16(req.MinConfs)
 	var minDepth *uint16
 	if req.IsZeroConf {
 		var d uint16 = 0
 		minDepth = &d
 	}
 
+	var rate *glightning.FeeRate
+	if req.FeeSatPerVByte != nil {
+		rate = &glightning.FeeRate{
+			Rate:  uint(*req.FeeSatPerVByte * 1000),
+			Style: glightning.PerKb,
+		}
+	} else if req.TargetConf != nil {
+		if *req.TargetConf < 3 {
+			rate = &glightning.FeeRate{
+				Directive: glightning.Urgent,
+			}
+		} else if *req.TargetConf < 30 {
+			rate = &glightning.FeeRate{
+				Directive: glightning.Normal,
+			}
+		} else {
+			rate = &glightning.FeeRate{
+				Directive: glightning.Slow,
+			}
+		}
+	}
+
 	fundResult, err := c.client.FundChannelExt(
 		pubkey,
 		glightning.NewSat(int(req.CapacitySat)),
-		&glightning.FeeRate{
-			Directive: glightning.Slow,
-		},
+		rate,
 		!req.IsPrivate,
-		&minConf,
+		&minConfs,
 		glightning.NewMsat(0),
 		minDepth,
 		glightning.NewSat(0),

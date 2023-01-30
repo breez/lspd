@@ -127,7 +127,7 @@ func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest
 			outPoint, err = node.client.OpenChannel(&OpenChannelRequest{
 				CapacitySat: node.nodeConfig.ChannelAmount,
 				Destination: pubkey,
-				TargetConf:  node.nodeConfig.TargetConf,
+				TargetConf:  &node.nodeConfig.TargetConf,
 				MinHtlcMsat: node.nodeConfig.MinHtlcMsat,
 				IsPrivate:   node.nodeConfig.ChannelPrivate,
 			})

@@ -96,16 +96,23 @@ func (c *LndClient) IsConnected(destination []byte) (bool, error) {
 }
 
 func (c *LndClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error) {
-	channelPoint, err := c.client.OpenChannelSync(context.Background(), &lnrpc.OpenChannelRequest{
+	lnReq := &lnrpc.OpenChannelRequest{
 		NodePubkey:         req.Destination,
 		LocalFundingAmount: int64(req.CapacitySat),
-		TargetConf:         int32(req.TargetConf),
 		PushSat:            0,
 		Private:            req.IsPrivate,
 		CommitmentType:     lnrpc.CommitmentType_ANCHORS,
 		ZeroConf:           req.IsZeroConf,
-	})
+		MinConfs:           int32(req.MinConfs),
+	}
 
+	if req.FeeSatPerVByte != nil {
+		lnReq.SatPerVbyte = uint64(*req.FeeSatPerVByte)
+	} else if req.TargetConf != nil {
+		lnReq.TargetConf = int32(*req.TargetConf)
+	}
+
+	channelPoint, err := c.client.OpenChannelSync(context.Background(), lnReq)
 	if err != nil {
 		log.Printf("LND: client.OpenChannelSync(%x, %v) error: %v", req.Destination, req.CapacitySat, err)
 		return nil, fmt.Errorf("LND: OpenChannel() error: %w", err)
