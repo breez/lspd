@@ -43,6 +43,7 @@ type LspNode interface {
 	NodeId() []byte
 	LightningNode() lntest.LightningNode
 	SupportsChargingFees() bool
+	PostgresBackend() *PostgresContainer
 }
 
 type lspBase struct {

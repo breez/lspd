@@ -240,3 +240,7 @@ func (l *LndLspNode) NodeId() []byte {
 func (l *LndLspNode) LightningNode() lntest.LightningNode {
 	return l.lightningNode
 }
+
+func (l *LndLspNode) PostgresBackend() *PostgresContainer {
+	return l.lspBase.postgresBackend
+}

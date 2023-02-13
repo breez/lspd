@@ -101,4 +101,8 @@ var allTestCases = []*testCase{
 		name: "testInvalidCltv",
 		test: testInvalidCltv,
 	},
+	{
+		name: "registerPaymentWithTag",
+		test: registerPaymentWithTag,
+	},
 }
