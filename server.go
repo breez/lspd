@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -91,14 +92,27 @@ func (s *server) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymen
 		log.Printf("proto.Unmarshal(%x) error: %v", data, err)
 		return nil, fmt.Errorf("proto.Unmarshal(%x) error: %w", data, err)
 	}
-	log.Printf("RegisterPayment - Destination: %x, pi.PaymentHash: %x, pi.PaymentSecret: %x, pi.IncomingAmountMsat: %v, pi.OutgoingAmountMsat: %v",
-		pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat)
+	log.Printf("RegisterPayment - Destination: %x, pi.PaymentHash: %x, pi.PaymentSecret: %x, pi.IncomingAmountMsat: %v, pi.OutgoingAmountMsat: %v, pi.Tag: %v",
+		pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat, pi.Tag)
+
+	if len(pi.Tag) > 1000 {
+		return nil, fmt.Errorf("tag too long")
+	}
+
+	if len(pi.Tag) != 0 {
+		var tag json.RawMessage
+		err = json.Unmarshal([]byte(pi.Tag), &tag)
+		if err != nil {
+			return nil, fmt.Errorf("tag is not a valid json object")
+		}
+	}
+
 	err = checkPayment(node.nodeConfig, pi.IncomingAmountMsat, pi.OutgoingAmountMsat)
 	if err != nil {
 		log.Printf("checkPayment(%v, %v) error: %v", pi.IncomingAmountMsat, pi.OutgoingAmountMsat, err)
 		return nil, fmt.Errorf("checkPayment(%v, %v) error: %v", pi.IncomingAmountMsat, pi.OutgoingAmountMsat, err)
 	}
-	err = registerPayment(pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat)
+	err = registerPayment(pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat, pi.Tag)
 	if err != nil {
 		log.Printf("RegisterPayment() error: %v", err)
 		return nil, fmt.Errorf("RegisterPayment() error: %w", err)

@@ -64,18 +64,22 @@ func setFundingTx(paymentHash []byte, channelPoint *wire.OutPoint) error {
 	return err
 }
 
-func registerPayment(destination, paymentHash, paymentSecret []byte, incomingAmountMsat, outgoingAmountMsat int64) error {
+func registerPayment(destination, paymentHash, paymentSecret []byte, incomingAmountMsat, outgoingAmountMsat int64, tag string) error {
+	var t *string
+	if tag != "" {
+		t = &tag
+	}
 	commandTag, err := pgxPool.Exec(context.Background(),
 		`INSERT INTO
-		payments (destination, payment_hash, payment_secret, incoming_amount_msat, outgoing_amount_msat)
-		VALUES ($1, $2, $3, $4, $5)
+		payments (destination, payment_hash, payment_secret, incoming_amount_msat, outgoing_amount_msat, tag)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT DO NOTHING`,
-		destination, paymentHash, paymentSecret, incomingAmountMsat, outgoingAmountMsat)
-	log.Printf("registerPayment(%x, %x, %x, %v, %v) rows: %v err: %v",
-		destination, paymentHash, paymentSecret, incomingAmountMsat, outgoingAmountMsat, commandTag.RowsAffected(), err)
+		destination, paymentHash, paymentSecret, incomingAmountMsat, outgoingAmountMsat, t)
+	log.Printf("registerPayment(%x, %x, %x, %v, %v, %v) rows: %v err: %v",
+		destination, paymentHash, paymentSecret, incomingAmountMsat, outgoingAmountMsat, tag, commandTag.RowsAffected(), err)
 	if err != nil {
-		return fmt.Errorf("registerPayment(%x, %x, %x, %v, %v) error: %w",
-			destination, paymentHash, paymentSecret, incomingAmountMsat, outgoingAmountMsat, err)
+		return fmt.Errorf("registerPayment(%x, %x, %x, %v, %v, %v) error: %w",
+			destination, paymentHash, paymentSecret, incomingAmountMsat, outgoingAmountMsat, tag, err)
 	}
 	return nil
 }
