@@ -99,7 +99,7 @@ func newLspd(h *lntest.TestHarness, name string, lnd *string, cln *string, envEx
 	nodes := fmt.Sprintf(
 		`NODES='[ { "name": "%s", "lspdPrivateKey": "%x", "token": "hello", "host": "host:port",`+
 			` "publicChannelAmount": "1000183", "channelAmount": "100000", "channelPrivate": false,`+
-			` "targetConf": "6", "minHtlcMsat": "600", "baseFeeMsat": "1000", "feeRate": "0.000001",`+
+			` "targetConf": "6", "minConfs": "1", "minHtlcMsat": "600", "baseFeeMsat": "1000", "feeRate": "0.000001",`+
 			` "timeLockDelta": "144", "channelFeePermyriad": "40", "channelMinimumFeeMsat": "2000000",`+
 			` "additionalChannelCapacity": "100000", "maxInactiveDuration": "3888000", %s}]'`,
 		name,
@@ -112,6 +112,7 @@ func newLspd(h *lntest.TestHarness, name string, lnd *string, cln *string, envEx
 		fmt.Sprintf("LISTEN_ADDRESS=%s", grpcAddress),
 		fmt.Sprintf("USE_MEMPOOL_FEE_ESTIMATION=true"),
 		fmt.Sprintf("MEMPOOL_API_BASE_URL=https://mempool.space/api/v1/"),
+		fmt.Sprintf("MEMPOOL_PRIORITY=economy"),
 	}
 
 	env = append(env, envExt...)

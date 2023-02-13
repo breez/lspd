@@ -33,6 +33,10 @@ type NodeConfig struct {
 	// Number of blocks after which an opened channel is considered confirmed.
 	TargetConf uint32 `json:"targetConf,string"`
 
+	// Minimum number of confirmations inputs for zero conf channel opens should
+	// have.
+	MinConfs uint32 `json:"minConfs,string"`
+
 	// Smallest htlc amount routed over channels opened with the OpenChannel
 	// rpc call.
 	MinHtlcMsat uint64 `json:"minHtlcMsat,string"`

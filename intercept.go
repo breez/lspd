@@ -37,6 +37,7 @@ var (
 
 var payHashGroup singleflight.Group
 var feeEstimator chain.FeeEstimator
+var feeStrategy chain.FeeStrategy
 
 type interceptResult struct {
 	action       interceptAction
@@ -247,7 +248,7 @@ func openChannel(client LightningClient, config *NodeConfig, paymentHash, destin
 	if feeEstimator != nil {
 		fee, err := feeEstimator.EstimateFeeRate(
 			context.Background(),
-			chain.FeeStrategyMinimum,
+			feeStrategy,
 		)
 		if err == nil {
 			feeEstimation = &fee.SatPerVByte
@@ -269,7 +270,7 @@ func openChannel(client LightningClient, config *NodeConfig, paymentHash, destin
 	channelPoint, err := client.OpenChannel(&OpenChannelRequest{
 		Destination:    destination,
 		CapacitySat:    uint64(capacity),
-		MinConfs:       6,
+		MinConfs:       config.MinConfs,
 		IsPrivate:      true,
 		IsZeroConf:     true,
 		FeeSatPerVByte: feeEstimation,

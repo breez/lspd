@@ -6,9 +6,11 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
+	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/mempool"
 	"github.com/btcsuite/btcd/btcec/v2"
 )
@@ -42,7 +44,22 @@ func main() {
 			log.Fatalf("failed to initialize mempool client: %v", err)
 		}
 
-		log.Printf("using mempool api for fee estimation: %v", mempoolUrl)
+		envFeeStrategy := os.Getenv("MEMPOOL_PRIORITY")
+		switch strings.ToLower(envFeeStrategy) {
+		case "minimum":
+			feeStrategy = chain.FeeStrategyMinimum
+		case "economy":
+			feeStrategy = chain.FeeStrategyEconomy
+		case "hour":
+			feeStrategy = chain.FeeStrategyHour
+		case "halfhour":
+			feeStrategy = chain.FeeStrategyHalfHour
+		case "fastest":
+			feeStrategy = chain.FeeStrategyFastest
+		default:
+			feeStrategy = chain.FeeStrategyEconomy
+		}
+		log.Printf("using mempool api for fee estimation: %v, fee strategy: %v:%v", mempoolUrl, envFeeStrategy, feeStrategy)
 	}
 
 	var interceptors []HtlcInterceptor
