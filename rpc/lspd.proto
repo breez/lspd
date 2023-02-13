@@ -3,6 +3,7 @@ syntax = "proto3";
 option java_multiple_files = true;
 option java_package = "io.grpc.lspd.service";
 option java_outer_classname = "LspdProto";
+option go_package = "github.com/breez/lspd";
 
 package lspd;
 
@@ -78,6 +79,7 @@ message PaymentInformation {
   bytes destination = 3;
   int64 incoming_amount_msat = 4;
   int64 outgoing_amount_msat = 5;
+  string tag = 6;
 }
 
 message Encrypted {

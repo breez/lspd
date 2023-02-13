@@ -28,6 +28,7 @@ import (
 )
 
 type server struct {
+	lspdrpc.ChannelOpenerServer
 	address         string
 	certmagicDomain string
 	lis             net.Listener
