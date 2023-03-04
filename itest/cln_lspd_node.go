@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/breez/lntest"
+	"github.com/breez/lspd/config"
 	lspd "github.com/breez/lspd/rpc"
 	"github.com/btcsuite/btcd/btcec/v2"
 	ecies "github.com/ecies/go/v2"
@@ -41,7 +42,7 @@ type clnLspNodeRuntime struct {
 	cleanups []*lntest.Cleanup
 }
 
-func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode {
+func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string, nodeConfig *config.NodeConfig) LspNode {
 	scriptDir := h.GetDirectory("lspd")
 	pluginBinary := *clnPluginExec
 	pluginPort, err := lntest.GetPort()
@@ -60,12 +61,11 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode
 		"--dev-allowdustreserve=true",
 	}
 	lightningNode := lntest.NewClnNode(h, m, name, args...)
-	cln := fmt.Sprintf(
-		`{ "pluginAddress": "%s", "socketPath": "%s" }`,
-		pluginAddress,
-		filepath.Join(lightningNode.SocketDir(), lightningNode.SocketFile()),
-	)
-	lspbase, err := newLspd(h, name, nil, &cln)
+	cln := &config.ClnConfig{
+		PluginAddress: pluginAddress,
+		SocketPath:    filepath.Join(lightningNode.SocketDir(), lightningNode.SocketFile()),
+	}
+	lspbase, err := newLspd(h, name, nodeConfig, nil, cln)
 	if err != nil {
 		h.T.Fatalf("failed to initialize lspd")
 	}

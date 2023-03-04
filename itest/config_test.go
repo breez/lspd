@@ -19,7 +19,7 @@ func TestConfigParameters(t *testing.T) {
 	m := lntest.NewMiner(h)
 	m.Start()
 
-	lsp := NewClnLspdNode(h, m, "lsp")
+	lsp := NewClnLspdNode(h, m, "lsp", nil)
 	lsp.Start()
 
 	log.Printf("Waiting %v to allow lsp server to activate.", htlcInterceptorDelay)

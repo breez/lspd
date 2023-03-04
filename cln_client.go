@@ -76,7 +76,11 @@ func (c *ClnClient) IsConnected(destination []byte) (bool, error) {
 
 func (c *ClnClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error) {
 	pubkey := hex.EncodeToString(req.Destination)
-	minConfs := uint16(req.MinConfs)
+	var minConfs *uint16
+	if req.MinConfs != nil {
+		m := uint16(*req.MinConfs)
+		minConfs = &m
+	}
 	var minDepth *uint16
 	if req.IsZeroConf {
 		var d uint16 = 0
@@ -110,7 +114,7 @@ func (c *ClnClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)
 		glightning.NewSat(int(req.CapacitySat)),
 		rate,
 		!req.IsPrivate,
-		&minConfs,
+		minConfs,
 		glightning.NewMsat(0),
 		minDepth,
 		glightning.NewSat(0),

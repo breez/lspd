@@ -3,6 +3,8 @@ package itest
 import (
 	"bufio"
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -11,6 +13,7 @@ import (
 	"path/filepath"
 
 	"github.com/breez/lntest"
+	"github.com/breez/lspd/config"
 	lspd "github.com/breez/lspd/rpc"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -58,7 +61,7 @@ type lspBase struct {
 	postgresBackend *PostgresContainer
 }
 
-func newLspd(h *lntest.TestHarness, name string, lnd *string, cln *string, envExt ...string) (*lspBase, error) {
+func newLspd(h *lntest.TestHarness, name string, nodeConfig *config.NodeConfig, lnd *config.LndConfig, cln *config.ClnConfig, envExt ...string) (*lspBase, error) {
 	scriptDir := h.GetDirectory(fmt.Sprintf("lspd-%s", name))
 	log.Printf("%s: Creating LSPD in dir %s", name, scriptDir)
 
@@ -88,32 +91,45 @@ func newLspd(h *lntest.TestHarness, name string, lnd *string, cln *string, envEx
 	eciesPubl := ecies.NewPrivateKeyFromBytes(lspdPrivateKeyBytes).PublicKey
 	host := "localhost"
 	grpcAddress := fmt.Sprintf("%s:%d", host, lspdPort)
-	var ext string
-	if lnd != nil {
-		ext = fmt.Sprintf(`"lnd": %s`, *lnd)
-	} else if cln != nil {
-		ext = fmt.Sprintf(`"cln": %s`, *cln)
-	} else {
-		h.T.Fatalf("%s: need either lnd or cln config", name)
+	minConfs := uint32(1)
+	conf := &config.NodeConfig{
+		Name:                      name,
+		LspdPrivateKey:            hex.EncodeToString(lspdPrivateKeyBytes),
+		Token:                     "hello",
+		Host:                      "host:port",
+		PublicChannelAmount:       1000183,
+		ChannelAmount:             100000,
+		ChannelPrivate:            false,
+		TargetConf:                6,
+		MinConfs:                  &minConfs,
+		MinHtlcMsat:               600,
+		BaseFeeMsat:               1000,
+		FeeRate:                   0.000001,
+		TimeLockDelta:             144,
+		ChannelFeePermyriad:       40,
+		ChannelMinimumFeeMsat:     2000000,
+		AdditionalChannelCapacity: 100000,
+		MaxInactiveDuration:       3888000,
+		Lnd:                       lnd,
+		Cln:                       cln,
 	}
 
-	nodes := fmt.Sprintf(
-		`NODES='[ { "name": "%s", "lspdPrivateKey": "%x", "token": "hello", "host": "host:port",`+
-			` "publicChannelAmount": "1000183", "channelAmount": "100000", "channelPrivate": false,`+
-			` "targetConf": "6", "minConfs": "1", "minHtlcMsat": "600", "baseFeeMsat": "1000", "feeRate": "0.000001",`+
-			` "timeLockDelta": "144", "channelFeePermyriad": "40", "channelMinimumFeeMsat": "2000000",`+
-			` "additionalChannelCapacity": "100000", "maxInactiveDuration": "3888000", %s}]'`,
-		name,
-		lspdPrivateKeyBytes,
-		ext,
-	)
+	if nodeConfig != nil {
+		if nodeConfig.MinConfs != nil {
+			conf.MinConfs = nodeConfig.MinConfs
+		}
+	}
+
+	log.Printf("%+v", conf)
+	confJson, _ := json.Marshal(conf)
+	nodes := fmt.Sprintf(`NODES='[%s]'`, string(confJson))
 	env := []string{
 		nodes,
 		fmt.Sprintf("DATABASE_URL=%s", postgresBackend.ConnectionString()),
 		fmt.Sprintf("LISTEN_ADDRESS=%s", grpcAddress),
-		fmt.Sprintf("USE_MEMPOOL_FEE_ESTIMATION=true"),
-		fmt.Sprintf("MEMPOOL_API_BASE_URL=https://mempool.space/api/v1/"),
-		fmt.Sprintf("MEMPOOL_PRIORITY=economy"),
+		"USE_MEMPOOL_FEE_ESTIMATION=true",
+		"MEMPOOL_API_BASE_URL=https://mempool.space/api/v1/",
+		"MEMPOOL_PRIORITY=economy",
 	}
 
 	env = append(env, envExt...)

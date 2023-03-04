@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/breez/lspd/chain"
+	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/mempool"
 	"github.com/btcsuite/btcd/btcec/v2"
 )
@@ -26,7 +27,7 @@ func main() {
 	}
 
 	n := os.Getenv("NODES")
-	var nodes []*NodeConfig
+	var nodes []*config.NodeConfig
 	err := json.Unmarshal([]byte(n), &nodes)
 	if err != nil {
 		log.Fatalf("failed to unmarshal NODES env: %v", err)

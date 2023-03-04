@@ -21,7 +21,7 @@ type OpenChannelRequest struct {
 	MinHtlcMsat    uint64
 	IsPrivate      bool
 	IsZeroConf     bool
-	MinConfs       uint32
+	MinConfs       *uint32
 	FeeSatPerVByte *float64
 	TargetConf     *uint32
 }
