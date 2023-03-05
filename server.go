@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/breez/lspd/btceclegacy"
+	"github.com/breez/lspd/config"
 	lspdrpc "github.com/breez/lspd/rpc"
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
@@ -39,7 +40,7 @@ type server struct {
 
 type node struct {
 	client              LightningClient
-	nodeConfig          *NodeConfig
+	nodeConfig          *config.NodeConfig
 	privateKey          *btcec.PrivateKey
 	publicKey           *btcec.PublicKey
 	eciesPrivateKey     *ecies.PrivateKey
@@ -259,7 +260,7 @@ func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lsp
 	return &lspdrpc.Encrypted{Data: encrypted}, nil
 }
 
-func NewGrpcServer(configs []*NodeConfig, address string, certmagicDomain string) (*server, error) {
+func NewGrpcServer(configs []*config.NodeConfig, address string, certmagicDomain string) (*server, error) {
 	if len(configs) == 0 {
 		return nil, fmt.Errorf("no nodes supplied")
 	}

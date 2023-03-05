@@ -8,6 +8,7 @@ import (
 	"log"
 
 	"github.com/breez/lspd/basetypes"
+	"github.com/breez/lspd/config"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/htlcswitch/hop"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -24,7 +25,7 @@ type LndClient struct {
 	conn                *grpc.ClientConn
 }
 
-func NewLndClient(conf *LndConfig) (*LndClient, error) {
+func NewLndClient(conf *config.LndConfig) (*LndClient, error) {
 	_, err := hex.DecodeString(conf.Macaroon)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode macaroon: %w", err)
@@ -103,7 +104,14 @@ func (c *LndClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)
 		Private:            req.IsPrivate,
 		CommitmentType:     lnrpc.CommitmentType_ANCHORS,
 		ZeroConf:           req.IsZeroConf,
-		MinConfs:           int32(req.MinConfs),
+	}
+
+	if req.MinConfs != nil {
+		minConfs := *req.MinConfs
+		lnReq.MinConfs = int32(minConfs)
+		if minConfs == 0 {
+			lnReq.SpendUnconfirmed = true
+		}
 	}
 
 	if req.FeeSatPerVByte != nil {

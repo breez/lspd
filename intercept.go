@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/breez/lspd/chain"
+	"github.com/breez/lspd/config"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
 	sphinx "github.com/lightningnetwork/lightning-onion"
@@ -49,7 +50,7 @@ type interceptResult struct {
 	onionBlob    []byte
 }
 
-func intercept(client LightningClient, config *NodeConfig, nextHop string, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) interceptResult {
+func intercept(client LightningClient, config *config.NodeConfig, nextHop string, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) interceptResult {
 	reqPaymentHashStr := hex.EncodeToString(reqPaymentHash)
 	resp, _, _ := payHashGroup.Do(reqPaymentHashStr, func() (interface{}, error) {
 		paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, channelPoint, err := paymentInfo(reqPaymentHash)
@@ -224,7 +225,7 @@ func intercept(client LightningClient, config *NodeConfig, nextHop string, reqPa
 	return resp.(interceptResult)
 }
 
-func checkPayment(config *NodeConfig, incomingAmountMsat, outgoingAmountMsat int64) error {
+func checkPayment(config *config.NodeConfig, incomingAmountMsat, outgoingAmountMsat int64) error {
 	fees := incomingAmountMsat * config.ChannelFeePermyriad / 10_000 / 1_000 * 1_000
 	if fees < config.ChannelMinimumFeeMsat {
 		fees = config.ChannelMinimumFeeMsat
@@ -235,7 +236,7 @@ func checkPayment(config *NodeConfig, incomingAmountMsat, outgoingAmountMsat int
 	return nil
 }
 
-func openChannel(client LightningClient, config *NodeConfig, paymentHash, destination []byte, incomingAmountMsat int64) (*wire.OutPoint, error) {
+func openChannel(client LightningClient, config *config.NodeConfig, paymentHash, destination []byte, incomingAmountMsat int64) (*wire.OutPoint, error) {
 	capacity := incomingAmountMsat/1000 + config.AdditionalChannelCapacity
 	if capacity == config.PublicChannelAmount {
 		capacity++

@@ -4,14 +4,20 @@ import (
 	"testing"
 
 	"github.com/breez/lntest"
+	"github.com/breez/lspd/config"
 )
 
+type LspFunc func(h *lntest.TestHarness, m *lntest.Miner, c *config.NodeConfig) LspNode
+type ClientFunc func(h *lntest.TestHarness, m *lntest.Miner) BreezClient
+
 type testParams struct {
-	t   *testing.T
-	h   *lntest.TestHarness
-	m   *lntest.Miner
-	c   BreezClient
-	lsp LspNode
+	t          *testing.T
+	h          *lntest.TestHarness
+	m          *lntest.Miner
+	c          BreezClient
+	lsp        LspNode
+	lspFunc    LspFunc
+	clientFunc ClientFunc
 }
 
 func (h *testParams) T() *testing.T {

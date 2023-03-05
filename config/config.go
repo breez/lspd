@@ -1,4 +1,4 @@
-package main
+package config
 
 type NodeConfig struct {
 	// Name of the LSP. If empty, the node's alias will be taken instead.
@@ -35,7 +35,7 @@ type NodeConfig struct {
 
 	// Minimum number of confirmations inputs for zero conf channel opens should
 	// have.
-	MinConfs uint32 `json:"minConfs,string"`
+	MinConfs *uint32 `json:"minConfs,string"`
 
 	// Smallest htlc amount routed over channels opened with the OpenChannel
 	// rpc call.

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/breez/lspd/config"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
 	"google.golang.org/grpc/codes"
@@ -14,7 +15,7 @@ import (
 )
 
 type LndHtlcInterceptor struct {
-	config        *NodeConfig
+	config        *config.NodeConfig
 	client        *LndClient
 	stopRequested bool
 	initWg        sync.WaitGroup
@@ -23,7 +24,7 @@ type LndHtlcInterceptor struct {
 	cancel        context.CancelFunc
 }
 
-func NewLndHtlcInterceptor(conf *NodeConfig) (*LndHtlcInterceptor, error) {
+func NewLndHtlcInterceptor(conf *config.NodeConfig) (*LndHtlcInterceptor, error) {
 	if conf.Lnd == nil {
 		return nil, fmt.Errorf("missing lnd configuration")
 	}

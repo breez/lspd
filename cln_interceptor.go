@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/breez/lspd/cln_plugin/proto"
+	"github.com/breez/lspd/config"
 	sphinx "github.com/lightningnetwork/lightning-onion"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/record"
@@ -23,7 +24,7 @@ import (
 )
 
 type ClnHtlcInterceptor struct {
-	config        *NodeConfig
+	config        *config.NodeConfig
 	pluginAddress string
 	client        *ClnClient
 	pluginClient  proto.ClnPluginClient
@@ -34,7 +35,7 @@ type ClnHtlcInterceptor struct {
 	cancel        context.CancelFunc
 }
 
-func NewClnHtlcInterceptor(conf *NodeConfig) (*ClnHtlcInterceptor, error) {
+func NewClnHtlcInterceptor(conf *config.NodeConfig) (*ClnHtlcInterceptor, error) {
 	if conf.Cln == nil {
 		return nil, fmt.Errorf("missing cln config")
 	}

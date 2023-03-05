@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/breez/lntest"
+	"github.com/breez/lspd/config"
 	lspd "github.com/breez/lspd/rpc"
 	"github.com/btcsuite/btcd/btcec/v2"
 	ecies "github.com/ecies/go/v2"
@@ -37,7 +38,7 @@ type lndLspNodeRuntime struct {
 	cleanups []*lntest.Cleanup
 }
 
-func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode {
+func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string, nodeConfig *config.NodeConfig) LspNode {
 	args := []string{
 		"--protocol.zero-conf",
 		"--protocol.option-scid-alias",
@@ -50,12 +51,12 @@ func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string) LspNode
 	}
 
 	lightningNode := lntest.NewLndNode(h, m, name, args...)
-	j, _ := json.Marshal(map[string]string{
-		"address":  lightningNode.GrpcHost(),
-		"cert":     string(lightningNode.TlsCert()),
-		"macaroon": hex.EncodeToString(lightningNode.Macaroon())})
-	lnd := string(j)
-	lspBase, err := newLspd(h, name, &lnd, nil)
+	lnd := &config.LndConfig{
+		Address:  lightningNode.GrpcHost(),
+		Cert:     string(lightningNode.TlsCert()),
+		Macaroon: hex.EncodeToString(lightningNode.Macaroon()),
+	}
+	lspBase, err := newLspd(h, name, nodeConfig, lnd, nil)
 	if err != nil {
 		h.T.Fatalf("failed to initialize lspd")
 	}
