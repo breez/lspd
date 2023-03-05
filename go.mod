@@ -3,7 +3,7 @@ module github.com/breez/lspd
 go 1.19
 
 require (
-	github.com/aws/aws-sdk-go v1.30.20
+	github.com/aws/aws-sdk-go v1.34.0
 	github.com/breez/lntest v0.0.19
 	github.com/btcsuite/btcd v0.23.3
 	github.com/btcsuite/btcd/btcec/v2 v2.2.1
