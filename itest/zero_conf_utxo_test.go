@@ -25,10 +25,14 @@ func testOpenZeroConfUtxo(p *testParams) {
 	})
 	channelId := alice.WaitForChannelReady(channel)
 
-	// Send an unconfirmed utxo to the lsp
+	tempaddr := lsp.LightningNode().GetNewAddress()
+	p.m.SendToAddress(tempaddr, 210000)
+	p.m.MineBlocks(6)
+	lsp.LightningNode().WaitForSync()
+
 	initialHeight := p.m.GetBlockHeight()
 	addr := lsp.LightningNode().GetNewAddress()
-	p.m.SendToAddress(addr, 200000)
+	lsp.LightningNode().SendToAddress(addr, 200000)
 
 	log.Printf("Adding bob's invoices")
 	outerAmountMsat := uint64(2100000)

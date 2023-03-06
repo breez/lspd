@@ -120,7 +120,7 @@ func newLspd(h *lntest.TestHarness, name string, nodeConfig *config.NodeConfig, 
 		}
 	}
 
-	log.Printf("%+v", conf)
+	log.Printf("%s: node config: %+v", name, conf)
 	confJson, _ := json.Marshal(conf)
 	nodes := fmt.Sprintf(`NODES='[%s]'`, string(confJson))
 	env := []string{
