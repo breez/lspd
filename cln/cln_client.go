@@ -1,6 +1,7 @@
 package cln
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -259,7 +260,7 @@ func (c *ClnClient) GetPeerId(scid *basetypes.ShortChannelID) ([]byte, error) {
 	return hex.DecodeString(*dest)
 }
 
-var pollingInterval = 400 * time.Millisecond
+var onlinePollingInterval = 400 * time.Millisecond
 
 func (c *ClnClient) WaitOnline(peerID []byte, deadline time.Time) error {
 	peerIDStr := hex.EncodeToString(peerID)
@@ -272,11 +273,73 @@ func (c *ClnClient) WaitOnline(peerID []byte, deadline time.Time) error {
 		select {
 		case <-time.After(time.Until(deadline)):
 			return fmt.Errorf("timeout")
-		case <-time.After(pollingInterval):
+		case <-time.After(onlinePollingInterval):
 		}
 	}
 }
 
 func (c *ClnClient) WaitChannelActive(peerID []byte, deadline time.Time) error {
 	return nil
+}
+
+const scidPollingInterval = time.Second * 10
+
+func (c *ClnClient) WatchScids(
+	ctx context.Context,
+	cache lightning.ScidCacheWriter,
+) error {
+	ticker := time.NewTicker(scidPollingInterval)
+	defer ticker.Stop()
+
+	err := c.updateScids(cache)
+	if err != nil {
+		return err
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			err = c.updateScids(cache)
+			if err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func (c *ClnClient) updateScids(cache lightning.ScidCacheWriter) error {
+	peers, err := c.client.ListPeers()
+	if err != nil {
+		return err
+	}
+
+	var scids []basetypes.ShortChannelID
+	for _, peer := range peers {
+		for _, ch := range peer.Channels {
+			s, err := mapToScids(ch.Alias.Local, ch.ShortChannelId)
+			if err != nil {
+				return err
+			}
+
+			scids = append(scids, s...)
+		}
+	}
+
+	cache.ReplaceScids(scids)
+	return nil
+}
+
+func mapToScids(scids ...string) ([]basetypes.ShortChannelID, error) {
+	var result []basetypes.ShortChannelID
+	for _, scid := range scids {
+		s, err := basetypes.NewShortChannelIDFromString(scid)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, *s)
+	}
+
+	return result, nil
 }

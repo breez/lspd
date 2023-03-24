@@ -1,6 +1,7 @@
 package lightning
 
 import (
+	"context"
 	"time"
 
 	"github.com/breez/lspd/basetypes"
@@ -38,4 +39,5 @@ type Client interface {
 	GetClosedChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error)
 	WaitOnline(peerID []byte, deadline time.Time) error
 	WaitChannelActive(peerID []byte, deadline time.Time) error
+	WatchScids(ctx context.Context, cache ScidCacheWriter) error
 }

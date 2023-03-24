@@ -365,6 +365,72 @@ func (c *LndClient) GetClosedChannels(nodeID string, channelPoints map[string]ui
 	return r, nil
 }
 
+func (c *LndClient) WatchScids(
+	ctx context.Context,
+	cache lightning.ScidCacheWriter,
+) error {
+	stream, err := c.client.SubscribeChannelEvents(
+		ctx,
+		&lnrpc.ChannelEventSubscription{},
+	)
+	if err != nil {
+		return err
+	}
+
+	// Sync current scids first
+	chans, err := c.client.ListChannels(
+		context.Background(),
+		&lnrpc.ListChannelsRequest{},
+	)
+	if err != nil {
+		return err
+	}
+
+	var initialScids []basetypes.ShortChannelID
+	for _, ch := range chans.Channels {
+		initialScids = append(
+			initialScids,
+			mapToScids(append(ch.AliasScids, ch.ChanId, ch.ZeroConfConfirmedScid)...)...)
+	}
+	cache.ReplaceScids(initialScids)
+
+	// Watch channels for changes
+	for {
+		upd, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+
+		switch upd.Type {
+		case lnrpc.ChannelEventUpdate_OPEN_CHANNEL:
+			ch := upd.GetOpenChannel()
+			if ch == nil {
+				continue
+			}
+
+			scids := mapToScids(append(ch.AliasScids, ch.ChanId, ch.ZeroConfConfirmedScid)...)
+			cache.AddScids(scids...)
+		case lnrpc.ChannelEventUpdate_CLOSED_CHANNEL:
+			ch := upd.GetClosedChannel()
+			if ch == nil {
+				continue
+			}
+
+			scids := mapToScids(append(ch.AliasScids, ch.ChanId, ch.ZeroConfConfirmedScid)...)
+			cache.RemoveScids(scids...)
+		}
+	}
+}
+
+func mapToScids(scids ...uint64) []basetypes.ShortChannelID {
+	var result []basetypes.ShortChannelID
+	for _, scid := range scids {
+		result = append(result, basetypes.ShortChannelID(scid))
+	}
+
+	return result
+}
+
 func (c *LndClient) getWaitingCloseChannels(nodeID string) ([]*lnrpc.PendingChannelsResponse_WaitingCloseChannel, error) {
 	pendingResponse, err := c.client.PendingChannels(context.Background(), &lnrpc.PendingChannelsRequest{})
 	if err != nil {
