@@ -131,7 +131,7 @@ func (c *ClnClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)
 		return nil, err
 	}
 
-	channelPoint, err := NewOutPoint(fundingTxId[:], uint32(fundResult.FundingTxOutputNum))
+	channelPoint, err := basetypes.NewOutPoint(fundingTxId[:], uint32(fundResult.FundingTxOutputNum))
 	if err != nil {
 		log.Printf("CLN: NewOutPoint(%s, %d) error: %v", fundingTxId.String(), fundResult.FundingTxOutputNum, err)
 		return nil, err

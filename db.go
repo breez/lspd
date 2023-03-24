@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/breez/lspd/basetypes"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
@@ -46,7 +47,7 @@ func paymentInfo(htlcPaymentHash []byte) ([]byte, []byte, []byte, int64, int64, 
 
 	var cp *wire.OutPoint
 	if fundingTxID != nil {
-		cp, err = NewOutPoint(fundingTxID, uint32(fundingTxOutnum.Int))
+		cp, err = basetypes.NewOutPoint(fundingTxID, uint32(fundingTxOutnum.Int))
 		if err != nil {
 			log.Printf("invalid funding txid in database %x", fundingTxID)
 		}

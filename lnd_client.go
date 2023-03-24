@@ -126,7 +126,7 @@ func (c *LndClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)
 		return nil, fmt.Errorf("LND: OpenChannel() error: %w", err)
 	}
 
-	result, err := NewOutPoint(channelPoint.GetFundingTxidBytes(), channelPoint.OutputIndex)
+	result, err := basetypes.NewOutPoint(channelPoint.GetFundingTxidBytes(), channelPoint.OutputIndex)
 	if err != nil {
 		log.Printf("LND: OpenChannel returned invalid outpoint. error: %v", err)
 		return nil, err
