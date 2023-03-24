@@ -1,4 +1,4 @@
-package main
+package lightning
 
 import (
 	"github.com/breez/lspd/basetypes"
@@ -26,7 +26,7 @@ type OpenChannelRequest struct {
 	TargetConf     *uint32
 }
 
-type LightningClient interface {
+type Client interface {
 	GetInfo() (*GetInfoResult, error)
 	IsConnected(destination []byte) (bool, error)
 	OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)

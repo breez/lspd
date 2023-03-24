@@ -11,6 +11,7 @@ import (
 
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
 	sphinx "github.com/lightningnetwork/lightning-onion"
@@ -50,7 +51,7 @@ type interceptResult struct {
 	onionBlob    []byte
 }
 
-func intercept(client LightningClient, config *config.NodeConfig, nextHop string, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) interceptResult {
+func intercept(client lightning.Client, config *config.NodeConfig, nextHop string, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) interceptResult {
 	reqPaymentHashStr := hex.EncodeToString(reqPaymentHash)
 	resp, _, _ := payHashGroup.Do(reqPaymentHashStr, func() (interface{}, error) {
 		paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, channelPoint, err := paymentInfo(reqPaymentHash)
@@ -236,7 +237,7 @@ func checkPayment(config *config.NodeConfig, incomingAmountMsat, outgoingAmountM
 	return nil
 }
 
-func openChannel(client LightningClient, config *config.NodeConfig, paymentHash, destination []byte, incomingAmountMsat int64) (*wire.OutPoint, error) {
+func openChannel(client lightning.Client, config *config.NodeConfig, paymentHash, destination []byte, incomingAmountMsat int64) (*wire.OutPoint, error) {
 	capacity := incomingAmountMsat/1000 + config.AdditionalChannelCapacity
 	if capacity == config.PublicChannelAmount {
 		capacity++
@@ -268,7 +269,7 @@ func openChannel(client LightningClient, config *config.NodeConfig, paymentHash,
 		feeStr,
 		confStr,
 	)
-	channelPoint, err := client.OpenChannel(&OpenChannelRequest{
+	channelPoint, err := client.OpenChannel(&lightning.OpenChannelRequest{
 		Destination:    destination,
 		CapacitySat:    uint64(capacity),
 		MinConfs:       config.MinConfs,

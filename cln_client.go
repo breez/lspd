@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/breez/lspd/basetypes"
+	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/niftynei/glightning/glightning"
@@ -42,14 +43,14 @@ func NewClnClient(socketPath string) (*ClnClient, error) {
 	}, nil
 }
 
-func (c *ClnClient) GetInfo() (*GetInfoResult, error) {
+func (c *ClnClient) GetInfo() (*lightning.GetInfoResult, error) {
 	info, err := c.client.GetInfo()
 	if err != nil {
 		log.Printf("CLN: client.GetInfo() error: %v", err)
 		return nil, err
 	}
 
-	return &GetInfoResult{
+	return &lightning.GetInfoResult{
 		Alias:  info.Alias,
 		Pubkey: info.Id,
 	}, nil
@@ -74,7 +75,7 @@ func (c *ClnClient) IsConnected(destination []byte) (bool, error) {
 	return false, nil
 }
 
-func (c *ClnClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error) {
+func (c *ClnClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoint, error) {
 	pubkey := hex.EncodeToString(req.Destination)
 	var minConfs *uint16
 	if req.MinConfs != nil {
@@ -140,7 +141,7 @@ func (c *ClnClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)
 	return channelPoint, nil
 }
 
-func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetChannelResult, error) {
+func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*lightning.GetChannelResult, error) {
 	pubkey := hex.EncodeToString(peerID)
 	peer, err := c.client.GetPeer(pubkey)
 	if err != nil {
@@ -162,7 +163,7 @@ func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetC
 				fmt.Printf("NewShortChannelIDFromString %v error: %v", c.Alias.Local, err)
 				return nil, err
 			}
-			return &GetChannelResult{
+			return &lightning.GetChannelResult{
 				InitialChannelID:   *initialChanID,
 				ConfirmedChannelID: *confirmedChanID,
 			}, nil

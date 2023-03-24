@@ -9,6 +9,7 @@ import (
 
 	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/htlcswitch/hop"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -64,14 +65,14 @@ func (c *LndClient) Close() {
 	c.conn.Close()
 }
 
-func (c *LndClient) GetInfo() (*GetInfoResult, error) {
+func (c *LndClient) GetInfo() (*lightning.GetInfoResult, error) {
 	info, err := c.client.GetInfo(context.Background(), &lnrpc.GetInfoRequest{})
 	if err != nil {
 		log.Printf("LND: client.GetInfo() error: %v", err)
 		return nil, err
 	}
 
-	return &GetInfoResult{
+	return &lightning.GetInfoResult{
 		Alias:  info.Alias,
 		Pubkey: info.IdentityPubkey,
 	}, nil
@@ -96,7 +97,7 @@ func (c *LndClient) IsConnected(destination []byte) (bool, error) {
 	return false, nil
 }
 
-func (c *LndClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error) {
+func (c *LndClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoint, error) {
 	lnReq := &lnrpc.OpenChannelRequest{
 		NodePubkey:         req.Destination,
 		LocalFundingAmount: int64(req.CapacitySat),
@@ -135,7 +136,7 @@ func (c *LndClient) OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)
 	return result, nil
 }
 
-func (c *LndClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetChannelResult, error) {
+func (c *LndClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*lightning.GetChannelResult, error) {
 	r, err := c.client.ListChannels(context.Background(), &lnrpc.ListChannelsRequest{Peer: peerID})
 	if err != nil {
 		log.Printf("client.ListChannels(%x) error: %v", peerID, err)
@@ -157,7 +158,7 @@ func (c *LndClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetC
 					confirmedChanId = 0
 				}
 			}
-			return &GetChannelResult{
+			return &lightning.GetChannelResult{
 				InitialChannelID:   basetypes.ShortChannelID(c.ChanId),
 				ConfirmedChannelID: basetypes.ShortChannelID(confirmedChanId),
 			}, nil

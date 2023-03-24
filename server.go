@@ -12,6 +12,7 @@ import (
 
 	"github.com/breez/lspd/btceclegacy"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/lightning"
 	lspdrpc "github.com/breez/lspd/rpc"
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
@@ -39,7 +40,7 @@ type server struct {
 }
 
 type node struct {
-	client              LightningClient
+	client              lightning.Client
 	nodeConfig          *config.NodeConfig
 	privateKey          *btcec.PrivateKey
 	publicKey           *btcec.PublicKey
@@ -140,7 +141,7 @@ func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest
 
 		var outPoint *wire.OutPoint
 		if channelCount == 0 {
-			outPoint, err = node.client.OpenChannel(&OpenChannelRequest{
+			outPoint, err = node.client.OpenChannel(&lightning.OpenChannelRequest{
 				CapacitySat: node.nodeConfig.ChannelAmount,
 				Destination: pubkey,
 				TargetConf:  &node.nodeConfig.TargetConf,
