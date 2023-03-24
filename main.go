@@ -11,7 +11,10 @@ import (
 	"syscall"
 
 	"github.com/breez/lspd/chain"
+	"github.com/breez/lspd/cln"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/interceptor"
+	"github.com/breez/lspd/lnd"
 	"github.com/breez/lspd/mempool"
 	"github.com/breez/lspd/postgresql"
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -38,6 +41,8 @@ func main() {
 		log.Fatalf("need at least one node configured in NODES.")
 	}
 
+	var feeEstimator chain.FeeEstimator
+	var feeStrategy chain.FeeStrategy
 	useMempool := os.Getenv("USE_MEMPOOL_FEE_ESTIMATION") == "true"
 	if useMempool {
 		mempoolUrl := os.Getenv("MEMPOOL_API_BASE_URL")
@@ -73,31 +78,31 @@ func main() {
 	interceptStore := postgresql.NewPostgresInterceptStore(pool)
 	forwardingStore := postgresql.NewForwardingEventStore(pool)
 
-	var interceptors []HtlcInterceptor
+	var interceptors []interceptor.HtlcInterceptor
 	for _, node := range nodes {
-		var htlcInterceptor HtlcInterceptor
+		var htlcInterceptor interceptor.HtlcInterceptor
 		if node.Lnd != nil {
-			client, err := NewLndClient(node.Lnd)
+			client, err := lnd.NewLndClient(node.Lnd)
 			if err != nil {
 				log.Fatalf("failed to initialize LND client: %v", err)
 			}
 
-			fwsync := NewForwardingHistorySync(client, interceptStore, forwardingStore)
-			interceptor := NewInterceptor(client, node, interceptStore)
-			htlcInterceptor, err = NewLndHtlcInterceptor(node, client, fwsync, interceptor)
+			fwsync := lnd.NewForwardingHistorySync(client, interceptStore, forwardingStore)
+			interceptor := interceptor.NewInterceptor(client, node, interceptStore, feeEstimator, feeStrategy)
+			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node, client, fwsync, interceptor)
 			if err != nil {
 				log.Fatalf("failed to initialize LND interceptor: %v", err)
 			}
 		}
 
 		if node.Cln != nil {
-			client, err := NewClnClient(node.Cln.SocketPath)
+			client, err := cln.NewClnClient(node.Cln.SocketPath)
 			if err != nil {
 				log.Fatalf("failed to initialize CLN client: %v", err)
 			}
 
-			interceptor := NewInterceptor(client, node, interceptStore)
-			htlcInterceptor, err = NewClnHtlcInterceptor(node, client, interceptor)
+			interceptor := interceptor.NewInterceptor(client, node, interceptStore, feeEstimator, feeStrategy)
+			htlcInterceptor, err = cln.NewClnHtlcInterceptor(node, client, interceptor)
 			if err != nil {
 				log.Fatalf("failed to initialize CLN interceptor: %v", err)
 			}

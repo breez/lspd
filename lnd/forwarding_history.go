@@ -1,4 +1,4 @@
-package main
+package lnd
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/breez/lspd/interceptor"
-	"github.com/breez/lspd/lnd"
 	"github.com/lightningnetwork/lnd/htlcswitch/hop"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/chainrpc"
@@ -41,13 +40,13 @@ func (cfe *copyFromEvents) Err() error {
 type ForwardingHistorySync struct {
 	client          *LndClient
 	interceptStore  interceptor.InterceptStore
-	forwardingStore lnd.ForwardingEventStore
+	forwardingStore ForwardingEventStore
 }
 
 func NewForwardingHistorySync(
 	client *LndClient,
 	interceptStore interceptor.InterceptStore,
-	forwardingStore lnd.ForwardingEventStore,
+	forwardingStore ForwardingEventStore,
 ) *ForwardingHistorySync {
 	return &ForwardingHistorySync{
 		client:          client,

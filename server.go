@@ -11,9 +11,11 @@ import (
 	"strings"
 
 	"github.com/breez/lspd/btceclegacy"
+	"github.com/breez/lspd/cln"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lightning"
+	"github.com/breez/lspd/lnd"
 	lspdrpc "github.com/breez/lspd/rpc"
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
@@ -301,14 +303,14 @@ func NewGrpcServer(
 		}
 
 		if config.Lnd != nil {
-			node.client, err = NewLndClient(config.Lnd)
+			node.client, err = lnd.NewLndClient(config.Lnd)
 			if err != nil {
 				return nil, err
 			}
 		}
 
 		if config.Cln != nil {
-			node.client, err = NewClnClient(config.Cln.SocketPath)
+			node.client, err = cln.NewClnClient(config.Cln.SocketPath)
 			if err != nil {
 				return nil, err
 			}

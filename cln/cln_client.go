@@ -1,4 +1,4 @@
-package main
+package cln
 
 import (
 	"encoding/hex"

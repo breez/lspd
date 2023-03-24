@@ -1,4 +1,4 @@
-package main
+package interceptor
 
 type HtlcInterceptor interface {
 	Start() error

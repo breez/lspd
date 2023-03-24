@@ -1,4 +1,4 @@
-package main
+package cln
 
 import (
 	"bytes"
@@ -12,6 +12,7 @@ import (
 
 	"github.com/breez/lspd/cln_plugin/proto"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/interceptor"
 	sphinx "github.com/lightningnetwork/lightning-onion"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/record"
@@ -24,7 +25,7 @@ import (
 )
 
 type ClnHtlcInterceptor struct {
-	interceptor   *Interceptor
+	interceptor   *interceptor.Interceptor
 	config        *config.NodeConfig
 	pluginAddress string
 	client        *ClnClient
@@ -36,11 +37,12 @@ type ClnHtlcInterceptor struct {
 	cancel        context.CancelFunc
 }
 
-func NewClnHtlcInterceptor(conf *config.NodeConfig, client *ClnClient, interceptor *Interceptor) (*ClnHtlcInterceptor, error) {
+func NewClnHtlcInterceptor(conf *config.NodeConfig, client *ClnClient, interceptor *interceptor.Interceptor) (*ClnHtlcInterceptor, error) {
 	i := &ClnHtlcInterceptor{
 		config:        conf,
 		pluginAddress: conf.Cln.PluginAddress,
 		client:        client,
+		interceptor:   interceptor,
 	}
 
 	i.initWg.Add(1)
@@ -163,14 +165,14 @@ func (i *ClnHtlcInterceptor) intercept() error {
 					i.doneWg.Done()
 				}
 				interceptResult := i.interceptor.Intercept(nextHop, paymentHash, request.Onion.ForwardMsat, request.Onion.OutgoingCltvValue, request.Htlc.CltvExpiry)
-				switch interceptResult.action {
-				case INTERCEPT_RESUME_WITH_ONION:
+				switch interceptResult.Action {
+				case interceptor.INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(i.resumeWithOnion(request, interceptResult))
-				case INTERCEPT_FAIL_HTLC_WITH_CODE:
+				case interceptor.INTERCEPT_FAIL_HTLC_WITH_CODE:
 					interceptorClient.Send(
-						i.failWithCode(request, interceptResult.failureCode),
+						i.failWithCode(request, interceptResult.FailureCode),
 					)
-				case INTERCEPT_RESUME:
+				case interceptor.INTERCEPT_RESUME:
 					fallthrough
 				default:
 					interceptorClient.Send(
@@ -202,22 +204,22 @@ func (i *ClnHtlcInterceptor) WaitStarted() {
 	i.initWg.Wait()
 }
 
-func (i *ClnHtlcInterceptor) resumeWithOnion(request *proto.HtlcAccepted, interceptResult interceptResult) *proto.HtlcResolution {
+func (i *ClnHtlcInterceptor) resumeWithOnion(request *proto.HtlcAccepted, interceptResult interceptor.InterceptResult) *proto.HtlcResolution {
 	//decoding and encoding onion with alias in type 6 record.
 	payload, err := hex.DecodeString(request.Onion.Payload)
 	if err != nil {
 		log.Printf("resumeWithOnion: hex.DecodeString(%v) error: %v", request.Onion.Payload, err)
-		return i.failWithCode(request, FAILURE_TEMPORARY_CHANNEL_FAILURE)
+		return i.failWithCode(request, interceptor.FAILURE_TEMPORARY_CHANNEL_FAILURE)
 	}
-	newPayload, err := encodePayloadWithNextHop(payload, interceptResult.channelId)
+	newPayload, err := encodePayloadWithNextHop(payload, interceptResult.ChannelId)
 	if err != nil {
 		log.Printf("encodePayloadWithNextHop error: %v", err)
-		return i.failWithCode(request, FAILURE_TEMPORARY_CHANNEL_FAILURE)
+		return i.failWithCode(request, interceptor.FAILURE_TEMPORARY_CHANNEL_FAILURE)
 	}
 
 	newPayloadStr := hex.EncodeToString(newPayload)
 
-	chanId := lnwire.NewChanIDFromOutPoint(interceptResult.channelPoint).String()
+	chanId := lnwire.NewChanIDFromOutPoint(interceptResult.ChannelPoint).String()
 	log.Printf("forwarding htlc to the destination node and a new private channel was opened")
 	return &proto.HtlcResolution{
 		Correlationid: request.Correlationid,
@@ -239,7 +241,7 @@ func (i *ClnHtlcInterceptor) defaultResolution(request *proto.HtlcAccepted) *pro
 	}
 }
 
-func (i *ClnHtlcInterceptor) failWithCode(request *proto.HtlcAccepted, code interceptFailureCode) *proto.HtlcResolution {
+func (i *ClnHtlcInterceptor) failWithCode(request *proto.HtlcAccepted, code interceptor.InterceptFailureCode) *proto.HtlcResolution {
 	return &proto.HtlcResolution{
 		Correlationid: request.Correlationid,
 		Outcome: &proto.HtlcResolution_Fail{
@@ -298,13 +300,13 @@ func encodePayloadWithNextHop(payload []byte, channelId uint64) ([]byte, error) 
 	return newPayloadBuf.Bytes(), nil
 }
 
-func (i *ClnHtlcInterceptor) mapFailureCode(original interceptFailureCode) string {
+func (i *ClnHtlcInterceptor) mapFailureCode(original interceptor.InterceptFailureCode) string {
 	switch original {
-	case FAILURE_TEMPORARY_CHANNEL_FAILURE:
+	case interceptor.FAILURE_TEMPORARY_CHANNEL_FAILURE:
 		return "1007"
-	case FAILURE_TEMPORARY_NODE_FAILURE:
+	case interceptor.FAILURE_TEMPORARY_NODE_FAILURE:
 		return "2002"
-	case FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
+	case interceptor.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
 		return "400F"
 	default:
 		log.Printf("Unknown failure code %v, default to temporary channel failure.", original)

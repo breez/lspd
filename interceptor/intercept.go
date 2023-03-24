@@ -1,4 +1,4 @@
-package main
+package interceptor
 
 import (
 	"bytes"
@@ -11,7 +11,6 @@ import (
 
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/config"
-	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
@@ -22,94 +21,97 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-type interceptAction int
+type InterceptAction int
 
 const (
-	INTERCEPT_RESUME              interceptAction = 0
-	INTERCEPT_RESUME_WITH_ONION   interceptAction = 1
-	INTERCEPT_FAIL_HTLC_WITH_CODE interceptAction = 2
+	INTERCEPT_RESUME              InterceptAction = 0
+	INTERCEPT_RESUME_WITH_ONION   InterceptAction = 1
+	INTERCEPT_FAIL_HTLC_WITH_CODE InterceptAction = 2
 )
 
-type interceptFailureCode uint16
+type InterceptFailureCode uint16
 
 var (
-	FAILURE_TEMPORARY_CHANNEL_FAILURE            interceptFailureCode = 0x1007
-	FAILURE_TEMPORARY_NODE_FAILURE               interceptFailureCode = 0x2002
-	FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS interceptFailureCode = 0x400F
+	FAILURE_TEMPORARY_CHANNEL_FAILURE            InterceptFailureCode = 0x1007
+	FAILURE_TEMPORARY_NODE_FAILURE               InterceptFailureCode = 0x2002
+	FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS InterceptFailureCode = 0x400F
 )
 
-var payHashGroup singleflight.Group
-var feeEstimator chain.FeeEstimator
-var feeStrategy chain.FeeStrategy
-
-type interceptResult struct {
-	action       interceptAction
-	failureCode  interceptFailureCode
-	destination  []byte
-	amountMsat   uint64
-	channelPoint *wire.OutPoint
-	channelId    uint64
-	onionBlob    []byte
+type InterceptResult struct {
+	Action       InterceptAction
+	FailureCode  InterceptFailureCode
+	Destination  []byte
+	AmountMsat   uint64
+	ChannelPoint *wire.OutPoint
+	ChannelId    uint64
+	OnionBlob    []byte
 }
 
 type Interceptor struct {
-	client lightning.Client
-	config *config.NodeConfig
-	store  interceptor.InterceptStore
+	client       lightning.Client
+	config       *config.NodeConfig
+	store        InterceptStore
+	feeEstimator chain.FeeEstimator
+	feeStrategy  chain.FeeStrategy
+	payHashGroup singleflight.Group
 }
 
 func NewInterceptor(
 	client lightning.Client,
 	config *config.NodeConfig,
-	store interceptor.InterceptStore,
+	store InterceptStore,
+	feeEstimator chain.FeeEstimator,
+	feeStrategy chain.FeeStrategy,
 ) *Interceptor {
 	return &Interceptor{
-		client: client,
-		config: config,
-		store:  store,
+		client:       client,
+		config:       config,
+		store:        store,
+		feeEstimator: feeEstimator,
+		feeStrategy:  feeStrategy,
 	}
 }
 
-func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) interceptResult {
+func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) InterceptResult {
 	reqPaymentHashStr := hex.EncodeToString(reqPaymentHash)
-	resp, _, _ := payHashGroup.Do(reqPaymentHashStr, func() (interface{}, error) {
+	resp, _, _ := i.payHashGroup.Do(reqPaymentHashStr, func() (interface{}, error) {
 		paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, channelPoint, err := i.store.PaymentInfo(reqPaymentHash)
 		if err != nil {
 			log.Printf("paymentInfo(%x) error: %v", reqPaymentHash, err)
-			return interceptResult{
-				action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-				failureCode: FAILURE_TEMPORARY_NODE_FAILURE,
+			return InterceptResult{
+				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				FailureCode: FAILURE_TEMPORARY_NODE_FAILURE,
 			}, nil
 		}
 		log.Printf("paymentHash:%x\npaymentSecret:%x\ndestination:%x\nincomingAmountMsat:%v\noutgoingAmountMsat:%v",
 			paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat)
 		if paymentSecret == nil || (nextHop != "<unknown>" && nextHop != hex.EncodeToString(destination)) {
-			return interceptResult{
-				action: INTERCEPT_RESUME,
+			return InterceptResult{
+				Action: INTERCEPT_RESUME,
 			}, nil
 		}
 
 		if channelPoint == nil {
 			if bytes.Equal(paymentHash, reqPaymentHash) {
 				if int64(reqIncomingExpiry)-int64(reqOutgoingExpiry) < int64(i.config.TimeLockDelta) {
-					return interceptResult{
-						action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-						failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					return InterceptResult{
+						Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+						FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 					}, nil
 				}
 
 				channelPoint, err = i.openChannel(reqPaymentHash, destination, incomingAmountMsat)
 				if err != nil {
 					log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
-					return interceptResult{
-						action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-						failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					return InterceptResult{
+						Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+						FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 					}, nil
 				}
 			} else { //probing
-				return interceptResult{
-					action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-					failureCode: FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
+				return InterceptResult{
+					Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureCode: FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
 				}, nil
 			}
 		}
@@ -117,18 +119,18 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 		pubKey, err := btcec.ParsePubKey(destination)
 		if err != nil {
 			log.Printf("btcec.ParsePubKey(%x): %v", destination, err)
-			return interceptResult{
-				action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-				failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+			return InterceptResult{
+				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 			}, nil
 		}
 
 		sessionKey, err := btcec.NewPrivateKey()
 		if err != nil {
 			log.Printf("btcec.NewPrivateKey(): %v", err)
-			return interceptResult{
-				action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-				failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+			return InterceptResult{
+				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 			}, nil
 		}
 
@@ -148,18 +150,18 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 		err = hop.PackHopPayload(&b, uint64(0))
 		if err != nil {
 			log.Printf("hop.PackHopPayload(): %v", err)
-			return interceptResult{
-				action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-				failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+			return InterceptResult{
+				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 			}, nil
 		}
 
 		payload, err := sphinx.NewHopPayload(nil, b.Bytes())
 		if err != nil {
 			log.Printf("sphinx.NewHopPayload(): %v", err)
-			return interceptResult{
-				action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-				failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+			return InterceptResult{
+				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 			}, nil
 		}
 
@@ -174,18 +176,18 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 		)
 		if err != nil {
 			log.Printf("sphinx.NewOnionPacket(): %v", err)
-			return interceptResult{
-				action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-				failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+			return InterceptResult{
+				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 			}, nil
 		}
 		var onionBlob bytes.Buffer
 		err = sphinxPacket.Encode(&onionBlob)
 		if err != nil {
 			log.Printf("sphinxPacket.Encode(): %v", err)
-			return interceptResult{
-				action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-				failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+			return InterceptResult{
+				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 			}, nil
 		}
 
@@ -206,9 +208,9 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 
 				if err != nil {
 					log.Printf("insertChannel error: %v", err)
-					return interceptResult{
-						action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-						failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					return InterceptResult{
+						Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+						FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 					}, nil
 				}
 
@@ -217,13 +219,13 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 					channelID = uint64(chanResult.InitialChannelID)
 				}
 
-				return interceptResult{
-					action:       INTERCEPT_RESUME_WITH_ONION,
-					destination:  destination,
-					channelPoint: channelPoint,
-					channelId:    channelID,
-					amountMsat:   uint64(amt),
-					onionBlob:    onionBlob.Bytes(),
+				return InterceptResult{
+					Action:       INTERCEPT_RESUME_WITH_ONION,
+					Destination:  destination,
+					ChannelPoint: channelPoint,
+					ChannelId:    channelID,
+					AmountMsat:   uint64(amt),
+					OnionBlob:    onionBlob.Bytes(),
 				}, nil
 			}
 
@@ -236,13 +238,13 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 		}
 
 		log.Printf("Error: Channel failed to opened... timed out. ")
-		return interceptResult{
-			action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-			failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+		return InterceptResult{
+			Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+			FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 		}, nil
 	})
 
-	return resp.(interceptResult)
+	return resp.(InterceptResult)
 }
 
 func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmountMsat int64) (*wire.OutPoint, error) {
@@ -255,10 +257,10 @@ func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmoun
 	confStr := "<nil>"
 	var feeEstimation *float64
 	feeStr := "<nil>"
-	if feeEstimator != nil {
-		fee, err := feeEstimator.EstimateFeeRate(
+	if i.feeEstimator != nil {
+		fee, err := i.feeEstimator.EstimateFeeRate(
 			context.Background(),
-			feeStrategy,
+			i.feeStrategy,
 		)
 		if err == nil {
 			feeEstimation = &fee.SatPerVByte

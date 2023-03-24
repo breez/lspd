@@ -1,4 +1,4 @@
-package main
+package lnd
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/interceptor"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
 	"google.golang.org/grpc/codes"
@@ -16,7 +17,7 @@ import (
 
 type LndHtlcInterceptor struct {
 	fwsync        *ForwardingHistorySync
-	interceptor   *Interceptor
+	interceptor   *interceptor.Interceptor
 	config        *config.NodeConfig
 	client        *LndClient
 	stopRequested bool
@@ -30,7 +31,7 @@ func NewLndHtlcInterceptor(
 	conf *config.NodeConfig,
 	client *LndClient,
 	fwsync *ForwardingHistorySync,
-	interceptor *Interceptor,
+	interceptor *interceptor.Interceptor,
 ) (*LndHtlcInterceptor, error) {
 	i := &LndHtlcInterceptor{
 		config:      conf,
@@ -152,22 +153,22 @@ func (i *LndHtlcInterceptor) intercept() error {
 			i.doneWg.Add(1)
 			go func() {
 				interceptResult := i.interceptor.Intercept(nextHop, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry, request.IncomingExpiry)
-				switch interceptResult.action {
-				case INTERCEPT_RESUME_WITH_ONION:
+				switch interceptResult.Action {
+				case interceptor.INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
 						IncomingCircuitKey:      request.IncomingCircuitKey,
 						Action:                  routerrpc.ResolveHoldForwardAction_RESUME,
-						OutgoingAmountMsat:      interceptResult.amountMsat,
-						OutgoingRequestedChanId: uint64(interceptResult.channelId),
-						OnionBlob:               interceptResult.onionBlob,
+						OutgoingAmountMsat:      interceptResult.AmountMsat,
+						OutgoingRequestedChanId: uint64(interceptResult.ChannelId),
+						OnionBlob:               interceptResult.OnionBlob,
 					})
-				case INTERCEPT_FAIL_HTLC_WITH_CODE:
+				case interceptor.INTERCEPT_FAIL_HTLC_WITH_CODE:
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
 						IncomingCircuitKey: request.IncomingCircuitKey,
 						Action:             routerrpc.ResolveHoldForwardAction_FAIL,
-						FailureCode:        i.mapFailureCode(interceptResult.failureCode),
+						FailureCode:        i.mapFailureCode(interceptResult.FailureCode),
 					})
-				case INTERCEPT_RESUME:
+				case interceptor.INTERCEPT_RESUME:
 					fallthrough
 				default:
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
@@ -187,13 +188,13 @@ func (i *LndHtlcInterceptor) intercept() error {
 	}
 }
 
-func (i *LndHtlcInterceptor) mapFailureCode(original interceptFailureCode) lnrpc.Failure_FailureCode {
+func (i *LndHtlcInterceptor) mapFailureCode(original interceptor.InterceptFailureCode) lnrpc.Failure_FailureCode {
 	switch original {
-	case FAILURE_TEMPORARY_CHANNEL_FAILURE:
+	case interceptor.FAILURE_TEMPORARY_CHANNEL_FAILURE:
 		return lnrpc.Failure_TEMPORARY_CHANNEL_FAILURE
-	case FAILURE_TEMPORARY_NODE_FAILURE:
+	case interceptor.FAILURE_TEMPORARY_NODE_FAILURE:
 		return lnrpc.Failure_TEMPORARY_NODE_FAILURE
-	case FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
+	case interceptor.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
 		return lnrpc.Failure_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
 	default:
 		log.Printf("Unknown failure code %v, default to temporary channel failure.", original)
