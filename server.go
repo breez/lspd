@@ -388,7 +388,7 @@ func (s *server) Start() error {
 			return nil, status.Errorf(codes.PermissionDenied, "Not authorized")
 		}),
 	)
-	lspdrpc.RegisterChannelOpenerServer(srv, &server{})
+	lspdrpc.RegisterChannelOpenerServer(srv, s)
 
 	s.s = srv
 	s.lis = lis
