@@ -1,4 +1,4 @@
-package main
+package postgresql
 
 import (
 	"context"
@@ -13,27 +13,22 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
-var (
-	pgxPool *pgxpool.Pool
-)
-
-func pgConnect(databaseUrl string) error {
-	var err error
-	pgxPool, err = pgxpool.Connect(context.Background(), databaseUrl)
-	if err != nil {
-		return fmt.Errorf("pgxpool.Connect(%v): %w", databaseUrl, err)
-	}
-	return nil
+type PostgresInterceptStore struct {
+	pool *pgxpool.Pool
 }
 
-func paymentInfo(htlcPaymentHash []byte) ([]byte, []byte, []byte, int64, int64, *wire.OutPoint, error) {
+func NewPostgresInterceptStore(pool *pgxpool.Pool) *PostgresInterceptStore {
+	return &PostgresInterceptStore{pool: pool}
+}
+
+func (s *PostgresInterceptStore) PaymentInfo(htlcPaymentHash []byte) ([]byte, []byte, []byte, int64, int64, *wire.OutPoint, error) {
 	var (
 		paymentHash, paymentSecret, destination []byte
 		incomingAmountMsat, outgoingAmountMsat  int64
 		fundingTxID                             []byte
 		fundingTxOutnum                         pgtype.Int4
 	)
-	err := pgxPool.QueryRow(context.Background(),
+	err := s.pool.QueryRow(context.Background(),
 		`SELECT payment_hash, payment_secret, destination, incoming_amount_msat, outgoing_amount_msat, funding_tx_id, funding_tx_outnum
 			FROM payments
 			WHERE payment_hash=$1 OR sha256('probing-01:' || payment_hash)=$1`,
@@ -55,8 +50,8 @@ func paymentInfo(htlcPaymentHash []byte) ([]byte, []byte, []byte, int64, int64, 
 	return paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, cp, nil
 }
 
-func setFundingTx(paymentHash []byte, channelPoint *wire.OutPoint) error {
-	commandTag, err := pgxPool.Exec(context.Background(),
+func (s *PostgresInterceptStore) SetFundingTx(paymentHash []byte, channelPoint *wire.OutPoint) error {
+	commandTag, err := s.pool.Exec(context.Background(),
 		`UPDATE payments
 			SET funding_tx_id = $2, funding_tx_outnum = $3
 			WHERE payment_hash=$1`,
@@ -65,12 +60,12 @@ func setFundingTx(paymentHash []byte, channelPoint *wire.OutPoint) error {
 	return err
 }
 
-func registerPayment(destination, paymentHash, paymentSecret []byte, incomingAmountMsat, outgoingAmountMsat int64, tag string) error {
+func (s *PostgresInterceptStore) RegisterPayment(destination, paymentHash, paymentSecret []byte, incomingAmountMsat, outgoingAmountMsat int64, tag string) error {
 	var t *string
 	if tag != "" {
 		t = &tag
 	}
-	commandTag, err := pgxPool.Exec(context.Background(),
+	commandTag, err := s.pool.Exec(context.Background(),
 		`INSERT INTO
 		payments (destination, payment_hash, payment_secret, incoming_amount_msat, outgoing_amount_msat, tag)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -85,14 +80,14 @@ func registerPayment(destination, paymentHash, paymentSecret []byte, incomingAmo
 	return nil
 }
 
-func insertChannel(initialChanID, confirmedChanId uint64, channelPoint string, nodeID []byte, lastUpdate time.Time) error {
+func (s *PostgresInterceptStore) InsertChannel(initialChanID, confirmedChanId uint64, channelPoint string, nodeID []byte, lastUpdate time.Time) error {
 
 	query := `INSERT INTO
 	channels (initial_chanid, confirmed_chanid, channel_point, nodeid, last_update)
 	VALUES ($1, NULLIF($2, 0::int8), $3, $4, $5)
 	ON CONFLICT (channel_point) DO UPDATE SET confirmed_chanid=NULLIF($2, 0::int8), last_update=$5`
 
-	c, err := pgxPool.Exec(context.Background(),
+	c, err := s.pool.Exec(context.Background(),
 		query, int64(initialChanID), int64(confirmedChanId), channelPoint, nodeID, lastUpdate)
 	if err != nil {
 		log.Printf("insertChannel(%v, %v, %s, %x) error: %v",
@@ -103,53 +98,4 @@ func insertChannel(initialChanID, confirmedChanId uint64, channelPoint string, n
 	log.Printf("insertChannel(%v, %v, %x) result: %v",
 		initialChanID, confirmedChanId, nodeID, c.String())
 	return nil
-}
-
-func lastForwardingEvent() (int64, error) {
-	var last int64
-	err := pgxPool.QueryRow(context.Background(),
-		`SELECT coalesce(MAX("timestamp"), 0) AS last FROM forwarding_history`).Scan(&last)
-	if err != nil {
-		return 0, err
-	}
-	return last, nil
-}
-
-func insertForwardingEvents(rowSrc pgx.CopyFromSource) error {
-
-	tx, err := pgxPool.Begin(context.Background())
-	if err != nil {
-		return fmt.Errorf("pgxPool.Begin() error: %w", err)
-	}
-	defer tx.Rollback(context.Background())
-
-	_, err = tx.Exec(context.Background(), `
-	CREATE TEMP TABLE tmp_table ON COMMIT DROP AS
-		SELECT *
-		FROM forwarding_history
-		WITH NO DATA;
-	`)
-	if err != nil {
-		return fmt.Errorf("CREATE TEMP TABLE error: %w", err)
-	}
-
-	count, err := tx.CopyFrom(context.Background(),
-		pgx.Identifier{"tmp_table"},
-		[]string{"timestamp", "chanid_in", "chanid_out", "amt_msat_in", "amt_msat_out"}, rowSrc)
-	if err != nil {
-		return fmt.Errorf("CopyFrom() error: %w", err)
-	}
-	log.Printf("count1: %v", count)
-
-	cmdTag, err := tx.Exec(context.Background(), `
-	INSERT INTO forwarding_history
-		SELECT *
-		FROM tmp_table
-	ON CONFLICT DO NOTHING
-	`)
-	if err != nil {
-		return fmt.Errorf("INSERT INTO forwarding_history error: %w", err)
-	}
-	log.Printf("count2: %v", cmdTag.RowsAffected())
-	return tx.Commit(context.Background())
 }

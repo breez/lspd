@@ -13,6 +13,7 @@ import (
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/mempool"
+	"github.com/breez/lspd/postgresql"
 	"github.com/btcsuite/btcd/btcec/v2"
 )
 
@@ -63,41 +64,57 @@ func main() {
 		log.Printf("using mempool api for fee estimation: %v, fee strategy: %v:%v", mempoolUrl, envFeeStrategy, feeStrategy)
 	}
 
+	databaseUrl := os.Getenv("DATABASE_URL")
+	pool, err := postgresql.PgConnect(databaseUrl)
+	if err != nil {
+		log.Fatalf("pgConnect() error: %v", err)
+	}
+
+	interceptStore := postgresql.NewPostgresInterceptStore(pool)
+	forwardingStore := postgresql.NewForwardingEventStore(pool)
+
 	var interceptors []HtlcInterceptor
 	for _, node := range nodes {
-		var interceptor HtlcInterceptor
+		var htlcInterceptor HtlcInterceptor
 		if node.Lnd != nil {
-			interceptor, err = NewLndHtlcInterceptor(node)
+			client, err := NewLndClient(node.Lnd)
+			if err != nil {
+				log.Fatalf("failed to initialize LND client: %v", err)
+			}
+
+			fwsync := NewForwardingHistorySync(client, interceptStore, forwardingStore)
+			interceptor := NewInterceptor(client, node, interceptStore)
+			htlcInterceptor, err = NewLndHtlcInterceptor(node, client, fwsync, interceptor)
 			if err != nil {
 				log.Fatalf("failed to initialize LND interceptor: %v", err)
 			}
 		}
 
 		if node.Cln != nil {
-			interceptor, err = NewClnHtlcInterceptor(node)
+			client, err := NewClnClient(node.Cln.SocketPath)
+			if err != nil {
+				log.Fatalf("failed to initialize CLN client: %v", err)
+			}
+
+			interceptor := NewInterceptor(client, node, interceptStore)
+			htlcInterceptor, err = NewClnHtlcInterceptor(node, client, interceptor)
 			if err != nil {
 				log.Fatalf("failed to initialize CLN interceptor: %v", err)
 			}
 		}
 
-		if interceptor == nil {
+		if htlcInterceptor == nil {
 			log.Fatalf("node has to be either cln or lnd")
 		}
 
-		interceptors = append(interceptors, interceptor)
+		interceptors = append(interceptors, htlcInterceptor)
 	}
 
 	address := os.Getenv("LISTEN_ADDRESS")
 	certMagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
-	s, err := NewGrpcServer(nodes, address, certMagicDomain)
+	s, err := NewGrpcServer(nodes, address, certMagicDomain, interceptStore)
 	if err != nil {
 		log.Fatalf("failed to initialize grpc server: %v", err)
-	}
-
-	databaseUrl := os.Getenv("DATABASE_URL")
-	err = pgConnect(databaseUrl)
-	if err != nil {
-		log.Fatalf("pgConnect() error: %v", err)
 	}
 
 	var wg sync.WaitGroup

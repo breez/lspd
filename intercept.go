@@ -11,6 +11,7 @@ import (
 
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
@@ -51,10 +52,28 @@ type interceptResult struct {
 	onionBlob    []byte
 }
 
-func intercept(client lightning.Client, config *config.NodeConfig, nextHop string, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) interceptResult {
+type Interceptor struct {
+	client lightning.Client
+	config *config.NodeConfig
+	store  interceptor.InterceptStore
+}
+
+func NewInterceptor(
+	client lightning.Client,
+	config *config.NodeConfig,
+	store interceptor.InterceptStore,
+) *Interceptor {
+	return &Interceptor{
+		client: client,
+		config: config,
+		store:  store,
+	}
+}
+
+func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) interceptResult {
 	reqPaymentHashStr := hex.EncodeToString(reqPaymentHash)
 	resp, _, _ := payHashGroup.Do(reqPaymentHashStr, func() (interface{}, error) {
-		paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, channelPoint, err := paymentInfo(reqPaymentHash)
+		paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, channelPoint, err := i.store.PaymentInfo(reqPaymentHash)
 		if err != nil {
 			log.Printf("paymentInfo(%x) error: %v", reqPaymentHash, err)
 			return interceptResult{
@@ -72,14 +91,14 @@ func intercept(client lightning.Client, config *config.NodeConfig, nextHop strin
 
 		if channelPoint == nil {
 			if bytes.Equal(paymentHash, reqPaymentHash) {
-				if int64(reqIncomingExpiry)-int64(reqOutgoingExpiry) < int64(config.TimeLockDelta) {
+				if int64(reqIncomingExpiry)-int64(reqOutgoingExpiry) < int64(i.config.TimeLockDelta) {
 					return interceptResult{
 						action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
 						failureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 					}, nil
 				}
 
-				channelPoint, err = openChannel(client, config, reqPaymentHash, destination, incomingAmountMsat)
+				channelPoint, err = i.openChannel(reqPaymentHash, destination, incomingAmountMsat)
 				if err != nil {
 					log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
 					return interceptResult{
@@ -173,11 +192,11 @@ func intercept(client lightning.Client, config *config.NodeConfig, nextHop strin
 		deadline := time.Now().Add(60 * time.Second)
 
 		for {
-			chanResult, _ := client.GetChannel(destination, *channelPoint)
+			chanResult, _ := i.client.GetChannel(destination, *channelPoint)
 			if chanResult != nil {
 				log.Printf("channel opended successfully alias: %v, confirmed: %v", chanResult.InitialChannelID.ToString(), chanResult.ConfirmedChannelID.ToString())
 
-				err := insertChannel(
+				err := i.store.InsertChannel(
 					uint64(chanResult.InitialChannelID),
 					uint64(chanResult.ConfirmedChannelID),
 					channelPoint.String(),
@@ -226,20 +245,9 @@ func intercept(client lightning.Client, config *config.NodeConfig, nextHop strin
 	return resp.(interceptResult)
 }
 
-func checkPayment(config *config.NodeConfig, incomingAmountMsat, outgoingAmountMsat int64) error {
-	fees := incomingAmountMsat * config.ChannelFeePermyriad / 10_000 / 1_000 * 1_000
-	if fees < config.ChannelMinimumFeeMsat {
-		fees = config.ChannelMinimumFeeMsat
-	}
-	if incomingAmountMsat-outgoingAmountMsat < fees {
-		return fmt.Errorf("not enough fees")
-	}
-	return nil
-}
-
-func openChannel(client lightning.Client, config *config.NodeConfig, paymentHash, destination []byte, incomingAmountMsat int64) (*wire.OutPoint, error) {
-	capacity := incomingAmountMsat/1000 + config.AdditionalChannelCapacity
-	if capacity == config.PublicChannelAmount {
+func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmountMsat int64) (*wire.OutPoint, error) {
+	capacity := incomingAmountMsat/1000 + i.config.AdditionalChannelCapacity
+	if capacity == i.config.PublicChannelAmount {
 		capacity++
 	}
 
@@ -257,7 +265,7 @@ func openChannel(client lightning.Client, config *config.NodeConfig, paymentHash
 			feeStr = fmt.Sprintf("%.5f", *feeEstimation)
 		} else {
 			log.Printf("Error estimating chain fee, fallback to target conf: %v", err)
-			targetConf = &config.TargetConf
+			targetConf = &i.config.TargetConf
 			confStr = fmt.Sprintf("%v", *targetConf)
 		}
 	}
@@ -269,10 +277,10 @@ func openChannel(client lightning.Client, config *config.NodeConfig, paymentHash
 		feeStr,
 		confStr,
 	)
-	channelPoint, err := client.OpenChannel(&lightning.OpenChannelRequest{
+	channelPoint, err := i.client.OpenChannel(&lightning.OpenChannelRequest{
 		Destination:    destination,
 		CapacitySat:    uint64(capacity),
-		MinConfs:       config.MinConfs,
+		MinConfs:       i.config.MinConfs,
 		IsPrivate:      true,
 		IsZeroConf:     true,
 		FeeSatPerVByte: feeEstimation,
@@ -289,6 +297,6 @@ func openChannel(client lightning.Client, config *config.NodeConfig, paymentHash
 		capacity,
 		channelPoint.String(),
 	)
-	err = setFundingTx(paymentHash, channelPoint)
+	err = i.store.SetFundingTx(paymentHash, channelPoint)
 	return channelPoint, err
 }

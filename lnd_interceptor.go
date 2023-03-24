@@ -15,6 +15,8 @@ import (
 )
 
 type LndHtlcInterceptor struct {
+	fwsync        *ForwardingHistorySync
+	interceptor   *Interceptor
 	config        *config.NodeConfig
 	client        *LndClient
 	stopRequested bool
@@ -24,17 +26,17 @@ type LndHtlcInterceptor struct {
 	cancel        context.CancelFunc
 }
 
-func NewLndHtlcInterceptor(conf *config.NodeConfig) (*LndHtlcInterceptor, error) {
-	if conf.Lnd == nil {
-		return nil, fmt.Errorf("missing lnd configuration")
-	}
-	client, err := NewLndClient(conf.Lnd)
-	if err != nil {
-		return nil, err
-	}
+func NewLndHtlcInterceptor(
+	conf *config.NodeConfig,
+	client *LndClient,
+	fwsync *ForwardingHistorySync,
+	interceptor *Interceptor,
+) (*LndHtlcInterceptor, error) {
 	i := &LndHtlcInterceptor{
-		config: conf,
-		client: client,
+		config:      conf,
+		client:      client,
+		fwsync:      fwsync,
+		interceptor: interceptor,
 	}
 
 	i.initWg.Add(1)
@@ -47,8 +49,8 @@ func (i *LndHtlcInterceptor) Start() error {
 	i.ctx = ctx
 	i.cancel = cancel
 	i.stopRequested = false
-	go forwardingHistorySynchronize(ctx, i.client)
-	go channelsSynchronize(ctx, i.client)
+	go i.fwsync.ForwardingHistorySynchronize(ctx)
+	go i.fwsync.ChannelsSynchronize(ctx)
 
 	return i.intercept()
 }
@@ -149,7 +151,7 @@ func (i *LndHtlcInterceptor) intercept() error {
 
 			i.doneWg.Add(1)
 			go func() {
-				interceptResult := intercept(i.client, i.config, nextHop, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry, request.IncomingExpiry)
+				interceptResult := i.interceptor.Intercept(nextHop, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry, request.IncomingExpiry)
 				switch interceptResult.action {
 				case INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{

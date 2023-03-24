@@ -12,6 +12,7 @@ import (
 
 	"github.com/breez/lspd/btceclegacy"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lightning"
 	lspdrpc "github.com/breez/lspd/rpc"
 	ecies "github.com/ecies/go/v2"
@@ -37,6 +38,7 @@ type server struct {
 	lis             net.Listener
 	s               *grpc.Server
 	nodes           map[string]*node
+	store           interceptor.InterceptStore
 }
 
 type node struct {
@@ -114,7 +116,7 @@ func (s *server) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymen
 		log.Printf("checkPayment(%v, %v) error: %v", pi.IncomingAmountMsat, pi.OutgoingAmountMsat, err)
 		return nil, fmt.Errorf("checkPayment(%v, %v) error: %v", pi.IncomingAmountMsat, pi.OutgoingAmountMsat, err)
 	}
-	err = registerPayment(pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat, pi.Tag)
+	err = s.store.RegisterPayment(pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat, pi.Tag)
 	if err != nil {
 		log.Printf("RegisterPayment() error: %v", err)
 		return nil, fmt.Errorf("RegisterPayment() error: %w", err)
@@ -261,7 +263,12 @@ func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lsp
 	return &lspdrpc.Encrypted{Data: encrypted}, nil
 }
 
-func NewGrpcServer(configs []*config.NodeConfig, address string, certmagicDomain string) (*server, error) {
+func NewGrpcServer(
+	configs []*config.NodeConfig,
+	address string,
+	certmagicDomain string,
+	store interceptor.InterceptStore,
+) (*server, error) {
 	if len(configs) == 0 {
 		return nil, fmt.Errorf("no nodes supplied")
 	}
@@ -319,6 +326,7 @@ func NewGrpcServer(configs []*config.NodeConfig, address string, certmagicDomain
 		address:         address,
 		certmagicDomain: certmagicDomain,
 		nodes:           nodes,
+		store:           store,
 	}, nil
 }
 
@@ -408,4 +416,15 @@ func getNode(ctx context.Context) (*node, error) {
 	}
 
 	return node, nil
+}
+
+func checkPayment(config *config.NodeConfig, incomingAmountMsat, outgoingAmountMsat int64) error {
+	fees := incomingAmountMsat * config.ChannelFeePermyriad / 10_000 / 1_000 * 1_000
+	if fees < config.ChannelMinimumFeeMsat {
+		fees = config.ChannelMinimumFeeMsat
+	}
+	if incomingAmountMsat-outgoingAmountMsat < fees {
+		return fmt.Errorf("not enough fees")
+	}
+	return nil
 }

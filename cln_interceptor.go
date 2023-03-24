@@ -24,6 +24,7 @@ import (
 )
 
 type ClnHtlcInterceptor struct {
+	interceptor   *Interceptor
 	config        *config.NodeConfig
 	pluginAddress string
 	client        *ClnClient
@@ -35,15 +36,7 @@ type ClnHtlcInterceptor struct {
 	cancel        context.CancelFunc
 }
 
-func NewClnHtlcInterceptor(conf *config.NodeConfig) (*ClnHtlcInterceptor, error) {
-	if conf.Cln == nil {
-		return nil, fmt.Errorf("missing cln config")
-	}
-
-	client, err := NewClnClient(conf.Cln.SocketPath)
-	if err != nil {
-		return nil, err
-	}
+func NewClnHtlcInterceptor(conf *config.NodeConfig, client *ClnClient, interceptor *Interceptor) (*ClnHtlcInterceptor, error) {
 	i := &ClnHtlcInterceptor{
 		config:        conf,
 		pluginAddress: conf.Cln.PluginAddress,
@@ -169,7 +162,7 @@ func (i *ClnHtlcInterceptor) intercept() error {
 					interceptorClient.Send(i.defaultResolution(request))
 					i.doneWg.Done()
 				}
-				interceptResult := intercept(i.client, i.config, nextHop, paymentHash, request.Onion.ForwardMsat, request.Onion.OutgoingCltvValue, request.Htlc.CltvExpiry)
+				interceptResult := i.interceptor.Intercept(nextHop, paymentHash, request.Onion.ForwardMsat, request.Onion.OutgoingCltvValue, request.Htlc.CltvExpiry)
 				switch interceptResult.action {
 				case INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(i.resumeWithOnion(request, interceptResult))
