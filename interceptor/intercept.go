@@ -13,6 +13,7 @@ import (
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lightning"
+	"github.com/breez/lspd/notifications"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
 	sphinx "github.com/lightningnetwork/lightning-onion"
@@ -35,6 +36,7 @@ type InterceptFailureCode uint16
 var (
 	FAILURE_TEMPORARY_CHANNEL_FAILURE            InterceptFailureCode = 0x1007
 	FAILURE_TEMPORARY_NODE_FAILURE               InterceptFailureCode = 0x2002
+	FAILURE_UNKNOWN_NEXT_PEER                    InterceptFailureCode = 0x400A
 	FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS InterceptFailureCode = 0x400F
 )
 
@@ -49,12 +51,13 @@ type InterceptResult struct {
 }
 
 type Interceptor struct {
-	client       lightning.Client
-	config       *config.NodeConfig
-	store        InterceptStore
-	feeEstimator chain.FeeEstimator
-	feeStrategy  chain.FeeStrategy
-	payHashGroup singleflight.Group
+	client              lightning.Client
+	config              *config.NodeConfig
+	store               InterceptStore
+	feeEstimator        chain.FeeEstimator
+	feeStrategy         chain.FeeStrategy
+	payHashGroup        singleflight.Group
+	notificationService *notifications.NotificationService
 }
 
 func NewInterceptor(
@@ -63,13 +66,15 @@ func NewInterceptor(
 	store InterceptStore,
 	feeEstimator chain.FeeEstimator,
 	feeStrategy chain.FeeStrategy,
+	notificationService *notifications.NotificationService,
 ) *Interceptor {
 	return &Interceptor{
-		client:       client,
-		config:       config,
-		store:        store,
-		feeEstimator: feeEstimator,
-		feeStrategy:  feeStrategy,
+		client:              client,
+		config:              config,
+		store:               store,
+		feeEstimator:        feeEstimator,
+		feeStrategy:         feeStrategy,
+		notificationService: notificationService,
 	}
 }
 
@@ -86,15 +91,8 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 		}
 		log.Printf("paymentHash:%x\npaymentSecret:%x\ndestination:%x\nincomingAmountMsat:%v\noutgoingAmountMsat:%v",
 			paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat)
-		nextHop, err := i.client.GetPeerId(scid)
-		if err != nil {
-			log.Printf("GetPeerId(%s) error: %v", scid.ToString(), err)
-			return InterceptResult{
-				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-				FailureCode: FAILURE_TEMPORARY_NODE_FAILURE,
-			}, nil
-		}
 
+		nextHop, _ := i.client.GetPeerId(scid)
 		// If the payment was registered, but the next hop is not the destination
 		// that means we are not the last hop of the payment, so we'll just forward.
 		if destination != nil && nextHop != nil && !bytes.Equal(nextHop, destination) {
@@ -102,6 +100,55 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 				Action: INTERCEPT_RESUME,
 			}, nil
 		}
+
+		if nextHop == nil {
+			nextHop = destination
+		}
+
+		if nextHop != nil {
+			connected, err := i.client.IsConnected(nextHop)
+			if err != nil {
+				log.Printf("IsConnected(%x) error: %v", nextHop, err)
+				return InterceptResult{
+					Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureCode: FAILURE_TEMPORARY_NODE_FAILURE,
+				}, nil
+			}
+
+			if !connected {
+				// If not connected, send a notification to the registered
+				// notification service for this client if available.
+				notified, err := i.notificationService.Notify(
+					hex.EncodeToString(nextHop),
+					reqPaymentHashStr,
+				)
+
+				// If this errors or the client is not notified, the client
+				// is offline or unknown, so return unknown next peer in either
+				// case.
+				if err != nil || !notified {
+					return InterceptResult{
+						Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+						FailureCode: FAILURE_UNKNOWN_NEXT_PEER,
+					}, nil
+				}
+
+				d, err := time.ParseDuration(i.config.NotificationTimeout)
+				if err != nil {
+					log.Printf("WARN: No notification timeout set. Using default 1m")
+					d = time.Minute
+				}
+				timeout := time.Now().Add(d)
+				err = i.client.WaitOnline(nextHop, timeout)
+				if err != nil {
+					return InterceptResult{
+						Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+						FailureCode: FAILURE_UNKNOWN_NEXT_PEER,
+					}, nil
+				}
+			}
+		}
+
 		// If the payment was not registered, this is a regular forward
 		if paymentSecret == nil {
 			return InterceptResult{

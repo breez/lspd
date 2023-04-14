@@ -79,6 +79,7 @@ func main() {
 	interceptStore := postgresql.NewPostgresInterceptStore(pool)
 	forwardingStore := postgresql.NewForwardingEventStore(pool)
 	notificationsStore := postgresql.NewNotificationsStore(pool)
+	notificationService := notifications.NewNotificationService(notificationsStore)
 
 	var interceptors []interceptor.HtlcInterceptor
 	for _, node := range nodes {
@@ -90,7 +91,7 @@ func main() {
 			}
 
 			fwsync := lnd.NewForwardingHistorySync(client, interceptStore, forwardingStore)
-			interceptor := interceptor.NewInterceptor(client, node, interceptStore, feeEstimator, feeStrategy)
+			interceptor := interceptor.NewInterceptor(client, node, interceptStore, feeEstimator, feeStrategy, notificationService)
 			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node, client, fwsync, interceptor)
 			if err != nil {
 				log.Fatalf("failed to initialize LND interceptor: %v", err)
@@ -103,7 +104,7 @@ func main() {
 				log.Fatalf("failed to initialize CLN client: %v", err)
 			}
 
-			interceptor := interceptor.NewInterceptor(client, node, interceptStore, feeEstimator, feeStrategy)
+			interceptor := interceptor.NewInterceptor(client, node, interceptStore, feeEstimator, feeStrategy, notificationService)
 			htlcInterceptor, err = cln.NewClnHtlcInterceptor(node, client, interceptor)
 			if err != nil {
 				log.Fatalf("failed to initialize CLN interceptor: %v", err)
