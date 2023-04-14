@@ -141,4 +141,12 @@ var allTestCases = []*testCase{
 		test:          testOpenZeroConfUtxo,
 		skipCreateLsp: true,
 	},
+	{
+		name: "testOfflineNotificationPaymentRegistered",
+		test: testOfflineNotificationPaymentRegistered,
+	},
+	{
+		name: "testOfflineNotificationRegularForward",
+		test: testOfflineNotificationRegularForward,
+	},
 }
