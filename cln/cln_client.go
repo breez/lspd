@@ -65,7 +65,7 @@ func (c *ClnClient) IsConnected(destination []byte) (bool, error) {
 	}
 
 	for _, peer := range peers {
-		if pubKey == peer.Id {
+		if pubKey == peer.Id && peer.Connected {
 			log.Printf("destination online: %x", destination)
 			return true, nil
 		}
@@ -172,6 +172,32 @@ func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 
 	log.Printf("No channel found: getChannel(%v, %v)", pubkey, fundingTxID)
 	return nil, fmt.Errorf("no channel found")
+}
+
+func (c *ClnClient) GetPeerId(scid *basetypes.ShortChannelID) ([]byte, error) {
+	scidStr := scid.ToString()
+	peers, err := c.client.ListPeers()
+	if err != nil {
+		return nil, err
+	}
+
+	var dest *string
+	for _, p := range peers {
+		for _, ch := range p.Channels {
+			if ch.Alias.Local == scidStr ||
+				ch.Alias.Remote == scidStr ||
+				ch.ShortChannelId == scidStr {
+				dest = &p.Id
+				break
+			}
+		}
+	}
+
+	if dest == nil {
+		return nil, nil
+	}
+
+	return hex.DecodeString(*dest)
 }
 
 func (c *ClnClient) GetNodeChannelCount(nodeID []byte) (int, error) {

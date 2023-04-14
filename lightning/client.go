@@ -31,6 +31,7 @@ type Client interface {
 	IsConnected(destination []byte) (bool, error)
 	OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)
 	GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetChannelResult, error)
+	GetPeerId(scid *basetypes.ShortChannelID) ([]byte, error)
 	GetNodeChannelCount(nodeID []byte) (int, error)
 	GetClosedChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error)
 }

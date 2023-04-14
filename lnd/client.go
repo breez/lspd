@@ -15,6 +15,7 @@ import (
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/chainrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
+	"golang.org/x/exp/slices"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -166,6 +167,29 @@ func (c *LndClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 	}
 	log.Printf("No channel found: getChannel(%x)", peerID)
 	return nil, fmt.Errorf("no channel found")
+}
+
+func (c *LndClient) GetPeerId(scid *basetypes.ShortChannelID) ([]byte, error) {
+	scidu64 := uint64(*scid)
+	chans, err := c.client.ListChannels(context.Background(), &lnrpc.ListChannelsRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	var dest *string
+	for _, ch := range chans.Channels {
+		if slices.Contains(ch.AliasScids, scidu64) ||
+			ch.ChanId == scidu64 {
+			dest = &ch.RemotePubkey
+			break
+		}
+	}
+
+	if dest == nil {
+		return nil, nil
+	}
+
+	return hex.DecodeString(*dest)
 }
 
 func (c *LndClient) GetNodeChannelCount(nodeID []byte) (int, error) {

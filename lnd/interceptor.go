@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/interceptor"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -127,21 +128,9 @@ func (i *LndHtlcInterceptor) intercept() error {
 				break
 			}
 
-			nextHop := "<unknown>"
-			chanInfo, err := i.client.client.GetChanInfo(context.Background(), &lnrpc.ChanInfoRequest{ChanId: request.OutgoingRequestedChanId})
-			if err == nil && chanInfo != nil {
-				if chanInfo.Node1Pub == i.config.NodePubkey {
-					nextHop = chanInfo.Node2Pub
-				}
-				if chanInfo.Node2Pub == i.config.NodePubkey {
-					nextHop = chanInfo.Node1Pub
-				}
-			}
-
-			fmt.Printf("htlc: %v\nchanID: %v\nnextHop: %v\nincoming amount: %v\noutgoing amount: %v\nincomin expiry: %v\noutgoing expiry: %v\npaymentHash: %x\nonionBlob: %x\n\n",
+			fmt.Printf("htlc: %v\nchanID: %v\nincoming amount: %v\noutgoing amount: %v\nincomin expiry: %v\noutgoing expiry: %v\npaymentHash: %x\nonionBlob: %x\n\n",
 				request.IncomingCircuitKey.HtlcId,
 				request.IncomingCircuitKey.ChanId,
-				nextHop,
 				request.IncomingAmountMsat,
 				request.OutgoingAmountMsat,
 				request.IncomingExpiry,
@@ -152,7 +141,8 @@ func (i *LndHtlcInterceptor) intercept() error {
 
 			i.doneWg.Add(1)
 			go func() {
-				interceptResult := i.interceptor.Intercept(nextHop, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry, request.IncomingExpiry)
+				scid := basetypes.ShortChannelID(request.OutgoingRequestedChanId)
+				interceptResult := i.interceptor.Intercept(&scid, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry, request.IncomingExpiry)
 				switch interceptResult.Action {
 				case interceptor.INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
