@@ -92,6 +92,8 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 		log.Printf("paymentHash:%x\npaymentSecret:%x\ndestination:%x\nincomingAmountMsat:%v\noutgoingAmountMsat:%v",
 			paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat)
 
+		isRegistered := paymentSecret != nil
+		isProbe := isRegistered && !bytes.Equal(paymentHash, reqPaymentHash)
 		nextHop, _ := i.client.GetPeerId(scid)
 		// If the payment was registered, but the next hop is not the destination
 		// that means we are not the last hop of the payment, so we'll just forward.
@@ -126,21 +128,33 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 				// If this errors or the client is not notified, the client
 				// is offline or unknown, so return unknown next peer in either
 				// case.
-				if err != nil || !notified {
+				if err != nil {
 					return InterceptResult{
 						Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
 						FailureCode: FAILURE_UNKNOWN_NEXT_PEER,
 					}, nil
 				}
 
-				d, err := time.ParseDuration(i.config.NotificationTimeout)
-				if err != nil {
-					log.Printf("WARN: No notification timeout set. Using default 1m")
-					d = time.Minute
-				}
-				timeout := time.Now().Add(d)
-				err = i.client.WaitOnline(nextHop, timeout)
-				if err != nil {
+				if notified {
+					d, err := time.ParseDuration(i.config.NotificationTimeout)
+					if err != nil {
+						log.Printf("WARN: No notification timeout set. Using default 1m")
+						d = time.Minute
+					}
+					timeout := time.Now().Add(d)
+					err = i.client.WaitOnline(nextHop, timeout)
+					if err != nil {
+						return InterceptResult{
+							Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+							FailureCode: FAILURE_UNKNOWN_NEXT_PEER,
+						}, nil
+					}
+				} else if isProbe {
+					return InterceptResult{
+						Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+						FailureCode: FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
+					}, nil
+				} else {
 					return InterceptResult{
 						Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
 						FailureCode: FAILURE_UNKNOWN_NEXT_PEER,
@@ -150,33 +164,33 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 		}
 
 		// If the payment was not registered, this is a regular forward
-		if paymentSecret == nil {
+		if !isRegistered {
 			return InterceptResult{
 				Action: INTERCEPT_RESUME,
 			}, nil
 		}
 
 		if channelPoint == nil {
-			if bytes.Equal(paymentHash, reqPaymentHash) {
-				if int64(reqIncomingExpiry)-int64(reqOutgoingExpiry) < int64(i.config.TimeLockDelta) {
-					return InterceptResult{
-						Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-						FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
-					}, nil
-				}
-
-				channelPoint, err = i.openChannel(reqPaymentHash, destination, incomingAmountMsat)
-				if err != nil {
-					log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
-					return InterceptResult{
-						Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-						FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
-					}, nil
-				}
-			} else { //probing
+			if isProbe {
 				return InterceptResult{
 					Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
 					FailureCode: FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
+				}, nil
+			}
+
+			if int64(reqIncomingExpiry)-int64(reqOutgoingExpiry) < int64(i.config.TimeLockDelta) {
+				return InterceptResult{
+					Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+				}, nil
+			}
+
+			channelPoint, err = i.openChannel(reqPaymentHash, destination, incomingAmountMsat)
+			if err != nil {
+				log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
+				return InterceptResult{
+					Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
 				}, nil
 			}
 		}
