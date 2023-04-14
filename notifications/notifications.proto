@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option go_package = "github.com/breez/lspd/notifications";
+
+package notifications;
+
+service Notifications {
+    rpc SubscribeNotifications(SubscribeNotificationsRequest)
+        returns (SubscribeNotificationsReply) {}
+}  
+
+message SubscribeNotificationsRequest {
+    string url = 1;
+    bytes signature = 2;
+}
+
+message SubscribeNotificationsReply {
+}
