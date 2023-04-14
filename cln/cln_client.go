@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"time"
 
 	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/lightning"
@@ -253,4 +254,22 @@ func (c *ClnClient) GetClosedChannels(nodeID string, channelPoints map[string]ui
 	}
 
 	return r, nil
+}
+
+var pollingInterval = 400 * time.Millisecond
+
+func (c *ClnClient) WaitOnline(peerID []byte, timeout time.Time) error {
+	peerIDStr := hex.EncodeToString(peerID)
+	for {
+		peer, err := c.client.GetPeer(peerIDStr)
+		if err == nil && peer.Connected {
+			return nil
+		}
+
+		select {
+		case <-time.After(time.Until(timeout)):
+			return fmt.Errorf("timeout")
+		case <-time.After(pollingInterval):
+		}
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/config"
@@ -253,4 +254,38 @@ func (c *LndClient) getWaitingCloseChannels(nodeID string) ([]*lnrpc.PendingChan
 		}
 	}
 	return waitingCloseChannels, nil
+}
+
+func (c *LndClient) WaitOnline(peerID []byte, timeout time.Time) error {
+	ctx, cancel := context.WithDeadline(context.Background(), timeout)
+	defer cancel()
+
+	pkStr := hex.EncodeToString(peerID)
+	sub, err := c.client.SubscribePeerEvents(ctx, &lnrpc.PeerEventSubscription{})
+	if err != nil {
+		return err
+	}
+
+	// NOTE: It would be nice to have a lookup for a single peer in LND.
+	peers, err := c.client.ListPeers(ctx, &lnrpc.ListPeersRequest{})
+	if err != nil {
+		return err
+	}
+
+	for _, peer := range peers.Peers {
+		if peer.PubKey == pkStr {
+			return nil
+		}
+	}
+
+	for {
+		ev, err := sub.Recv()
+		if err != nil {
+			return err
+		}
+
+		if ev.PubKey == pkStr && ev.Type == lnrpc.PeerEvent_PEER_ONLINE {
+			return nil
+		}
+	}
 }
