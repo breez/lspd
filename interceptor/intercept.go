@@ -36,7 +36,6 @@ type InterceptFailureCode uint16
 var (
 	FAILURE_TEMPORARY_CHANNEL_FAILURE            InterceptFailureCode = 0x1007
 	FAILURE_TEMPORARY_NODE_FAILURE               InterceptFailureCode = 0x2002
-	FAILURE_UNKNOWN_NEXT_PEER                    InterceptFailureCode = 0x400A
 	FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS InterceptFailureCode = 0x400F
 )
 
@@ -103,6 +102,10 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 			}, nil
 		}
 
+		// nextHop is set if the sender's scid corresponds to a known channel
+		// destination is set if the payment was registered for a channel open.
+		// The 'actual' next hop will be either of those. Or nil if the next hop
+		// is unknown.
 		if nextHop == nil {
 			nextHop = destination
 		}
@@ -126,12 +129,11 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 				)
 
 				// If this errors or the client is not notified, the client
-				// is offline or unknown, so return unknown next peer in either
-				// case.
+				// is offline or unknown. We'll resume the HTLC (which will
+				// result in UNKOWN_NEXT_PEER)
 				if err != nil {
 					return InterceptResult{
-						Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-						FailureCode: FAILURE_UNKNOWN_NEXT_PEER,
+						Action: INTERCEPT_RESUME,
 					}, nil
 				}
 
@@ -143,10 +145,12 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 					}
 					timeout := time.Now().Add(d)
 					err = i.client.WaitOnline(nextHop, timeout)
+
+					// If there's an error waiting, resume the htlc. It will
+					// probably fail with UNKNOWN_NEXT_PEER.
 					if err != nil {
 						return InterceptResult{
-							Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-							FailureCode: FAILURE_UNKNOWN_NEXT_PEER,
+							Action: INTERCEPT_RESUME,
 						}, nil
 					}
 				} else if isProbe {
@@ -155,9 +159,10 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 						FailureCode: FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
 					}, nil
 				} else {
+					// If we haven't notified, resume the htlc. It will probably
+					// fail with UNKNOWN_NEXT_PEER.
 					return InterceptResult{
-						Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-						FailureCode: FAILURE_UNKNOWN_NEXT_PEER,
+						Action: INTERCEPT_RESUME,
 					}, nil
 				}
 			}
