@@ -37,4 +37,5 @@ type Client interface {
 	GetNodeChannelCount(nodeID []byte) (int, error)
 	GetClosedChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error)
 	WaitOnline(peerID []byte, timeout time.Time) error
+	WaitChannelActive(peerID []byte, timeout time.Time) error
 }

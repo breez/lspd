@@ -289,3 +289,24 @@ func (c *LndClient) WaitOnline(peerID []byte, timeout time.Time) error {
 		}
 	}
 }
+
+var pollingInterval time.Duration = time.Millisecond * 400
+
+func (c *LndClient) WaitChannelActive(peerID []byte, timeout time.Time) error {
+	ctx, cancel := context.WithDeadline(context.Background(), timeout)
+	defer cancel()
+
+	for {
+		chans, err := c.client.ListChannels(ctx, &lnrpc.ListChannelsRequest{
+			Peer:       peerID,
+			ActiveOnly: true,
+		})
+		if err != nil {
+			return err
+		}
+
+		if len(chans.Channels) > 0 {
+			return nil
+		}
+	}
+}

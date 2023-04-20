@@ -273,3 +273,7 @@ func (c *ClnClient) WaitOnline(peerID []byte, timeout time.Time) error {
 		}
 	}
 }
+
+func (c *ClnClient) WaitChannelActive(peerID []byte, timeout time.Time) error {
+	return nil
+}

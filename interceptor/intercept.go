@@ -153,6 +153,23 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 							Action: INTERCEPT_RESUME,
 						}, nil
 					}
+
+					// At this point we know a few things.
+					// - This is either a channel partner or a registered payment
+					// - they were offline
+					// - They got notified about the htlc
+					// - They came back online
+					// So if this payment was not registered, this is a channel
+					// partner and we have to wait for the channel to become active
+					// before we can forward.
+					if !isRegistered {
+						err = i.client.WaitChannelActive(nextHop, timeout)
+						if err != nil {
+							return InterceptResult{
+								Action: INTERCEPT_RESUME,
+							}, nil
+						}
+					}
 				} else if isProbe {
 					return InterceptResult{
 						Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
