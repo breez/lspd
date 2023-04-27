@@ -90,6 +90,7 @@ func main() {
 				log.Fatalf("failed to initialize LND client: %v", err)
 			}
 
+			client.StartListeners()
 			fwsync := lnd.NewForwardingHistorySync(client, interceptStore, forwardingStore)
 			interceptor := interceptor.NewInterceptor(client, node, interceptStore, feeEstimator, feeStrategy, notificationService)
 			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node, client, fwsync, interceptor)

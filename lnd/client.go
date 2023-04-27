@@ -6,19 +6,22 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lightning"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/htlcswitch/hop"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/chainrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
-	"golang.org/x/exp/slices"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 )
 
 type LndClient struct {
@@ -26,6 +29,12 @@ type LndClient struct {
 	routerClient        routerrpc.RouterClient
 	chainNotifierClient chainrpc.ChainNotifierClient
 	conn                *grpc.ClientConn
+	listenerCtx         context.Context
+	listenerCancel      context.CancelFunc
+	peersubs            map[string]map[uint64]chan struct{}
+	chansubs            map[string]map[uint64]chan struct{}
+	submtx              sync.RWMutex
+	index               uint64
 }
 
 func NewLndClient(conf *config.LndConfig) (*LndClient, error) {
@@ -60,11 +69,151 @@ func NewLndClient(conf *config.LndConfig) (*LndClient, error) {
 		routerClient:        routerClient,
 		chainNotifierClient: chainNotifierClient,
 		conn:                conn,
+		peersubs:            make(map[string]map[uint64]chan struct{}),
+		chansubs:            make(map[string]map[uint64]chan struct{}),
 	}, nil
 }
 
 func (c *LndClient) Close() {
+	cancel := c.listenerCancel
+	if cancel != nil {
+		cancel()
+	}
 	c.conn.Close()
+}
+
+func (c *LndClient) StartListeners() {
+	c.listenerCtx, c.listenerCancel = context.WithCancel(context.Background())
+	go c.listenPeerEvents()
+	go c.listenChannelEvents()
+}
+
+func (c *LndClient) listenPeerEvents() {
+	ctx := c.listenerCtx
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+
+		sub, err := c.client.SubscribePeerEvents(
+			ctx,
+			&lnrpc.PeerEventSubscription{},
+		)
+		if err != nil {
+			log.Printf("SubscribePeerEvents: %v", err)
+			<-time.After(time.Second)
+			continue
+		}
+
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+
+			msg, err := sub.Recv()
+			if err != nil {
+				status, ok := status.FromError(err)
+				if ok && status.Code() == codes.Canceled {
+					log.Printf("listenPeerEvents: Got code canceled. Break.")
+					break
+				}
+
+				log.Printf("unexpected error in listenPeerEvents: %v", err)
+				break
+			}
+
+			log.Printf("REMOVE THIS LINE: peer event: %+v", msg)
+			if msg.Type != lnrpc.PeerEvent_PEER_ONLINE {
+				continue
+			}
+
+			c.submtx.RLock()
+			subs, ok := c.peersubs[msg.PubKey]
+			if ok {
+				for _, sub := range subs {
+					sub <- struct{}{}
+				}
+			}
+			c.submtx.RUnlock()
+		}
+
+		<-time.After(time.Second)
+	}
+}
+
+func (c *LndClient) listenChannelEvents() {
+	ctx := c.listenerCtx
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+
+		sub, err := c.client.SubscribeChannelEvents(
+			ctx,
+			&lnrpc.ChannelEventSubscription{},
+		)
+		if err != nil {
+			log.Printf("listenChannelEvents: SubscribeChannelEvents: %v", err)
+			<-time.After(time.Second)
+			continue
+		}
+
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+
+			msg, err := sub.Recv()
+			if err != nil {
+				status, ok := status.FromError(err)
+				if ok && status.Code() == codes.Canceled {
+					log.Printf("listenChannelEvents: Got code canceled. Break.")
+					break
+				}
+
+				log.Printf("unexpected error in listenChannelEvents: %v", err)
+				break
+			}
+
+			log.Printf("REMOVE THIS LINE: channel event: %+v", msg)
+			if msg.Type != lnrpc.ChannelEventUpdate_ACTIVE_CHANNEL {
+				continue
+			}
+
+			ch := msg.GetActiveChannel()
+			point, err := extractChannelPoint(ch)
+			if err != nil {
+				log.Printf("listenChannelEvents: Failed to extract channel point %+v: %v", ch, err)
+				continue
+			}
+
+			c.submtx.RLock()
+			subs, ok := c.chansubs[point]
+			log.Printf("REMOVE THIS LINE: chansubs: %+v, ok: %t, point: %s", c.chansubs, ok, point)
+			if ok {
+				for _, sub := range subs {
+					sub <- struct{}{}
+				}
+			}
+			c.submtx.RUnlock()
+		}
+
+		<-time.After(time.Second)
+	}
+}
+
+func extractChannelPoint(cp *lnrpc.ChannelPoint) (string, error) {
+	str := cp.GetFundingTxidStr()
+	if str == "" {
+		b := cp.GetFundingTxidBytes()
+		h, err := chainhash.NewHash(b)
+		if err != nil {
+			return "", err
+		}
+		str = h.String()
+	}
+
+	return fmt.Sprintf("%s:%d", str, cp.OutputIndex), nil
 }
 
 func (c *LndClient) GetInfo() (*lightning.GetInfoResult, error) {
@@ -81,18 +230,18 @@ func (c *LndClient) GetInfo() (*lightning.GetInfoResult, error) {
 }
 
 func (c *LndClient) IsConnected(destination []byte) (bool, error) {
-	pubKey := hex.EncodeToString(destination)
+	pubkey := hex.EncodeToString(destination)
 
-	r, err := c.client.ListPeers(context.Background(), &lnrpc.ListPeersRequest{LatestError: true})
+	r, err := c.client.GetPeerConnected(context.Background(), &lnrpc.GetPeerConnectedRequest{
+		Pubkey: pubkey,
+	})
 	if err != nil {
-		log.Printf("LND: client.ListPeers() error: %v", err)
-		return false, fmt.Errorf("LND: client.ListPeers() error: %w", err)
+		log.Printf("LND: client.GetPeer(%s) error: %v", pubkey, err)
+		return false, fmt.Errorf("LND: client.GetPeer(%s) error: %w", pubkey, err)
 	}
-	for _, peer := range r.Peers {
-		if pubKey == peer.PubKey {
-			log.Printf("destination online: %x", destination)
-			return true, nil
-		}
+	if r.Connected {
+		log.Printf("LND: destination online: %x", destination)
+		return true, nil
 	}
 
 	log.Printf("LND: destination offline: %x", destination)
@@ -172,25 +321,19 @@ func (c *LndClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 
 func (c *LndClient) GetPeerId(scid *basetypes.ShortChannelID) ([]byte, error) {
 	scidu64 := uint64(*scid)
-	chans, err := c.client.ListChannels(context.Background(), &lnrpc.ListChannelsRequest{})
+	peer, err := c.client.GetPeerIdByScid(context.Background(), &lnrpc.GetPeerIdByScidRequest{
+		Scid: scidu64,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	var dest *string
-	for _, ch := range chans.Channels {
-		if slices.Contains(ch.AliasScids, scidu64) ||
-			ch.ChanId == scidu64 {
-			dest = &ch.RemotePubkey
-			break
-		}
-	}
-
-	if dest == nil {
+	if peer.PeerId == "" {
 		return nil, nil
 	}
 
-	return hex.DecodeString(*dest)
+	peerid, _ := hex.DecodeString(peer.PeerId)
+	return peerid, nil
 }
 
 func (c *LndClient) GetNodeChannelCount(nodeID []byte) (int, error) {
@@ -256,57 +399,133 @@ func (c *LndClient) getWaitingCloseChannels(nodeID string) ([]*lnrpc.PendingChan
 	return waitingCloseChannels, nil
 }
 
-func (c *LndClient) WaitOnline(peerID []byte, timeout time.Time) error {
-	ctx, cancel := context.WithDeadline(context.Background(), timeout)
-	defer cancel()
-
+func (c *LndClient) WaitOnline(peerID []byte, deadline time.Time) error {
 	pkStr := hex.EncodeToString(peerID)
-	sub, err := c.client.SubscribePeerEvents(ctx, &lnrpc.PeerEventSubscription{})
+	signal := make(chan struct{}, 10)
+	defer close(signal)
+
+	c.submtx.Lock()
+	subid := c.index
+	c.index++
+	subs, ok := c.peersubs[pkStr]
+	if !ok {
+		subs = make(map[uint64]chan struct{})
+		c.peersubs[pkStr] = subs
+	}
+
+	subs[subid] = signal
+	c.submtx.Unlock()
+
+	defer func() {
+		c.submtx.Lock()
+		subs, ok := c.peersubs[pkStr]
+		if ok {
+			delete(subs, subid)
+			if len(subs) == 0 {
+				delete(c.peersubs, pkStr)
+			}
+		}
+		c.submtx.Unlock()
+	}()
+
+	connected, err := c.IsConnected(peerID)
 	if err != nil {
 		return err
 	}
-
-	// NOTE: It would be nice to have a lookup for a single peer in LND.
-	peers, err := c.client.ListPeers(ctx, &lnrpc.ListPeersRequest{})
-	if err != nil {
-		return err
+	if connected {
+		return nil
 	}
 
-	for _, peer := range peers.Peers {
-		if peer.PubKey == pkStr {
-			return nil
-		}
-	}
-
-	for {
-		ev, err := sub.Recv()
-		if err != nil {
-			return err
-		}
-
-		if ev.PubKey == pkStr && ev.Type == lnrpc.PeerEvent_PEER_ONLINE {
-			return nil
-		}
+	select {
+	case <-signal:
+		return nil
+	case <-time.After(time.Until(deadline)):
+		return fmt.Errorf("deadline exceeded")
 	}
 }
 
-var pollingInterval time.Duration = time.Millisecond * 400
-
-func (c *LndClient) WaitChannelActive(peerID []byte, timeout time.Time) error {
-	ctx, cancel := context.WithDeadline(context.Background(), timeout)
+func (c *LndClient) WaitChannelActive(peerID []byte, deadline time.Time) error {
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	for {
-		chans, err := c.client.ListChannels(ctx, &lnrpc.ListChannelsRequest{
-			Peer:       peerID,
-			ActiveOnly: true,
-		})
-		if err != nil {
-			return err
-		}
+	// Fetch the channels for this peer
+	chans, err := c.client.ListChannels(ctx, &lnrpc.ListChannelsRequest{
+		Peer: peerID,
+	})
+	if err != nil {
+		return err
+	}
+	if len(chans.Channels) == 0 {
+		return fmt.Errorf("no channels with peer")
+	}
 
-		if len(chans.Channels) > 0 {
+	// Exit now if a channel is already active.
+	for _, ch := range chans.Channels {
+		if ch.Active {
 			return nil
 		}
+	}
+
+	signal := make(chan struct{}, 10)
+	defer close(signal)
+
+	// Subscribe to channel active events from this channel
+	c.submtx.Lock()
+	for _, ch := range chans.Channels {
+		chansignal := make(chan struct{}, 10)
+		defer close(chansignal)
+
+		// forward signals from all channels to the signal aggregate
+		go func(c chan struct{}) {
+			for msg := range c {
+				signal <- msg
+			}
+		}(chansignal)
+
+		outpoint := ch.ChannelPoint
+		subid := c.index
+		c.index++
+		subs, ok := c.chansubs[outpoint]
+		if !ok {
+			subs = make(map[uint64]chan struct{})
+			c.chansubs[outpoint] = subs
+		}
+
+		subs[subid] = chansignal
+		defer func() {
+			c.submtx.Lock()
+			subs, ok := c.chansubs[outpoint]
+			if ok {
+				delete(subs, subid)
+				if len(subs) == 0 {
+					delete(c.chansubs, outpoint)
+				}
+			}
+			c.submtx.Unlock()
+		}()
+	}
+	c.submtx.Unlock()
+
+	// Fetch the channels for this peer again, so there is no gap between the
+	// subscription and the call.
+	chans, err = c.client.ListChannels(ctx, &lnrpc.ListChannelsRequest{
+		Peer: peerID,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Exit now if a channel is already active.
+	for _, ch := range chans.Channels {
+		if ch.Active {
+			return nil
+		}
+	}
+
+	select {
+	case <-signal:
+		return nil
+	case <-time.After(time.Until(deadline)):
+		return fmt.Errorf("deadline exceeded")
 	}
 }

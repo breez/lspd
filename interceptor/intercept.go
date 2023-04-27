@@ -138,6 +138,7 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 				}
 
 				if notified {
+					log.Printf("Notified %x of pending htlc", nextHop)
 					d, err := time.ParseDuration(i.config.NotificationTimeout)
 					if err != nil {
 						log.Printf("WARN: No notification timeout set. Using default 1m")
@@ -149,11 +150,17 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 					// If there's an error waiting, resume the htlc. It will
 					// probably fail with UNKNOWN_NEXT_PEER.
 					if err != nil {
+						log.Printf(
+							"waiting for peer %x to come online failed with %v",
+							nextHop,
+							err,
+						)
 						return InterceptResult{
 							Action: INTERCEPT_RESUME,
 						}, nil
 					}
 
+					log.Printf("Peer %x is back online. Continue htlc.", nextHop)
 					// At this point we know a few things.
 					// - This is either a channel partner or a registered payment
 					// - they were offline
@@ -165,6 +172,11 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 					if !isRegistered {
 						err = i.client.WaitChannelActive(nextHop, timeout)
 						if err != nil {
+							log.Printf(
+								"waiting for channnel with %x to become active failed with %v",
+								nextHop,
+								err,
+							)
 							return InterceptResult{
 								Action: INTERCEPT_RESUME,
 							}, nil
