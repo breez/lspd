@@ -149,4 +149,8 @@ var allTestCases = []*testCase{
 		name: "testOfflineNotificationRegularForward",
 		test: testOfflineNotificationRegularForward,
 	},
+	{
+		name: "testOfflineNotificationZeroConfChannel",
+		test: testOfflineNotificationZeroConfChannel,
+	},
 }
