@@ -39,8 +39,6 @@ import (
 	"github.com/lightningnetwork/lnd/lnwire"
 )
 
-var TIME_FORMAT string = "2006-01-02T15:04:05.999Z"
-
 type server struct {
 	lspdrpc.ChannelOpenerServer
 	address         string
@@ -186,7 +184,10 @@ func validateOpeningFeeParams(node *node, params *lspdrpc.OpeningFeeParams) bool
 	return true
 }
 
-func (s *server) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymentRequest) (*lspdrpc.RegisterPaymentReply, error) {
+func (s *server) RegisterPayment(
+	ctx context.Context,
+	in *lspdrpc.RegisterPaymentRequest,
+) (*lspdrpc.RegisterPaymentReply, error) {
 	node, err := getNode(ctx)
 	if err != nil {
 		return nil, err
@@ -223,12 +224,38 @@ func (s *server) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymen
 		}
 	}
 
-	err = checkPayment(node.nodeConfig, pi.IncomingAmountMsat, pi.OutgoingAmountMsat)
+	// TODO: Remove this nil check and the else cluase when we enforce all
+	// clients to use opening_fee_params.
+	if pi.OpeningFeeParams != nil {
+		valid := validateOpeningFeeParams(node, pi.OpeningFeeParams)
+		if !valid {
+			return nil, fmt.Errorf("invalid opening_fee_params")
+		}
+	} else {
+		log.Printf("DEPRECATED: RegisterPayment with deprecated fee mechanism.")
+		pi.OpeningFeeParams = &lspdrpc.OpeningFeeParams{
+			MinMsat:              uint64(node.nodeConfig.ChannelMinimumFeeMsat),
+			Proportional:         uint32(node.nodeConfig.ChannelFeePermyriad * 100),
+			ValidUntil:           time.Now().UTC().Add(time.Duration(time.Hour * 24)).Format(basetypes.TIME_FORMAT),
+			MaxIdleTime:          uint32(node.nodeConfig.MaxInactiveDuration / 600),
+			MaxClientToSelfDelay: uint32(node.nodeConfig.MaxClientToSelfDelay),
+		}
+	}
+
+	err = checkPayment(pi.OpeningFeeParams, pi.IncomingAmountMsat, pi.OutgoingAmountMsat)
 	if err != nil {
 		log.Printf("checkPayment(%v, %v) error: %v", pi.IncomingAmountMsat, pi.OutgoingAmountMsat, err)
 		return nil, fmt.Errorf("checkPayment(%v, %v) error: %v", pi.IncomingAmountMsat, pi.OutgoingAmountMsat, err)
 	}
-	err = s.store.RegisterPayment(pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat, pi.Tag)
+	params := &interceptor.OpeningFeeParams{
+		MinMsat:              pi.OpeningFeeParams.MinMsat,
+		Proportional:         pi.OpeningFeeParams.Proportional,
+		ValidUntil:           pi.OpeningFeeParams.ValidUntil,
+		MaxIdleTime:          pi.OpeningFeeParams.MaxIdleTime,
+		MaxClientToSelfDelay: pi.OpeningFeeParams.MaxClientToSelfDelay,
+		Promise:              pi.OpeningFeeParams.Promise,
+	}
+	err = s.store.RegisterPayment(params, pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat, pi.Tag)
 	if err != nil {
 		log.Printf("RegisterPayment() error: %v", err)
 		return nil, fmt.Errorf("RegisterPayment() error: %w", err)
@@ -534,10 +561,10 @@ func getNode(ctx context.Context) (*node, error) {
 	return node, nil
 }
 
-func checkPayment(config *config.NodeConfig, incomingAmountMsat, outgoingAmountMsat int64) error {
-	fees := incomingAmountMsat * config.ChannelFeePermyriad / 10_000 / 1_000 * 1_000
-	if fees < config.ChannelMinimumFeeMsat {
-		fees = config.ChannelMinimumFeeMsat
+func checkPayment(params *lspdrpc.OpeningFeeParams, incomingAmountMsat, outgoingAmountMsat int64) error {
+	fees := incomingAmountMsat * int64(params.Proportional) / 1_000_000 / 1_000 * 1_000
+	if fees < int64(params.MinMsat) {
+		fees = int64(params.MinMsat)
 	}
 	if incomingAmountMsat-outgoingAmountMsat < fees {
 		return fmt.Errorf("not enough fees")
