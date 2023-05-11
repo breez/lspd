@@ -2,15 +2,20 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"strings"
+	"time"
 
+	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/btceclegacy"
+	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/cln"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/interceptor"
@@ -27,11 +32,14 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/caddyserver/certmagic"
 	"github.com/lightningnetwork/lnd/lnwire"
 )
+
+var TIME_FORMAT string = "2006-01-02T15:04:05.999Z"
 
 type server struct {
 	lspdrpc.ChannelOpenerServer
@@ -41,6 +49,8 @@ type server struct {
 	s               *grpc.Server
 	nodes           map[string]*node
 	store           interceptor.InterceptStore
+	feeStrategy     chain.FeeStrategy
+	feeEstimator    chain.FeeEstimator
 }
 
 type node struct {
@@ -59,6 +69,11 @@ func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInfo
 		return nil, err
 	}
 
+	params, err := s.createOpeningParams(ctx, node)
+	if err != nil {
+		return nil, err
+	}
+
 	return &lspdrpc.ChannelInformationReply{
 		Name:                  node.nodeConfig.Name,
 		Pubkey:                node.nodeConfig.NodePubkey,
@@ -73,7 +88,102 @@ func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInfo
 		ChannelMinimumFeeMsat: int64(node.nodeConfig.ChannelMinimumFeeMsat),
 		LspPubkey:             node.publicKey.SerializeCompressed(), // TODO: Is the publicKey different from the ecies public key?
 		MaxInactiveDuration:   int64(node.nodeConfig.MaxInactiveDuration),
+		OpeningFeeParamsMenu:  []*lspdrpc.OpeningFeeParams{params},
 	}, nil
+}
+
+func (s *server) createOpeningParams(
+	ctx context.Context,
+	node *node,
+) (*lspdrpc.OpeningFeeParams, error) {
+	// Get a fee estimate.
+	estimate, err := s.feeEstimator.EstimateFeeRate(ctx, s.feeStrategy)
+	if err != nil {
+		log.Printf("Failed to get fee estimate: %v", err)
+		return nil, fmt.Errorf("failed to get fee estimate")
+	}
+
+	// Multiply the fee estiimate by the configured multiplication factor.
+	minFeeMsat := estimate.SatPerVByte *
+		float64(node.nodeConfig.FeeMultiplicationFactor)
+
+	// Make sure the fee is not lower than the minimum fee.
+	minFeeMsat = math.Max(minFeeMsat, float64(node.nodeConfig.ChannelMinimumFeeMsat))
+
+	validUntil := time.Now().UTC().Add(
+		time.Second * time.Duration(node.nodeConfig.FeeValidityDuration),
+	)
+	params := &lspdrpc.OpeningFeeParams{
+		MinMsat: uint64(minFeeMsat),
+		// Proportional is ppm, so divide by 100.
+		Proportional: uint32(node.nodeConfig.ChannelFeePermyriad / 100),
+		ValidUntil:   validUntil.Format(basetypes.TIME_FORMAT),
+		// MaxInactiveDuration is in seconds, so divide by 600 for blocks.
+		MaxIdleTime:          uint32(node.nodeConfig.MaxInactiveDuration / 600),
+		MaxClientToSelfDelay: uint32(node.nodeConfig.MaxClientToSelfDelay),
+	}
+
+	promise, err := createPromise(node, params)
+	if err != nil {
+		log.Printf("Failed to create promise: %v", err)
+	}
+
+	params.Promise = *promise
+	return params, nil
+}
+
+func createPromise(node *node, params *lspdrpc.OpeningFeeParams) (*string, error) {
+
+	// First hash all the values in the params in a fixed order.
+	items := []interface{}{
+		params.MinMsat,
+		params.Proportional,
+		params.ValidUntil,
+		params.MaxIdleTime,
+		params.MaxClientToSelfDelay,
+	}
+	blob, err := json.Marshal(items)
+	if err != nil {
+		return nil, err
+	}
+	hash := sha256.Sum256(blob)
+
+	// Sign the hash with the private key of the LSP id.
+	sig, err := ecdsa.SignCompact(node.privateKey, hash[:], true)
+	if err != nil {
+		return nil, err
+	}
+
+	// The promise is the hex encoded hash of the signature.
+	result := sha256.Sum256(sig)
+	promise := hex.EncodeToString(result[:])
+	return &promise, nil
+}
+
+func validateOpeningFeeParams(node *node, params *lspdrpc.OpeningFeeParams) bool {
+	if params == nil {
+		return false
+	}
+
+	promise, err := createPromise(node, params)
+	if err != nil {
+		return false
+	}
+
+	if *promise != params.Promise {
+		return false
+	}
+
+	t, err := time.Parse(basetypes.TIME_FORMAT, params.ValidUntil)
+	if err != nil {
+		return false
+	}
+
+	if time.Now().UTC().After(t) {
+		return false
+	}
+
+	return true
 }
 
 func (s *server) RegisterPayment(ctx context.Context, in *lspdrpc.RegisterPaymentRequest) (*lspdrpc.RegisterPaymentReply, error) {
@@ -270,6 +380,8 @@ func NewGrpcServer(
 	address string,
 	certmagicDomain string,
 	store interceptor.InterceptStore,
+	feeStrategy chain.FeeStrategy,
+	feeEstimator chain.FeeEstimator,
 ) (*server, error) {
 	if len(configs) == 0 {
 		return nil, fmt.Errorf("no nodes supplied")
@@ -329,6 +441,8 @@ func NewGrpcServer(
 		certmagicDomain: certmagicDomain,
 		nodes:           nodes,
 		store:           store,
+		feeStrategy:     feeStrategy,
+		feeEstimator:    feeEstimator,
 	}, nil
 }
 
