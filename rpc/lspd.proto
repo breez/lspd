@@ -47,14 +47,27 @@ message ChannelInformationReply {
   /// the channel.
   int64 min_htlc_msat = 9 [ json_name = "min_htlc_msat" ];
 
-  int64 channel_fee_permyriad = 10;
+  int64 channel_fee_permyriad = 10 [deprecated = true];
 
   bytes lsp_pubkey = 11;
 
   // The channel can be closed if not used this duration in seconds.
-  int64 max_inactive_duration = 12;
+  int64 max_inactive_duration = 12  [deprecated = true];
 
-  int64 channel_minimum_fee_msat = 13;
+  int64 channel_minimum_fee_msat = 13 [deprecated = true];
+
+  repeated OpeningFeeParams opening_fee_params_menu = 14;
+}
+
+message OpeningFeeParams {
+  uint64 min_msat = 1;
+  uint32 proportional = 2;
+  string valid_until = 3;
+
+  // The channel can be closed if not used this duration in blocks.
+  uint32 max_idle_time = 4;
+  uint32 max_client_to_self_delay = 5;
+  string promise = 6;
 }
 
 message OpenChannelRequest {
@@ -80,6 +93,7 @@ message PaymentInformation {
   int64 incoming_amount_msat = 4;
   int64 outgoing_amount_msat = 5;
   string tag = 6;
+  OpeningFeeParams opening_fee_params = 7;
 }
 
 message Encrypted {
