@@ -23,23 +23,24 @@ func NewPostgresInterceptStore(pool *pgxpool.Pool) *PostgresInterceptStore {
 	return &PostgresInterceptStore{pool: pool}
 }
 
-func (s *PostgresInterceptStore) PaymentInfo(htlcPaymentHash []byte) ([]byte, []byte, []byte, int64, int64, *wire.OutPoint, error) {
+func (s *PostgresInterceptStore) PaymentInfo(htlcPaymentHash []byte) (*interceptor.OpeningFeeParams, []byte, []byte, []byte, int64, int64, *wire.OutPoint, error) {
 	var (
+		p                                       *string
 		paymentHash, paymentSecret, destination []byte
 		incomingAmountMsat, outgoingAmountMsat  int64
 		fundingTxID                             []byte
 		fundingTxOutnum                         pgtype.Int4
 	)
 	err := s.pool.QueryRow(context.Background(),
-		`SELECT payment_hash, payment_secret, destination, incoming_amount_msat, outgoing_amount_msat, funding_tx_id, funding_tx_outnum
+		`SELECT payment_hash, payment_secret, destination, incoming_amount_msat, outgoing_amount_msat, funding_tx_id, funding_tx_outnum, opening_fee_params
 			FROM payments
 			WHERE payment_hash=$1 OR sha256('probing-01:' || payment_hash)=$1`,
-		htlcPaymentHash).Scan(&paymentHash, &paymentSecret, &destination, &incomingAmountMsat, &outgoingAmountMsat, &fundingTxID, &fundingTxOutnum)
+		htlcPaymentHash).Scan(&paymentHash, &paymentSecret, &destination, &incomingAmountMsat, &outgoingAmountMsat, &fundingTxID, &fundingTxOutnum, &p)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			err = nil
 		}
-		return nil, nil, nil, 0, 0, nil, err
+		return nil, nil, nil, nil, 0, 0, nil, err
 	}
 
 	var cp *wire.OutPoint
@@ -49,7 +50,16 @@ func (s *PostgresInterceptStore) PaymentInfo(htlcPaymentHash []byte) ([]byte, []
 			log.Printf("invalid funding txid in database %x", fundingTxID)
 		}
 	}
-	return paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, cp, nil
+
+	var params *interceptor.OpeningFeeParams
+	if p != nil {
+		err = json.Unmarshal([]byte(*p), &params)
+		if err != nil {
+			log.Printf("Failed to unmarshal OpeningFeeParams '%s': %v", *p, err)
+			return nil, nil, nil, nil, 0, 0, nil, err
+		}
+	}
+	return params, paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, cp, nil
 }
 
 func (s *PostgresInterceptStore) SetFundingTx(paymentHash []byte, channelPoint *wire.OutPoint) error {
