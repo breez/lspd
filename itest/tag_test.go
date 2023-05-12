@@ -23,7 +23,7 @@ func registerPaymentWithTag(p *testParams) {
 		IncomingAmountMsat: int64(25000000),
 		OutgoingAmountMsat: int64(21000000),
 		Tag:                expected,
-	})
+	}, false)
 
 	pgxPool, err := pgxpool.Connect(p.h.Ctx, p.lsp.PostgresBackend().ConnectionString())
 	if err != nil {

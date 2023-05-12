@@ -147,4 +147,8 @@ var allTestCases = []*testCase{
 		test:          testOpenZeroConfUtxo,
 		skipCreateLsp: true,
 	},
+	{
+		name: "testDynamicFeeFlow",
+		test: testDynamicFeeFlow,
+	},
 }

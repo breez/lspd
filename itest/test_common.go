@@ -2,8 +2,10 @@ package itest
 
 import (
 	"crypto/rand"
+	"log"
 	"testing"
 
+	lspd "github.com/breez/lspd/rpc"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -26,15 +28,27 @@ func AssertChannelCapacity(
 	assert.Equal(t, ((outerAmountMsat/1000)+100000)*1000, capacityMsat)
 }
 
-func calculateInnerAmountMsat(lsp LspNode, outerAmountMsat uint64) uint64 {
-	fee := outerAmountMsat * 40 / 10_000 / 1_000 * 1_000
-	if fee < 2000000 {
-		fee = 2000000
+func calculateInnerAmountMsat(lsp LspNode, outerAmountMsat uint64, params *lspd.OpeningFeeParams) uint64 {
+	var fee uint64
+	log.Printf("%+v", params)
+	if params == nil {
+		fee = outerAmountMsat * 40 / 10_000 / 1_000 * 1_000
+		if fee < 2000000 {
+			fee = 2000000
+		}
+	} else {
+		fee = outerAmountMsat * 40 / 1_000_000 / 1_000 * 1_000
+		if fee < params.MinMsat {
+			fee = params.MinMsat
+		}
 	}
 
-	inner := outerAmountMsat - fee
+	if fee > outerAmountMsat {
+		lsp.Harness().Fatalf("Fee is higher than amount")
+	}
 
-	return inner
+	log.Printf("outer: %v, fee: %v", outerAmountMsat, fee)
+	return outerAmountMsat - fee
 }
 
 var publicChanAmount uint64 = 1000183

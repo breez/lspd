@@ -23,7 +23,7 @@ func testZeroReserve(p *testParams) {
 
 	log.Printf("Adding bob's invoices")
 	outerAmountMsat := uint64(2100000)
-	innerAmountMsat := calculateInnerAmountMsat(p.lsp, outerAmountMsat)
+	innerAmountMsat := calculateInnerAmountMsat(p.lsp, outerAmountMsat, nil)
 	description := "Please pay me"
 	innerInvoice, outerInvoice := GenerateInvoices(p.BreezClient(),
 		generateInvoicesRequest{
@@ -44,7 +44,7 @@ func testZeroReserve(p *testParams) {
 		Destination:        p.BreezClient().Node().NodeId(),
 		IncomingAmountMsat: int64(outerAmountMsat),
 		OutgoingAmountMsat: int64(innerAmountMsat),
-	})
+	}, false)
 
 	// TODO: Fix race waiting for htlc interceptor.
 	log.Printf("Waiting %v to allow htlc interceptor to activate.", htlcInterceptorDelay)

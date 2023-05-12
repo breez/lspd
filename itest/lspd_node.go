@@ -223,7 +223,19 @@ func (l *lspBase) Initialize() error {
 	return nil
 }
 
-func RegisterPayment(l LspNode, paymentInfo *lspd.PaymentInformation) {
+func ChannelInformation(l LspNode) *lspd.ChannelInformationReply {
+	info, err := l.Rpc().ChannelInformation(
+		l.Harness().Ctx,
+		&lspd.ChannelInformationRequest{},
+	)
+	if err != nil {
+		l.Harness().T.Fatalf("Failed to get ChannelInformation: %v", err)
+	}
+
+	return info
+}
+
+func RegisterPayment(l LspNode, paymentInfo *lspd.PaymentInformation, continueOnError bool) error {
 	serialized, err := proto.Marshal(paymentInfo)
 	lntest.CheckError(l.Harness().T, err)
 
@@ -237,7 +249,12 @@ func RegisterPayment(l LspNode, paymentInfo *lspd.PaymentInformation) {
 			Blob: encrypted,
 		},
 	)
-	lntest.CheckError(l.Harness().T, err)
+
+	if !continueOnError {
+		lntest.CheckError(l.Harness().T, err)
+	}
+
+	return err
 }
 
 func getLspdBinary() (string, error) {
