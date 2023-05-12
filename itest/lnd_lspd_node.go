@@ -38,7 +38,7 @@ type lndLspNodeRuntime struct {
 	cleanups []*lntest.Cleanup
 }
 
-func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string, nodeConfig *config.NodeConfig) LspNode {
+func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, name string, nodeConfig *config.NodeConfig) LspNode {
 	args := []string{
 		"--protocol.zero-conf",
 		"--protocol.option-scid-alias",
@@ -56,7 +56,7 @@ func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string, nodeCon
 		Cert:     string(lightningNode.TlsCert()),
 		Macaroon: hex.EncodeToString(lightningNode.Macaroon()),
 	}
-	lspBase, err := newLspd(h, name, nodeConfig, lnd, nil)
+	lspBase, err := newLspd(h, mem, name, nodeConfig, lnd, nil)
 	if err != nil {
 		h.T.Fatalf("failed to initialize lspd")
 	}

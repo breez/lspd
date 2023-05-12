@@ -16,7 +16,7 @@ func testOpenZeroConfUtxo(p *testParams) {
 	alice.Fund(10000000)
 
 	minConfs := uint32(0)
-	lsp := p.lspFunc(p.h, p.m, &config.NodeConfig{MinConfs: &minConfs})
+	lsp := p.lspFunc(p.h, p.m, p.mem, &config.NodeConfig{MinConfs: &minConfs})
 	lsp.Start()
 
 	log.Print("Opening channel between Alice and the lsp")

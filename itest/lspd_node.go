@@ -60,7 +60,7 @@ type lspBase struct {
 	postgresBackend *PostgresContainer
 }
 
-func newLspd(h *lntest.TestHarness, name string, nodeConfig *config.NodeConfig, lnd *config.LndConfig, cln *config.ClnConfig, envExt ...string) (*lspBase, error) {
+func newLspd(h *lntest.TestHarness, mem *mempoolApi, name string, nodeConfig *config.NodeConfig, lnd *config.LndConfig, cln *config.ClnConfig, envExt ...string) (*lspBase, error) {
 	scriptDir := h.GetDirectory(fmt.Sprintf("lspd-%s", name))
 	log.Printf("%s: Creating LSPD in dir %s", name, scriptDir)
 
@@ -129,7 +129,7 @@ func newLspd(h *lntest.TestHarness, name string, nodeConfig *config.NodeConfig, 
 		nodes,
 		fmt.Sprintf("DATABASE_URL=%s", postgresBackend.ConnectionString()),
 		fmt.Sprintf("LISTEN_ADDRESS=%s", grpcAddress),
-		"MEMPOOL_API_BASE_URL=https://mempool.space/api/v1/",
+		fmt.Sprintf("MEMPOOL_API_BASE_URL=%s", mem.Address()),
 		"MEMPOOL_PRIORITY=economy",
 	}
 

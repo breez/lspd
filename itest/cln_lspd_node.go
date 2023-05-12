@@ -42,7 +42,7 @@ type clnLspNodeRuntime struct {
 	cleanups []*lntest.Cleanup
 }
 
-func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string, nodeConfig *config.NodeConfig) LspNode {
+func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, name string, nodeConfig *config.NodeConfig) LspNode {
 	scriptDir := h.GetDirectory("lspd")
 	pluginBinary := *clnPluginExec
 	pluginPort, err := lntest.GetPort()
@@ -65,7 +65,7 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, name string, nodeCon
 		PluginAddress: pluginAddress,
 		SocketPath:    filepath.Join(lightningNode.SocketDir(), lightningNode.SocketFile()),
 	}
-	lspbase, err := newLspd(h, name, nodeConfig, nil, cln)
+	lspbase, err := newLspd(h, mem, name, nodeConfig, nil, cln)
 	if err != nil {
 		h.T.Fatalf("failed to initialize lspd")
 	}

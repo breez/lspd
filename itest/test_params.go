@@ -7,13 +7,14 @@ import (
 	"github.com/breez/lspd/config"
 )
 
-type LspFunc func(h *lntest.TestHarness, m *lntest.Miner, c *config.NodeConfig) LspNode
+type LspFunc func(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, c *config.NodeConfig) LspNode
 type ClientFunc func(h *lntest.TestHarness, m *lntest.Miner) BreezClient
 
 type testParams struct {
 	t          *testing.T
 	h          *lntest.TestHarness
 	m          *lntest.Miner
+	mem        *mempoolApi
 	c          BreezClient
 	lsp        LspNode
 	lspFunc    LspFunc
@@ -26,6 +27,10 @@ func (h *testParams) T() *testing.T {
 
 func (h *testParams) Miner() *lntest.Miner {
 	return h.m
+}
+
+func (h *testParams) Mempool() *mempoolApi {
+	return h.mem
 }
 
 func (h *testParams) Lsp() LspNode {

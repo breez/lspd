@@ -18,12 +18,12 @@ func TestLspd(t *testing.T) {
 	runTests(t, testCases, "CLN-lspd", clnLspFunc, clnClientFunc)
 }
 
-func lndLspFunc(h *lntest.TestHarness, m *lntest.Miner, c *config.NodeConfig) LspNode {
-	return NewLndLspdNode(h, m, "lsp", c)
+func lndLspFunc(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, c *config.NodeConfig) LspNode {
+	return NewLndLspdNode(h, m, mem, "lsp", c)
 }
 
-func clnLspFunc(h *lntest.TestHarness, m *lntest.Miner, c *config.NodeConfig) LspNode {
-	return NewClnLspdNode(h, m, "lsp", c)
+func clnLspFunc(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, c *config.NodeConfig) LspNode {
+	return NewClnLspdNode(h, m, mem, "lsp", c)
 }
 
 func lndClientFunc(h *lntest.TestHarness, m *lntest.Miner) BreezClient {
@@ -72,10 +72,15 @@ func runTest(
 	log.Printf("Creating miner")
 	miner := lntest.NewMiner(h)
 	miner.Start()
+
+	log.Printf("Creating mempool api")
+	mem := NewMempoolApi(h)
+	mem.Start()
+
 	log.Printf("Creating lsp")
 	var lsp LspNode
 	if !testCase.skipCreateLsp {
-		lsp = lspFunc(h, miner, nil)
+		lsp = lspFunc(h, miner, mem, nil)
 		lsp.Start()
 	}
 	c := clientFunc(h, miner)
@@ -85,6 +90,7 @@ func runTest(
 		t:          t,
 		h:          h,
 		m:          miner,
+		mem:        mem,
 		c:          c,
 		lsp:        lsp,
 		lspFunc:    lspFunc,
