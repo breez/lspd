@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"net"
+	"sort"
 	"strings"
 	"time"
 
@@ -67,7 +68,7 @@ func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInfo
 		return nil, err
 	}
 
-	params, err := s.createOpeningParams(ctx, node)
+	params, err := s.createOpeningParamsMenu(ctx, node)
 	if err != nil {
 		return nil, err
 	}
@@ -86,14 +87,16 @@ func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInfo
 		ChannelMinimumFeeMsat: int64(node.nodeConfig.ChannelMinimumFeeMsat),
 		LspPubkey:             node.publicKey.SerializeCompressed(), // TODO: Is the publicKey different from the ecies public key?
 		MaxInactiveDuration:   int64(node.nodeConfig.MaxInactiveDuration),
-		OpeningFeeParamsMenu:  []*lspdrpc.OpeningFeeParams{params},
+		OpeningFeeParamsMenu:  params,
 	}, nil
 }
 
-func (s *server) createOpeningParams(
+func (s *server) createOpeningParamsMenu(
 	ctx context.Context,
 	node *node,
-) (*lspdrpc.OpeningFeeParams, error) {
+) ([]*lspdrpc.OpeningFeeParams, error) {
+	var menu []*lspdrpc.OpeningFeeParams
+
 	// Get a fee estimate.
 	estimate, err := s.feeEstimator.EstimateFeeRate(ctx, s.feeStrategy)
 	if err != nil {
@@ -101,33 +104,39 @@ func (s *server) createOpeningParams(
 		return nil, fmt.Errorf("failed to get fee estimate")
 	}
 
-	// Multiply the fee estiimate by the configured multiplication factor.
-	minFeeMsat := estimate.SatPerVByte *
-		float64(node.nodeConfig.FeeMultiplicationFactor)
+	for _, setting := range node.nodeConfig.FeeParams {
+		// Multiply the fee estiimate by the configured multiplication factor.
+		minFeeMsat := estimate.SatPerVByte *
+			float64(setting.MultiplicationFactor)
 
-	// Make sure the fee is not lower than the minimum fee.
-	minFeeMsat = math.Max(minFeeMsat, float64(node.nodeConfig.ChannelMinimumFeeMsat))
+		// Make sure the fee is not lower than the minimum fee.
+		minFeeMsat = math.Max(minFeeMsat, float64(setting.MinimumFeeMsat))
 
-	validUntil := time.Now().UTC().Add(
-		time.Second * time.Duration(node.nodeConfig.FeeValidityDuration),
-	)
-	params := &lspdrpc.OpeningFeeParams{
-		MinMsat: uint64(minFeeMsat),
-		// Proportional is ppm, so divide by 100.
-		Proportional: uint32(node.nodeConfig.ChannelFeePermyriad / 100),
-		ValidUntil:   validUntil.Format(basetypes.TIME_FORMAT),
-		// MaxInactiveDuration is in seconds, so divide by 600 for blocks.
-		MaxIdleTime:          uint32(node.nodeConfig.MaxInactiveDuration / 600),
-		MaxClientToSelfDelay: uint32(node.nodeConfig.MaxClientToSelfDelay),
+		validUntil := time.Now().UTC().Add(
+			time.Second * time.Duration(setting.ValidityDuration),
+		)
+		params := &lspdrpc.OpeningFeeParams{
+			MinMsat:              uint64(minFeeMsat),
+			Proportional:         setting.Proportional,
+			ValidUntil:           validUntil.Format(basetypes.TIME_FORMAT),
+			MaxIdleTime:          setting.MaxIdleTime,
+			MaxClientToSelfDelay: uint32(setting.MaxClientToSelfDelay),
+		}
+
+		promise, err := createPromise(node, params)
+		if err != nil {
+			log.Printf("Failed to create promise: %v", err)
+			return nil, err
+		}
+
+		params.Promise = *promise
+		menu = append(menu, params)
 	}
 
-	promise, err := createPromise(node, params)
-	if err != nil {
-		log.Printf("Failed to create promise: %v", err)
-	}
-
-	params.Promise = *promise
-	return params, nil
+	sort.Slice(menu, func(i, j int) bool {
+		return menu[i].MinMsat < menu[j].MinMsat
+	})
+	return menu, nil
 }
 
 func createPromise(node *node, params *lspdrpc.OpeningFeeParams) (*string, error) {
@@ -238,7 +247,7 @@ func (s *server) RegisterPayment(
 			Proportional:         uint32(node.nodeConfig.ChannelFeePermyriad * 100),
 			ValidUntil:           time.Now().UTC().Add(time.Duration(time.Hour * 24)).Format(basetypes.TIME_FORMAT),
 			MaxIdleTime:          uint32(node.nodeConfig.MaxInactiveDuration / 600),
-			MaxClientToSelfDelay: uint32(node.nodeConfig.MaxClientToSelfDelay),
+			MaxClientToSelfDelay: uint32(10000),
 		}
 	}
 

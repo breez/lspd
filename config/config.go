@@ -66,8 +66,18 @@ type NodeConfig struct {
 	// The channel can be closed if not used this duration in seconds.
 	MaxInactiveDuration uint64 `json:"maxInactiveDuration,string"`
 
-	// The validity duration of an opening params promise.
-	FeeValidityDuration uint64 `json:"feeValidityDuration,string"`
+	FeeParams []*FeeParamsSettings `json:"feeParams"`
+
+	// Set this field to connect to an LND node.
+	Lnd *LndConfig `json:"lnd,omitempty"`
+
+	// Set this field to connect to a CLN node.
+	Cln *ClnConfig `json:"cln,omitempty"`
+}
+
+type FeeParamsSettings struct {
+	// The validity duration of an opening params promise in seconds.
+	ValidityDuration uint64 `json:"validityDuration,string"`
 
 	// Maximum number of blocks that the client is allowed to set its
 	// `to_self_delay` parameter.
@@ -80,13 +90,16 @@ type NodeConfig struct {
 	// fee rate, and take a margin of 20%, the fee multiplication factor should
 	// be 500 * 1.2 * 1000 = 600000. With 20 sat/vbyte, the resulting minimum fee
 	// would be 600000 * 20 = 12000000msat = 12000sat.
-	FeeMultiplicationFactor uint64 `json:"feeMultiplicationFactor,string"`
+	MultiplicationFactor uint64 `json:"multiplicationFactor,string"`
 
-	// Set this field to connect to an LND node.
-	Lnd *LndConfig `json:"lnd,omitempty"`
+	// The proportional fee to charge on channeel opens in ppm.
+	Proportional uint32 `json:"proportional,string"`
 
-	// Set this field to connect to a CLN node.
-	Cln *ClnConfig `json:"cln,omitempty"`
+	// The minimum fee to charge for a channel open.
+	MinimumFeeMsat uint64 `json:"minimumFeeMsat,string"`
+
+	// The maximum idle time in blocks
+	MaxIdleTime uint32 `json:"maxIdleTime,string"`
 }
 
 type LndConfig struct {

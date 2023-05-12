@@ -109,11 +109,18 @@ func newLspd(h *lntest.TestHarness, mem *mempoolApi, name string, nodeConfig *co
 		ChannelMinimumFeeMsat:     2000000,
 		AdditionalChannelCapacity: 100000,
 		MaxInactiveDuration:       3888000,
-		FeeValidityDuration:       60 * 60 * 24,
-		MaxClientToSelfDelay:      2016,
-		FeeMultiplicationFactor:   1000000,
-		Lnd:                       lnd,
-		Cln:                       cln,
+		FeeParams: []*config.FeeParamsSettings{
+			{
+				ValidityDuration:     60 * 60 * 24,
+				MaxClientToSelfDelay: 2016,
+				MultiplicationFactor: 1000000,
+				Proportional:         4000,
+				MinimumFeeMsat:       2000000,
+				MaxIdleTime:          6480,
+			},
+		},
+		Lnd: lnd,
+		Cln: cln,
 	}
 
 	if nodeConfig != nil {

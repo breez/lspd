@@ -102,7 +102,7 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 						Proportional:         uint32(i.config.ChannelFeePermyriad * 100),
 						ValidUntil:           time.Now().UTC().Add(time.Duration(time.Hour * 24)).Format(basetypes.TIME_FORMAT),
 						MaxIdleTime:          uint32(i.config.MaxInactiveDuration / 600),
-						MaxClientToSelfDelay: uint32(i.config.MaxClientToSelfDelay),
+						MaxClientToSelfDelay: uint32(10000),
 					}
 				}
 
