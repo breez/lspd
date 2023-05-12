@@ -41,33 +41,33 @@ func main() {
 		log.Fatalf("need at least one node configured in NODES.")
 	}
 
-	var feeEstimator chain.FeeEstimator
-	var feeStrategy chain.FeeStrategy
-	useMempool := os.Getenv("USE_MEMPOOL_FEE_ESTIMATION") == "true"
-	if useMempool {
-		mempoolUrl := os.Getenv("MEMPOOL_API_BASE_URL")
-		feeEstimator, err = mempool.NewMempoolClient(mempoolUrl)
-		if err != nil {
-			log.Fatalf("failed to initialize mempool client: %v", err)
-		}
-
-		envFeeStrategy := os.Getenv("MEMPOOL_PRIORITY")
-		switch strings.ToLower(envFeeStrategy) {
-		case "minimum":
-			feeStrategy = chain.FeeStrategyMinimum
-		case "economy":
-			feeStrategy = chain.FeeStrategyEconomy
-		case "hour":
-			feeStrategy = chain.FeeStrategyHour
-		case "halfhour":
-			feeStrategy = chain.FeeStrategyHalfHour
-		case "fastest":
-			feeStrategy = chain.FeeStrategyFastest
-		default:
-			feeStrategy = chain.FeeStrategyEconomy
-		}
-		log.Printf("using mempool api for fee estimation: %v, fee strategy: %v:%v", mempoolUrl, envFeeStrategy, feeStrategy)
+	mempoolUrl := os.Getenv("MEMPOOL_API_BASE_URL")
+	if mempoolUrl == "" {
+		log.Fatalf("No mempool url configured.")
 	}
+
+	feeEstimator, err := mempool.NewMempoolClient(mempoolUrl)
+	if err != nil {
+		log.Fatalf("failed to initialize mempool client: %v", err)
+	}
+
+	var feeStrategy chain.FeeStrategy
+	envFeeStrategy := os.Getenv("MEMPOOL_PRIORITY")
+	switch strings.ToLower(envFeeStrategy) {
+	case "minimum":
+		feeStrategy = chain.FeeStrategyMinimum
+	case "economy":
+		feeStrategy = chain.FeeStrategyEconomy
+	case "hour":
+		feeStrategy = chain.FeeStrategyHour
+	case "halfhour":
+		feeStrategy = chain.FeeStrategyHalfHour
+	case "fastest":
+		feeStrategy = chain.FeeStrategyFastest
+	default:
+		feeStrategy = chain.FeeStrategyEconomy
+	}
+	log.Printf("using mempool api for fee estimation: %v, fee strategy: %v:%v", mempoolUrl, envFeeStrategy, feeStrategy)
 
 	databaseUrl := os.Getenv("DATABASE_URL")
 	pool, err := postgresql.PgConnect(databaseUrl)
