@@ -68,6 +68,14 @@ type NodeConfig struct {
 
 	FeeParams []*FeeParamsSettings `json:"feeParams"`
 
+	// When a htlc comes in where a channel open is needed, and that payment
+	// was registered with a promise, but the promise has expired, lspd may
+	// open the channel anyway if the fee is low enough right now (the promise
+	// fee was higher than the current fee). ExpiredPromiseMultiplicationFactor
+	// is the multiplication factor to use on the mempool fee rate to check
+	// whether the min fee of the promise is lower than the current min fee.
+	ExpiredPromiseMultiplicationFactor uint64
+
 	// Set this field to connect to an LND node.
 	Lnd *LndConfig `json:"lnd,omitempty"`
 

@@ -123,11 +123,25 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 				}
 
 				if time.Now().UTC().After(validUntil) {
-					log.Printf("Intercepted expired payment registration. Failing payment. payment hash: %x, valid until: %s", paymentHash, params.ValidUntil)
-					return InterceptResult{
-						Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-						FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
-					}, nil
+					feeEstimate, err := i.feeEstimator.EstimateFeeRate(context.Background(), i.feeStrategy)
+					if err != nil {
+						log.Printf("Intercepted expired payment registration. Failing payment. payment hash: %x, valid until: %s", paymentHash, params.ValidUntil)
+						return InterceptResult{
+							Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+							FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+						}, nil
+					}
+
+					minMsat := uint64(feeEstimate.SatPerVByte * float64(i.config.ExpiredPromiseMultiplicationFactor))
+					if minMsat >= params.MinMsat {
+						log.Printf("Intercepted expired payment registration. Failing payment. payment hash: %x, valid until: %s", paymentHash, params.ValidUntil)
+						return InterceptResult{
+							Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+							FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+						}, nil
+					}
+
+					log.Printf("Intercepted expired payment registration. Opening channel anyway, because it's cheaper at the current rate. feeEstimate: %v minMsat: %v, params: %+v", feeEstimate.SatPerVByte, minMsat, params)
 				}
 
 				channelPoint, err = i.openChannel(reqPaymentHash, destination, incomingAmountMsat)
