@@ -66,48 +66,11 @@ type NodeConfig struct {
 	// The channel can be closed if not used this duration in seconds.
 	MaxInactiveDuration uint64 `json:"maxInactiveDuration,string"`
 
-	FeeParams []*FeeParamsSettings `json:"feeParams"`
-
-	// When a htlc comes in where a channel open is needed, and that payment
-	// was registered with a promise, but the promise has expired, lspd may
-	// open the channel anyway if the fee is low enough right now (the promise
-	// fee was higher than the current fee). ExpiredPromiseMultiplicationFactor
-	// is the multiplication factor to use on the mempool fee rate to check
-	// whether the min fee of the promise is lower than the current min fee.
-	ExpiredPromiseMultiplicationFactor uint64
-
 	// Set this field to connect to an LND node.
 	Lnd *LndConfig `json:"lnd,omitempty"`
 
 	// Set this field to connect to a CLN node.
 	Cln *ClnConfig `json:"cln,omitempty"`
-}
-
-type FeeParamsSettings struct {
-	// The validity duration of an opening params promise in seconds.
-	ValidityDuration uint64 `json:"validityDuration,string"`
-
-	// Maximum number of blocks that the client is allowed to set its
-	// `to_self_delay` parameter.
-	MaxClientToSelfDelay uint64 `json:"maxClientToSelfDelay,string"`
-
-	// Multiplication factor to calculate the minimum fee for a JIT channel open.
-	// The resulting fee after multiplying sat/vbyte by the multiplication factor
-	// is denominated in millisat.
-	// e.g. if you expect to publish 500 bytes onchain with the given sat/vbyte
-	// fee rate, and take a margin of 20%, the fee multiplication factor should
-	// be 500 * 1.2 * 1000 = 600000. With 20 sat/vbyte, the resulting minimum fee
-	// would be 600000 * 20 = 12000000msat = 12000sat.
-	MultiplicationFactor uint64 `json:"multiplicationFactor,string"`
-
-	// The proportional fee to charge on channeel opens in ppm.
-	Proportional uint32 `json:"proportional,string"`
-
-	// The minimum fee to charge for a channel open.
-	MinimumFeeMsat uint64 `json:"minimumFeeMsat,string"`
-
-	// The maximum idle time in blocks
-	MaxIdleTime uint32 `json:"maxIdleTime,string"`
 }
 
 type LndConfig struct {

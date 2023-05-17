@@ -118,3 +118,36 @@ func (s *PostgresInterceptStore) InsertChannel(initialChanID, confirmedChanId ui
 		initialChanID, confirmedChanId, nodeID, c.String())
 	return nil
 }
+
+func (s *PostgresInterceptStore) GetFeeParamsSettings() ([]*interceptor.OpeningFeeParamsSetting, error) {
+	rows, err := s.pool.Query(context.Background(), `SELECT validity, params FROM new_channel_params`)
+	if err != nil {
+		log.Printf("GetFeeParamsSettings() error: %v", err)
+		return nil, err
+	}
+
+	var settings []*interceptor.OpeningFeeParamsSetting
+	for rows.Next() {
+		var validity int64
+		var param string
+		err = rows.Scan(&validity, &param)
+		if err != nil {
+			return nil, err
+		}
+
+		var params *interceptor.OpeningFeeParams
+		err := json.Unmarshal([]byte(param), &params)
+		if err != nil {
+			log.Printf("Failed to unmarshal fee param '%v': %v", param, err)
+			return nil, err
+		}
+
+		duration := time.Second * time.Duration(validity)
+		settings = append(settings, &interceptor.OpeningFeeParamsSetting{
+			Validity: duration,
+			Params:   params,
+		})
+	}
+
+	return settings, nil
+}

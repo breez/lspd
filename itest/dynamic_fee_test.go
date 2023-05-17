@@ -22,18 +22,20 @@ func testDynamicFeeFlow(p *testParams) {
 	channelId := alice.WaitForChannelReady(channel)
 
 	log.Printf("Getting channel information")
-	p.Mempool().SetFees(&RecommendedFeesResponse{
-		FastestFee:  3,
-		HalfHourFee: 3,
-		HourFee:     3,
-		EconomyFee:  3,
-		MinimumFee:  3,
-	})
+	SetFeeParams(p.lsp, []*FeeParamSetting{
+		{
+			Validity:     time.Second * 3600,
+			MinMsat:      3000000,
+			Proportional: 1000,
+		},
+	},
+	)
 	info := ChannelInformation(p.lsp)
 	assert.Len(p.t, info.OpeningFeeParamsMenu, 1)
 	params := info.OpeningFeeParamsMenu[0]
 	assert.Equal(p.t, uint64(3000000), params.MinMsat)
 
+	log.Printf("opening_fee_params: %+v", params)
 	log.Printf("Adding bob's invoices")
 	outerAmountMsat := uint64(4200000)
 	innerAmountMsat := calculateInnerAmountMsat(p.lsp, outerAmountMsat, params)

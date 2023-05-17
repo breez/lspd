@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"net"
 	"sort"
 	"strings"
@@ -16,7 +15,6 @@ import (
 
 	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/btceclegacy"
-	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/cln"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/interceptor"
@@ -48,8 +46,6 @@ type server struct {
 	s               *grpc.Server
 	nodes           map[string]*node
 	store           interceptor.InterceptStore
-	feeStrategy     chain.FeeStrategy
-	feeEstimator    chain.FeeEstimator
 }
 
 type node struct {
@@ -97,30 +93,20 @@ func (s *server) createOpeningParamsMenu(
 ) ([]*lspdrpc.OpeningFeeParams, error) {
 	var menu []*lspdrpc.OpeningFeeParams
 
-	// Get a fee estimate.
-	estimate, err := s.feeEstimator.EstimateFeeRate(ctx, s.feeStrategy)
+	settings, err := s.store.GetFeeParamsSettings()
 	if err != nil {
-		log.Printf("Failed to get fee estimate: %v", err)
-		return nil, fmt.Errorf("failed to get fee estimate")
+		log.Printf("Failed to fetch fee params settings: %v", err)
+		return nil, fmt.Errorf("failed to get opening_fee_params")
 	}
 
-	for _, setting := range node.nodeConfig.FeeParams {
-		// Multiply the fee estiimate by the configured multiplication factor.
-		minFeeMsat := estimate.SatPerVByte *
-			float64(setting.MultiplicationFactor)
-
-		// Make sure the fee is not lower than the minimum fee.
-		minFeeMsat = math.Max(minFeeMsat, float64(setting.MinimumFeeMsat))
-
-		validUntil := time.Now().UTC().Add(
-			time.Second * time.Duration(setting.ValidityDuration),
-		)
+	for _, setting := range settings {
+		validUntil := time.Now().UTC().Add(setting.Validity)
 		params := &lspdrpc.OpeningFeeParams{
-			MinMsat:              uint64(minFeeMsat),
-			Proportional:         setting.Proportional,
+			MinMsat:              setting.Params.MinMsat,
+			Proportional:         setting.Params.Proportional,
 			ValidUntil:           validUntil.Format(basetypes.TIME_FORMAT),
-			MaxIdleTime:          setting.MaxIdleTime,
-			MaxClientToSelfDelay: uint32(setting.MaxClientToSelfDelay),
+			MaxIdleTime:          setting.Params.MaxIdleTime,
+			MaxClientToSelfDelay: setting.Params.MaxClientToSelfDelay,
 		}
 
 		promise, err := createPromise(node, params)
@@ -416,8 +402,6 @@ func NewGrpcServer(
 	address string,
 	certmagicDomain string,
 	store interceptor.InterceptStore,
-	feeStrategy chain.FeeStrategy,
-	feeEstimator chain.FeeEstimator,
 ) (*server, error) {
 	if len(configs) == 0 {
 		return nil, fmt.Errorf("no nodes supplied")
@@ -477,8 +461,6 @@ func NewGrpcServer(
 		certmagicDomain: certmagicDomain,
 		nodes:           nodes,
 		store:           store,
-		feeStrategy:     feeStrategy,
-		feeEstimator:    feeEstimator,
 	}, nil
 }
 

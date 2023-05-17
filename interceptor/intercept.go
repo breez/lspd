@@ -123,8 +123,7 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 				}
 
 				if time.Now().UTC().After(validUntil) {
-					feeEstimate, err := i.feeEstimator.EstimateFeeRate(context.Background(), i.feeStrategy)
-					if err != nil {
+					if !i.isCurrentChainFeeCheaper(params) {
 						log.Printf("Intercepted expired payment registration. Failing payment. payment hash: %x, valid until: %s", paymentHash, params.ValidUntil)
 						return InterceptResult{
 							Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
@@ -132,16 +131,7 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 						}, nil
 					}
 
-					minMsat := uint64(feeEstimate.SatPerVByte * float64(i.config.ExpiredPromiseMultiplicationFactor))
-					if minMsat >= params.MinMsat {
-						log.Printf("Intercepted expired payment registration. Failing payment. payment hash: %x, valid until: %s", paymentHash, params.ValidUntil)
-						return InterceptResult{
-							Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-							FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
-						}, nil
-					}
-
-					log.Printf("Intercepted expired payment registration. Opening channel anyway, because it's cheaper at the current rate. feeEstimate: %v minMsat: %v, params: %+v", feeEstimate.SatPerVByte, minMsat, params)
+					log.Printf("Intercepted expired payment registration. Opening channel anyway, because it's cheaper at the current rate. %+v", params)
 				}
 
 				channelPoint, err = i.openChannel(reqPaymentHash, destination, incomingAmountMsat)
@@ -289,6 +279,22 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 	})
 
 	return resp.(InterceptResult)
+}
+
+func (i *Interceptor) isCurrentChainFeeCheaper(params *OpeningFeeParams) bool {
+	settings, err := i.store.GetFeeParamsSettings()
+	if err != nil {
+		log.Printf("Failed to get fee params settings: %v", err)
+		return false
+	}
+
+	for _, setting := range settings {
+		if setting.Params.MinMsat <= params.MinMsat {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmountMsat int64) (*wire.OutPoint, error) {

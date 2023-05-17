@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/breez/lntest"
 	"github.com/breez/lspd/config"
@@ -19,6 +20,7 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 var (
@@ -109,18 +111,8 @@ func newLspd(h *lntest.TestHarness, mem *mempoolApi, name string, nodeConfig *co
 		ChannelMinimumFeeMsat:     2000000,
 		AdditionalChannelCapacity: 100000,
 		MaxInactiveDuration:       3888000,
-		FeeParams: []*config.FeeParamsSettings{
-			{
-				ValidityDuration:     60 * 60 * 24,
-				MaxClientToSelfDelay: 2016,
-				MultiplicationFactor: 1000000,
-				Proportional:         4000,
-				MinimumFeeMsat:       2000000,
-				MaxIdleTime:          6480,
-			},
-		},
-		Lnd: lnd,
-		Cln: cln,
+		Lnd:                       lnd,
+		Cln:                       cln,
 	}
 
 	if nodeConfig != nil {
@@ -190,6 +182,25 @@ func (l *lspBase) Initialize() error {
 	if err != nil {
 		lntest.PerformCleanup(cleanups)
 		return err
+	}
+
+	pgxPool, err := pgxpool.Connect(l.harness.Ctx, l.postgresBackend.ConnectionString())
+	if err != nil {
+		lntest.PerformCleanup(cleanups)
+		return fmt.Errorf("failed to connect to postgres: %w", err)
+	}
+	defer pgxPool.Close()
+
+	_, err = pgxPool.Exec(
+		l.harness.Ctx,
+		`INSERT INTO new_channel_params (validity, params)
+		 VALUES 
+		  (3600, '{"min_msat": "1000000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432}'),
+		  (259200, '{"min_msat": "1100000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432}');`,
+	)
+	if err != nil {
+		lntest.PerformCleanup(cleanups)
+		return fmt.Errorf("failed to insert new_channel_params: %w", err)
 	}
 
 	log.Printf("%s: Creating lspd startup script at %s", l.name, l.scriptFilePath)
@@ -262,6 +273,53 @@ func RegisterPayment(l LspNode, paymentInfo *lspd.PaymentInformation, continueOn
 	}
 
 	return err
+}
+
+type FeeParamSetting struct {
+	Validity     time.Duration
+	MinMsat      uint64
+	Proportional uint32
+}
+
+func SetFeeParams(l LspNode, settings []*FeeParamSetting) error {
+	pgxPool, err := pgxpool.Connect(l.Harness().Ctx, l.PostgresBackend().ConnectionString())
+	if err != nil {
+		return fmt.Errorf("failed to connect to postgres: %w", err)
+	}
+	defer pgxPool.Close()
+
+	_, err = pgxPool.Exec(l.Harness().Ctx, "DELETE FROM new_channel_params")
+	if err != nil {
+		return fmt.Errorf("failed to delete new_channel_params: %w", err)
+	}
+
+	if len(settings) == 0 {
+		return nil
+	}
+
+	query := `INSERT INTO new_channel_params (validity, params) VALUES `
+	first := true
+	for _, setting := range settings {
+		if !first {
+			query += `,`
+		}
+
+		query += fmt.Sprintf(
+			`(%d, '{"min_msat": "%d", "proportional": %d, "max_idle_time": 4320, "max_client_to_self_delay": 432}')`,
+			int64(setting.Validity.Seconds()),
+			setting.MinMsat,
+			setting.Proportional,
+		)
+
+		first = false
+	}
+	query += `;`
+	_, err = pgxPool.Exec(l.Harness().Ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to insert new_channel_params: %w", err)
+	}
+
+	return nil
 }
 
 func getLspdBinary() (string, error) {

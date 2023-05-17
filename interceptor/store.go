@@ -6,6 +6,10 @@ import (
 	"github.com/btcsuite/btcd/wire"
 )
 
+type OpeningFeeParamsSetting struct {
+	Validity time.Duration
+	Params   *OpeningFeeParams
+}
 type OpeningFeeParams struct {
 	MinMsat              uint64 `json:"min_msat,string"`
 	Proportional         uint32 `json:"proportional"`
@@ -20,4 +24,5 @@ type InterceptStore interface {
 	SetFundingTx(paymentHash []byte, channelPoint *wire.OutPoint) error
 	RegisterPayment(params *OpeningFeeParams, destination, paymentHash, paymentSecret []byte, incomingAmountMsat, outgoingAmountMsat int64, tag string) error
 	InsertChannel(initialChanID, confirmedChanId uint64, channelPoint string, nodeID []byte, lastUpdate time.Time) error
+	GetFeeParamsSettings() ([]*OpeningFeeParamsSetting, error)
 }

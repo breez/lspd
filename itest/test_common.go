@@ -37,7 +37,7 @@ func calculateInnerAmountMsat(lsp LspNode, outerAmountMsat uint64, params *lspd.
 			fee = 2000000
 		}
 	} else {
-		fee = outerAmountMsat * 40 / 1_000_000 / 1_000 * 1_000
+		fee = outerAmountMsat * uint64(params.Proportional) / 1_000_000 / 1_000 * 1_000
 		if fee < params.MinMsat {
 			fee = params.MinMsat
 		}
