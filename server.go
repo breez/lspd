@@ -125,8 +125,7 @@ func (s *server) createOpeningParamsMenu(
 	return menu, nil
 }
 
-func createPromise(node *node, params *lspdrpc.OpeningFeeParams) (*string, error) {
-
+func paramsHash(params *lspdrpc.OpeningFeeParams) ([]byte, error) {
 	// First hash all the values in the params in a fixed order.
 	items := []interface{}{
 		params.MinMsat,
@@ -140,17 +139,40 @@ func createPromise(node *node, params *lspdrpc.OpeningFeeParams) (*string, error
 		return nil, err
 	}
 	hash := sha256.Sum256(blob)
+	return hash[:], nil
+}
 
+func createPromise(node *node, params *lspdrpc.OpeningFeeParams) (*string, error) {
+	hash, err := paramsHash(params)
+	if err != nil {
+		return nil, err
+	}
 	// Sign the hash with the private key of the LSP id.
 	sig, err := ecdsa.SignCompact(node.privateKey, hash[:], true)
 	if err != nil {
 		return nil, err
 	}
-
-	// The promise is the hex encoded hash of the signature.
-	result := sha256.Sum256(sig)
-	promise := hex.EncodeToString(result[:])
+	promise := hex.EncodeToString(sig)
 	return &promise, nil
+}
+
+func verifyPromise(node *node, params *lspdrpc.OpeningFeeParams) error {
+	hash, err := paramsHash(params)
+	if err != nil {
+		return err
+	}
+	sig, err := hex.DecodeString(params.Promise)
+	if err != nil {
+		return err
+	}
+	pub, _, err := ecdsa.RecoverCompact(sig, hash)
+	if err != nil {
+		return err
+	}
+	if !node.publicKey.IsEqual(pub) {
+		return fmt.Errorf("invalid promise")
+	}
+	return nil
 }
 
 func validateOpeningFeeParams(node *node, params *lspdrpc.OpeningFeeParams) bool {
@@ -158,12 +180,8 @@ func validateOpeningFeeParams(node *node, params *lspdrpc.OpeningFeeParams) bool
 		return false
 	}
 
-	promise, err := createPromise(node, params)
+	err := verifyPromise(node, params)
 	if err != nil {
-		return false
-	}
-
-	if *promise != params.Promise {
 		return false
 	}
 
