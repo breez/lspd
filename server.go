@@ -136,6 +136,7 @@ func paramsHash(params *lspdrpc.OpeningFeeParams) ([]byte, error) {
 	}
 	blob, err := json.Marshal(items)
 	if err != nil {
+		log.Printf("paramsHash error: %v", err)
 		return nil, err
 	}
 	hash := sha256.Sum256(blob)
@@ -150,6 +151,7 @@ func createPromise(node *node, params *lspdrpc.OpeningFeeParams) (*string, error
 	// Sign the hash with the private key of the LSP id.
 	sig, err := ecdsa.SignCompact(node.privateKey, hash[:], true)
 	if err != nil {
+		log.Printf("createPromise: SignCompact error: %v", err)
 		return nil, err
 	}
 	promise := hex.EncodeToString(sig)
@@ -163,13 +165,16 @@ func verifyPromise(node *node, params *lspdrpc.OpeningFeeParams) error {
 	}
 	sig, err := hex.DecodeString(params.Promise)
 	if err != nil {
+		log.Printf("verifyPromise: hex.DecodeString error: %v", err)
 		return err
 	}
 	pub, _, err := ecdsa.RecoverCompact(sig, hash)
 	if err != nil {
+		log.Printf("verifyPromise: RecoverCompact(%x) error: %v", sig, err)
 		return err
 	}
 	if !node.publicKey.IsEqual(pub) {
+		log.Print("verifyPromise: not signed by us", err)
 		return fmt.Errorf("invalid promise")
 	}
 	return nil
@@ -187,10 +192,12 @@ func validateOpeningFeeParams(node *node, params *lspdrpc.OpeningFeeParams) bool
 
 	t, err := time.Parse(basetypes.TIME_FORMAT, params.ValidUntil)
 	if err != nil {
+		log.Printf("validateOpeningFeeParams: time.Parse(%v, %v) error: %v", basetypes.TIME_FORMAT, params.ValidUntil, err)
 		return false
 	}
 
 	if time.Now().UTC().After(t) {
+		log.Printf("validateOpeningFeeParams: promise not valid anymore: %v", t)
 		return false
 	}
 
