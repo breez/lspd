@@ -193,6 +193,15 @@ func (l *lspBase) Initialize() error {
 
 	_, err = pgxPool.Exec(
 		l.harness.Ctx,
+		`DELETE FROM new_channel_params`,
+	)
+	if err != nil {
+		lntest.PerformCleanup(cleanups)
+		return fmt.Errorf("failed to delete new_channel_params: %w", err)
+	}
+
+	_, err = pgxPool.Exec(
+		l.harness.Ctx,
 		`INSERT INTO new_channel_params (validity, params)
 		 VALUES 
 		  (3600, '{"min_msat": "1000000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432}'),
