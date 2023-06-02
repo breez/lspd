@@ -124,7 +124,9 @@ func sendChannelMismatchNotification(nodeID string, notFakeChannels, closedChann
 func sendOpenChannelEmailNotification(
 	paymentHash []byte, incomingAmountMsat int64,
 	destination []byte, capacity int64,
-	channelPoint string) error {
+	channelPoint string,
+	tag *string,
+) error {
 	var html bytes.Buffer
 
 	tpl := `
@@ -134,6 +136,7 @@ func sendOpenChannelEmailNotification(
 	<tr><td>Destination Node:</td><td>{{ .Destination }}</td></tr>
 	<tr><td>Channel capacity (sat):</td><td>{{ .Capacity }}</td></tr>
 	<tr><td>Channel point:</td><td>{{ .ChannelPoint }}</td></tr>
+	<tr><td>Tag:</td><td>{{ .Tag }}</td></tr>
 	</table>
 	`
 	t, err := template.New("OpenChannelEmail").Parse(tpl)
@@ -141,12 +144,17 @@ func sendOpenChannelEmailNotification(
 		return err
 	}
 
+	tagStr := ""
+	if tag != nil {
+		tagStr = *tag
+	}
 	if err := t.Execute(&html, map[string]string{
 		"PaymentHash":        hex.EncodeToString(paymentHash),
 		"IncomingAmountMsat": strconv.FormatUint(uint64(incomingAmountMsat), 10),
 		"Destination":        hex.EncodeToString(destination),
 		"Capacity":           strconv.FormatUint(uint64(capacity), 10),
 		"ChannelPoint":       channelPoint,
+		"Tag":                tagStr,
 	}); err != nil {
 		return err
 	}
