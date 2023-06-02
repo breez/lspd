@@ -58,13 +58,15 @@ type node struct {
 	openChannelReqGroup singleflight.Group
 }
 
+type contextKey string
+
 func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInformationRequest) (*lspdrpc.ChannelInformationReply, error) {
-	node, err := getNode(ctx)
+	node, token, err := s.getNode(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	params, err := s.createOpeningParamsMenu(ctx, node)
+	params, err := s.createOpeningParamsMenu(ctx, node, token)
 	if err != nil {
 		return nil, err
 	}
@@ -90,10 +92,11 @@ func (s *server) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInfo
 func (s *server) createOpeningParamsMenu(
 	ctx context.Context,
 	node *node,
+	token string,
 ) ([]*lspdrpc.OpeningFeeParams, error) {
 	var menu []*lspdrpc.OpeningFeeParams
 
-	settings, err := s.store.GetFeeParamsSettings()
+	settings, err := s.store.GetFeeParamsSettings(token)
 	if err != nil {
 		log.Printf("Failed to fetch fee params settings: %v", err)
 		return nil, fmt.Errorf("failed to get opening_fee_params")
@@ -208,7 +211,7 @@ func (s *server) RegisterPayment(
 	ctx context.Context,
 	in *lspdrpc.RegisterPaymentRequest,
 ) (*lspdrpc.RegisterPaymentReply, error) {
-	node, err := getNode(ctx)
+	node, token, err := s.getNode(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +278,7 @@ func (s *server) RegisterPayment(
 		MaxClientToSelfDelay: pi.OpeningFeeParams.MaxClientToSelfDelay,
 		Promise:              pi.OpeningFeeParams.Promise,
 	}
-	err = s.store.RegisterPayment(params, pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat, pi.Tag)
+	err = s.store.RegisterPayment(token, params, pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat, pi.Tag)
 	if err != nil {
 		log.Printf("RegisterPayment() error: %v", err)
 		return nil, fmt.Errorf("RegisterPayment() error: %w", err)
@@ -284,7 +287,7 @@ func (s *server) RegisterPayment(
 }
 
 func (s *server) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest) (*lspdrpc.OpenChannelReply, error) {
-	node, err := getNode(ctx)
+	node, _, err := s.getNode(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +371,7 @@ func (n *node) getSignedEncryptedData(in *lspdrpc.Encrypted) (string, []byte, bo
 }
 
 func (s *server) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lspdrpc.Encrypted, error) {
-	node, err := getNode(ctx)
+	node, _, err := s.getNode(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -473,12 +476,14 @@ func NewGrpcServer(
 			}
 		}
 
-		_, exists := nodes[config.Token]
-		if exists {
-			return nil, fmt.Errorf("cannot have multiple nodes with the same token")
-		}
+		for _, token := range config.Tokens {
+			_, exists := nodes[token]
+			if exists {
+				return nil, fmt.Errorf("cannot have multiple nodes with the same token")
+			}
 
-		nodes[config.Token] = node
+			nodes[token] = node
+		}
 	}
 
 	return &server{
@@ -534,12 +539,12 @@ func (s *server) Start() error {
 					}
 
 					token := strings.Replace(auth, "Bearer ", "", 1)
-					node, ok := s.nodes[token]
+					_, ok := s.nodes[token]
 					if !ok {
 						continue
 					}
 
-					return handler(context.WithValue(ctx, "node", node), req)
+					return handler(context.WithValue(ctx, contextKey("token"), token), req)
 				}
 			}
 			return nil, status.Errorf(codes.PermissionDenied, "Not authorized")
@@ -563,18 +568,21 @@ func (s *server) Stop() {
 	}
 }
 
-func getNode(ctx context.Context) (*node, error) {
-	n := ctx.Value("node")
-	if n == nil {
-		return nil, status.Errorf(codes.PermissionDenied, "Not authorized")
+func (s *server) getNode(ctx context.Context) (*node, string, error) {
+	tok := ctx.Value(contextKey("token"))
+	if tok == nil {
+		return nil, "", status.Errorf(codes.PermissionDenied, "Not authorized")
 	}
 
-	node, ok := n.(*node)
-	if !ok || node == nil {
-		return nil, status.Errorf(codes.PermissionDenied, "Not authorized")
+	token, ok := tok.(string)
+	if !ok {
+		return nil, "", status.Errorf(codes.PermissionDenied, "Not authorized")
 	}
-
-	return node, nil
+	node, ok := s.nodes[token]
+	if !ok {
+		return nil, "", status.Errorf(codes.PermissionDenied, "Not authorized")
+	}
+	return node, token, nil
 }
 
 func checkPayment(params *lspdrpc.OpeningFeeParams, incomingAmountMsat, outgoingAmountMsat int64) error {

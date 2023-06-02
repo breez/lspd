@@ -76,7 +76,7 @@ func NewInterceptor(
 func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) InterceptResult {
 	reqPaymentHashStr := hex.EncodeToString(reqPaymentHash)
 	resp, _, _ := i.payHashGroup.Do(reqPaymentHashStr, func() (interface{}, error) {
-		params, paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, channelPoint, err := i.store.PaymentInfo(reqPaymentHash)
+		token, params, paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, channelPoint, err := i.store.PaymentInfo(reqPaymentHash)
 		if err != nil {
 			log.Printf("paymentInfo(%x) error: %v", reqPaymentHash, err)
 			return InterceptResult{
@@ -123,7 +123,7 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 				}
 
 				if time.Now().UTC().After(validUntil) {
-					if !i.isCurrentChainFeeCheaper(params) {
+					if !i.isCurrentChainFeeCheaper(token, params) {
 						log.Printf("Intercepted expired payment registration. Failing payment. payment hash: %x, valid until: %s", paymentHash, params.ValidUntil)
 						return InterceptResult{
 							Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
@@ -281,8 +281,8 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 	return resp.(InterceptResult)
 }
 
-func (i *Interceptor) isCurrentChainFeeCheaper(params *OpeningFeeParams) bool {
-	settings, err := i.store.GetFeeParamsSettings()
+func (i *Interceptor) isCurrentChainFeeCheaper(token string, params *OpeningFeeParams) bool {
+	settings, err := i.store.GetFeeParamsSettings(token)
 	if err != nil {
 		log.Printf("Failed to get fee params settings: %v", err)
 		return false

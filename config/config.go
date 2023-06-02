@@ -11,9 +11,9 @@ type NodeConfig struct {
 	// clients.
 	LspdPrivateKey string `json:"lspdPrivateKey"`
 
-	// Token used to authenticate to lspd. This token must be unique for each
+	// Tokens used to authenticate to lspd. These tokens must be unique for each
 	// configured node, so it's obvious which node an rpc call is meant for.
-	Token string `json:"token"`
+	Tokens []string `json:"tokens"`
 
 	// The network location of the lightning node, e.g. `12.34.56.78:9012` or
 	// `localhost:10011`

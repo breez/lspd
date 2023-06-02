@@ -15,6 +15,11 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
+type extendedParams struct {
+	Token  string                       `json:"token"`
+	Params interceptor.OpeningFeeParams `json:"fees_params"`
+}
+
 type PostgresInterceptStore struct {
 	pool *pgxpool.Pool
 }
@@ -23,7 +28,7 @@ func NewPostgresInterceptStore(pool *pgxpool.Pool) *PostgresInterceptStore {
 	return &PostgresInterceptStore{pool: pool}
 }
 
-func (s *PostgresInterceptStore) PaymentInfo(htlcPaymentHash []byte) (*interceptor.OpeningFeeParams, []byte, []byte, []byte, int64, int64, *wire.OutPoint, error) {
+func (s *PostgresInterceptStore) PaymentInfo(htlcPaymentHash []byte) (string, *interceptor.OpeningFeeParams, []byte, []byte, []byte, int64, int64, *wire.OutPoint, error) {
 	var (
 		p                                       *string
 		paymentHash, paymentSecret, destination []byte
@@ -40,7 +45,7 @@ func (s *PostgresInterceptStore) PaymentInfo(htlcPaymentHash []byte) (*intercept
 		if err == pgx.ErrNoRows {
 			err = nil
 		}
-		return nil, nil, nil, nil, 0, 0, nil, err
+		return "", nil, nil, nil, nil, 0, 0, nil, err
 	}
 
 	var cp *wire.OutPoint
@@ -51,15 +56,15 @@ func (s *PostgresInterceptStore) PaymentInfo(htlcPaymentHash []byte) (*intercept
 		}
 	}
 
-	var params *interceptor.OpeningFeeParams
+	var extParams *extendedParams
 	if p != nil {
-		err = json.Unmarshal([]byte(*p), &params)
+		err = json.Unmarshal([]byte(*p), &extParams)
 		if err != nil {
 			log.Printf("Failed to unmarshal OpeningFeeParams '%s': %v", *p, err)
-			return nil, nil, nil, nil, 0, 0, nil, err
+			return "", nil, nil, nil, nil, 0, 0, nil, err
 		}
 	}
-	return params, paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, cp, nil
+	return extParams.Token, &extParams.Params, paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, cp, nil
 }
 
 func (s *PostgresInterceptStore) SetFundingTx(paymentHash []byte, channelPoint *wire.OutPoint) error {
@@ -72,16 +77,20 @@ func (s *PostgresInterceptStore) SetFundingTx(paymentHash []byte, channelPoint *
 	return err
 }
 
-func (s *PostgresInterceptStore) RegisterPayment(params *interceptor.OpeningFeeParams, destination, paymentHash, paymentSecret []byte, incomingAmountMsat, outgoingAmountMsat int64, tag string) error {
+func (s *PostgresInterceptStore) RegisterPayment(token string, params *interceptor.OpeningFeeParams, destination, paymentHash, paymentSecret []byte, incomingAmountMsat, outgoingAmountMsat int64, tag string) error {
 	var t *string
 	if tag != "" {
 		t = &tag
 	}
 
-	p, err := json.Marshal(params)
-	if err != nil {
-		log.Printf("Failed to marshal OpeningFeeParams: %v", err)
-		return err
+	p := []byte{}
+	if params != nil {
+		var err error
+		p, err = json.Marshal(extendedParams{Token: token, Params: *params})
+		if err != nil {
+			log.Printf("Failed to marshal OpeningFeeParams: %v", err)
+			return err
+		}
 	}
 
 	commandTag, err := s.pool.Exec(context.Background(),
@@ -119,10 +128,10 @@ func (s *PostgresInterceptStore) InsertChannel(initialChanID, confirmedChanId ui
 	return nil
 }
 
-func (s *PostgresInterceptStore) GetFeeParamsSettings() ([]*interceptor.OpeningFeeParamsSetting, error) {
-	rows, err := s.pool.Query(context.Background(), `SELECT validity, params FROM new_channel_params`)
+func (s *PostgresInterceptStore) GetFeeParamsSettings(token string) ([]*interceptor.OpeningFeeParamsSetting, error) {
+	rows, err := s.pool.Query(context.Background(), `SELECT validity, params FROM new_channel_params WHERE token=$1`, token)
 	if err != nil {
-		log.Printf("GetFeeParamsSettings() error: %v", err)
+		log.Printf("GetFeeParamsSettings(%v) error: %v", token, err)
 		return nil, err
 	}
 
