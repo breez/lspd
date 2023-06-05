@@ -76,7 +76,7 @@ func NewInterceptor(
 func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) InterceptResult {
 	reqPaymentHashStr := hex.EncodeToString(reqPaymentHash)
 	resp, _, _ := i.payHashGroup.Do(reqPaymentHashStr, func() (interface{}, error) {
-		token, params, paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, channelPoint, err := i.store.PaymentInfo(reqPaymentHash)
+		token, params, paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, channelPoint, tag, err := i.store.PaymentInfo(reqPaymentHash)
 		if err != nil {
 			log.Printf("paymentInfo(%x) error: %v", reqPaymentHash, err)
 			return InterceptResult{
@@ -134,7 +134,7 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 					log.Printf("Intercepted expired payment registration. Opening channel anyway, because it's cheaper at the current rate. %+v", params)
 				}
 
-				channelPoint, err = i.openChannel(reqPaymentHash, destination, incomingAmountMsat)
+				channelPoint, err = i.openChannel(reqPaymentHash, destination, incomingAmountMsat, tag)
 				if err != nil {
 					log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
 					return InterceptResult{
@@ -297,7 +297,7 @@ func (i *Interceptor) isCurrentChainFeeCheaper(token string, params *OpeningFeeP
 	return false
 }
 
-func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmountMsat int64) (*wire.OutPoint, error) {
+func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmountMsat int64, tag *string) (*wire.OutPoint, error) {
 	capacity := incomingAmountMsat/1000 + i.config.AdditionalChannelCapacity
 	if capacity == i.config.PublicChannelAmount {
 		capacity++
@@ -348,6 +348,7 @@ func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmoun
 		destination,
 		capacity,
 		channelPoint.String(),
+		tag,
 	)
 	err = i.store.SetFundingTx(paymentHash, channelPoint)
 	return channelPoint, err
