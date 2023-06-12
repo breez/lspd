@@ -96,7 +96,7 @@ func newLspd(h *lntest.TestHarness, mem *mempoolApi, name string, nodeConfig *co
 	conf := &config.NodeConfig{
 		Name:                      name,
 		LspdPrivateKey:            hex.EncodeToString(lspdPrivateKeyBytes),
-		Token:                     "hello",
+		Tokens:                    []string{"hello"},
 		Host:                      "host:port",
 		PublicChannelAmount:       1000183,
 		ChannelAmount:             100000,
@@ -202,10 +202,10 @@ func (l *lspBase) Initialize() error {
 
 	_, err = pgxPool.Exec(
 		l.harness.Ctx,
-		`INSERT INTO new_channel_params (validity, params)
+		`INSERT INTO new_channel_params (validity, params, token)
 		 VALUES 
-		  (3600, '{"min_msat": "1000000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432}'),
-		  (259200, '{"min_msat": "1100000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432}');`,
+		  (3600, '{"min_msat": "1000000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432}', 'hello'),
+		  (259200, '{"min_msat": "1100000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432}', 'hello');`,
 	)
 	if err != nil {
 		lntest.PerformCleanup(cleanups)
@@ -306,7 +306,7 @@ func SetFeeParams(l LspNode, settings []*FeeParamSetting) error {
 		return nil
 	}
 
-	query := `INSERT INTO new_channel_params (validity, params) VALUES `
+	query := `INSERT INTO new_channel_params (validity, params, token) VALUES `
 	first := true
 	for _, setting := range settings {
 		if !first {
@@ -314,7 +314,7 @@ func SetFeeParams(l LspNode, settings []*FeeParamSetting) error {
 		}
 
 		query += fmt.Sprintf(
-			`(%d, '{"min_msat": "%d", "proportional": %d, "max_idle_time": 4320, "max_client_to_self_delay": 432}')`,
+			`(%d, '{"min_msat": "%d", "proportional": %d, "max_idle_time": 4320, "max_client_to_self_delay": 432}', 'hello')`,
 			int64(setting.Validity.Seconds()),
 			setting.MinMsat,
 			setting.Proportional,
