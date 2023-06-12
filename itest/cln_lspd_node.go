@@ -59,6 +59,7 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, nam
 		fmt.Sprintf("--cltv-delta=%d", lspCltvDelta),
 		"--max-concurrent-htlcs=30",
 		"--dev-allowdustreserve=true",
+		"--allow-deprecated-apis=true",
 	}
 	lightningNode := lntest.NewClnNode(h, m, name, args...)
 	cln := &config.ClnConfig{
