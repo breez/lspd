@@ -2,7 +2,6 @@ package lnd
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -137,18 +136,6 @@ func (i *LndHtlcInterceptor) intercept() error {
 					nextHop = chanInfo.Node1Pub
 				}
 			}
-
-			fmt.Printf("htlc: %v\nchanID: %v\nnextHop: %v\nincoming amount: %v\noutgoing amount: %v\nincomin expiry: %v\noutgoing expiry: %v\npaymentHash: %x\nonionBlob: %x\n\n",
-				request.IncomingCircuitKey.HtlcId,
-				request.IncomingCircuitKey.ChanId,
-				nextHop,
-				request.IncomingAmountMsat,
-				request.OutgoingAmountMsat,
-				request.IncomingExpiry,
-				request.OutgoingExpiry,
-				request.PaymentHash,
-				request.OnionBlob,
-			)
 
 			i.doneWg.Add(1)
 			go func() {
