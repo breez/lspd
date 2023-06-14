@@ -144,19 +144,6 @@ func (i *ClnHtlcInterceptor) intercept() error {
 				}
 			}
 
-			log.Printf("correlationid: %v\nhtlc: %v\nchanID: %v\nnextHop: %v\nincoming amount: %v\noutgoing amount: %v\nincoming expiry: %v\noutgoing expiry: %v\npaymentHash: %v\nonionBlob: %v\n\n",
-				request.Correlationid,
-				request.Htlc,
-				request.Onion.ShortChannelId,
-				nextHop,
-				request.Htlc.AmountMsat, //with fees
-				request.Onion.ForwardMsat,
-				request.Htlc.CltvExpiryRelative,
-				request.Htlc.CltvExpiry,
-				request.Htlc.PaymentHash,
-				request,
-			)
-
 			i.doneWg.Add(1)
 			go func() {
 				paymentHash, err := hex.DecodeString(request.Htlc.PaymentHash)

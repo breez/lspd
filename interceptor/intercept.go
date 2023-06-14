@@ -84,8 +84,7 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 				FailureCode: FAILURE_TEMPORARY_NODE_FAILURE,
 			}, nil
 		}
-		log.Printf("paymentHash:%x\npaymentSecret:%x\ndestination:%x\nincomingAmountMsat:%v\noutgoingAmountMsat:%v",
-			paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat)
+
 		if paymentSecret == nil || (nextHop != "<unknown>" && nextHop != hex.EncodeToString(destination)) {
 			return InterceptResult{
 				Action: INTERCEPT_RESUME,
@@ -96,7 +95,7 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 			if bytes.Equal(paymentHash, reqPaymentHash) {
 				// TODO: When opening_fee_params is enforced, turn this check in a temporary channel failure.
 				if params == nil {
-					log.Printf("DEPRECATED: Intercepted htlc with deprecated fee mechanism.")
+					log.Printf("DEPRECATED: Intercepted htlc with deprecated fee mechanism. Using default fees. payment hash: %s", reqPaymentHashStr)
 					params = &OpeningFeeParams{
 						MinMsat:              uint64(i.config.ChannelMinimumFeeMsat),
 						Proportional:         uint32(i.config.ChannelFeePermyriad * 100),
@@ -131,7 +130,7 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 						}, nil
 					}
 
-					log.Printf("Intercepted expired payment registration. Opening channel anyway, because it's cheaper at the current rate. %+v", params)
+					log.Printf("Intercepted expired payment registration. Opening channel anyway, because it's cheaper at the current rate. paymenthash: %s, params: %+v", reqPaymentHashStr, params)
 				}
 
 				channelPoint, err = i.openChannel(reqPaymentHash, destination, incomingAmountMsat, tag)
@@ -230,7 +229,7 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 		for {
 			chanResult, _ := i.client.GetChannel(destination, *channelPoint)
 			if chanResult != nil {
-				log.Printf("channel opended successfully alias: %v, confirmed: %v", chanResult.InitialChannelID.ToString(), chanResult.ConfirmedChannelID.ToString())
+				log.Printf("channel opened successfully alias: %v, confirmed: %v", chanResult.InitialChannelID.ToString(), chanResult.ConfirmedChannelID.ToString())
 
 				err := i.store.InsertChannel(
 					uint64(chanResult.InitialChannelID),
@@ -271,7 +270,7 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 			<-time.After(1 * time.Second)
 		}
 
-		log.Printf("Error: Channel failed to opened... timed out. ")
+		log.Printf("Error: Channel failed to open... timed out. ")
 		return InterceptResult{
 			Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
 			FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
