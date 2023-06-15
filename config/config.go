@@ -66,6 +66,10 @@ type NodeConfig struct {
 	// The channel can be closed if not used this duration in seconds.
 	MaxInactiveDuration uint64 `json:"maxInactiveDuration,string"`
 
+	// The maximum time to hold a htlc after sending a notification when the
+	// peer is offline.
+	NotificationTimeout string `json:"notificationTimeout,string"`
+
 	// Set this field to connect to an LND node.
 	Lnd *LndConfig `json:"lnd,omitempty"`
 
