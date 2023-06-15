@@ -9,7 +9,7 @@ This is a simple example of an lspd that works with an [lnd](https://github.com/
 1. Compile lspd using `go build .`
 
 ### Before running
-1. Create a random token (for instance using the command `openssl rand -base64 48`)
+1. Create a random token (for instance using the command `openssl rand -base64 48`, or `./lspd genkey`)
 1. Define the environment variables as described in sample.env. If `CERTMAGIC_DOMAIN` is defined, certificate for this domain is automatically obtained and renewed from Let's Encrypt. In this case, the port needs to be 443. If `CERTMAGIC_DOMAIN` is not defined, lspd needs to run behind a reverse proxy like treafik or nginx.
 
 ### Running lspd on LND
