@@ -117,7 +117,8 @@ func main() {
 
 	address := os.Getenv("LISTEN_ADDRESS")
 	certMagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
-	s, err := NewGrpcServer(nodes, address, certMagicDomain, interceptStore)
+	cs := NewChannelOpenerServer(interceptStore)
+	s, err := NewGrpcServer(nodes, address, certMagicDomain, cs)
 	if err != nil {
 		log.Fatalf("failed to initialize grpc server: %v", err)
 	}
