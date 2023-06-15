@@ -1,6 +1,8 @@
 package lightning
 
 import (
+	"time"
+
 	"github.com/breez/lspd/basetypes"
 	"github.com/btcsuite/btcd/wire"
 )
@@ -34,4 +36,6 @@ type Client interface {
 	GetPeerId(scid *basetypes.ShortChannelID) ([]byte, error)
 	GetNodeChannelCount(nodeID []byte) (int, error)
 	GetClosedChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error)
+	WaitOnline(peerID []byte, deadline time.Time) error
+	WaitChannelActive(peerID []byte, deadline time.Time) error
 }

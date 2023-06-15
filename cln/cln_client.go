@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"time"
 
 	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/lightning"
@@ -253,4 +254,26 @@ func (c *ClnClient) GetPeerId(scid *basetypes.ShortChannelID) ([]byte, error) {
 	}
 
 	return hex.DecodeString(*dest)
+}
+
+var pollingInterval = 400 * time.Millisecond
+
+func (c *ClnClient) WaitOnline(peerID []byte, deadline time.Time) error {
+	peerIDStr := hex.EncodeToString(peerID)
+	for {
+		peer, err := c.client.GetPeer(peerIDStr)
+		if err == nil && peer.Connected {
+			return nil
+		}
+
+		select {
+		case <-time.After(time.Until(deadline)):
+			return fmt.Errorf("timeout")
+		case <-time.After(pollingInterval):
+		}
+	}
+}
+
+func (c *ClnClient) WaitChannelActive(peerID []byte, deadline time.Time) error {
+	return nil
 }
