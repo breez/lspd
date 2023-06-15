@@ -16,6 +16,7 @@ import (
 	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lnd"
 	"github.com/breez/lspd/mempool"
+	"github.com/breez/lspd/notifications"
 	"github.com/breez/lspd/postgresql"
 	"github.com/btcsuite/btcd/btcec/v2"
 )
@@ -77,6 +78,7 @@ func main() {
 
 	interceptStore := postgresql.NewPostgresInterceptStore(pool)
 	forwardingStore := postgresql.NewForwardingEventStore(pool)
+	notificationsStore := postgresql.NewNotificationsStore(pool)
 
 	var interceptors []interceptor.HtlcInterceptor
 	for _, node := range nodes {
@@ -118,7 +120,8 @@ func main() {
 	address := os.Getenv("LISTEN_ADDRESS")
 	certMagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
 	cs := NewChannelOpenerServer(interceptStore)
-	s, err := NewGrpcServer(nodes, address, certMagicDomain, cs)
+	ns := notifications.NewNotificationsServer(notificationsStore)
+	s, err := NewGrpcServer(nodes, address, certMagicDomain, cs, ns)
 	if err != nil {
 		log.Fatalf("failed to initialize grpc server: %v", err)
 	}

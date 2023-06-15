@@ -13,6 +13,7 @@ import (
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lnd"
+	"github.com/breez/lspd/notifications"
 	lspdrpc "github.com/breez/lspd/rpc"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/caddyserver/certmagic"
@@ -32,6 +33,7 @@ type grpcServer struct {
 	s               *grpc.Server
 	nodes           map[string]*node
 	c               lspdrpc.ChannelOpenerServer
+	n               notifications.NotificationsServer
 }
 
 type nodeContext struct {
@@ -54,6 +56,7 @@ func NewGrpcServer(
 	address string,
 	certmagicDomain string,
 	c lspdrpc.ChannelOpenerServer,
+	n notifications.NotificationsServer,
 ) (*grpcServer, error) {
 	if len(configs) == 0 {
 		return nil, fmt.Errorf("no nodes supplied")
@@ -115,6 +118,7 @@ func NewGrpcServer(
 		certmagicDomain: certmagicDomain,
 		nodes:           nodes,
 		c:               c,
+		n:               n,
 	}, nil
 }
 
@@ -178,6 +182,7 @@ func (s *grpcServer) Start() error {
 		}),
 	)
 	lspdrpc.RegisterChannelOpenerServer(srv, s.c)
+	notifications.RegisterNotificationsServer(srv, s.n)
 
 	s.s = srv
 	s.lis = lis
