@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/cln_plugin/proto"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/interceptor"
@@ -129,20 +130,6 @@ func (i *ClnHtlcInterceptor) intercept() error {
 				log.Printf("unexpected error in interceptor.Recv() %v", err)
 				break
 			}
-			nextHop := "<unknown>"
-			channels, err := i.client.client.GetChannel(request.Onion.ShortChannelId)
-			if err != nil {
-				for _, c := range channels {
-					if c.Source == i.config.NodePubkey {
-						nextHop = c.Destination
-						break
-					}
-					if c.Destination == i.config.NodePubkey {
-						nextHop = c.Source
-						break
-					}
-				}
-			}
 
 			i.doneWg.Add(1)
 			go func() {
@@ -150,8 +137,17 @@ func (i *ClnHtlcInterceptor) intercept() error {
 				if err != nil {
 					interceptorClient.Send(i.defaultResolution(request))
 					i.doneWg.Done()
+					return
 				}
-				interceptResult := i.interceptor.Intercept(nextHop, paymentHash, request.Onion.ForwardMsat, request.Onion.OutgoingCltvValue, request.Htlc.CltvExpiry)
+
+				scid, err := basetypes.NewShortChannelIDFromString(request.Onion.ShortChannelId)
+				if err != nil {
+					interceptorClient.Send(i.defaultResolution(request))
+					i.doneWg.Done()
+					return
+				}
+
+				interceptResult := i.interceptor.Intercept(scid, paymentHash, request.Onion.ForwardMsat, request.Onion.OutgoingCltvValue, request.Htlc.CltvExpiry)
 				switch interceptResult.Action {
 				case interceptor.INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(i.resumeWithOnion(request, interceptResult))

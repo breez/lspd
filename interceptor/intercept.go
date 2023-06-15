@@ -73,7 +73,7 @@ func NewInterceptor(
 	}
 }
 
-func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) InterceptResult {
+func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) InterceptResult {
 	reqPaymentHashStr := hex.EncodeToString(reqPaymentHash)
 	resp, _, _ := i.payHashGroup.Do(reqPaymentHashStr, func() (interface{}, error) {
 		token, params, paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, channelPoint, tag, err := i.store.PaymentInfo(reqPaymentHash)
@@ -85,7 +85,24 @@ func (i *Interceptor) Intercept(nextHop string, reqPaymentHash []byte, reqOutgoi
 			}, nil
 		}
 
-		if paymentSecret == nil || (nextHop != "<unknown>" && nextHop != hex.EncodeToString(destination)) {
+		nextHop, err := i.client.GetPeerId(scid)
+		if err != nil {
+			log.Printf("GetPeerId(%s) error: %v", scid.ToString(), err)
+			return InterceptResult{
+				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				FailureCode: FAILURE_TEMPORARY_NODE_FAILURE,
+			}, nil
+		}
+
+		// If the payment was registered, but the next hop is not the destination
+		// that means we are not the last hop of the payment, so we'll just forward.
+		if destination != nil && nextHop != nil && !bytes.Equal(nextHop, destination) {
+			return InterceptResult{
+				Action: INTERCEPT_RESUME,
+			}, nil
+		}
+
+		if paymentSecret == nil {
 			return InterceptResult{
 				Action: INTERCEPT_RESUME,
 			}, nil

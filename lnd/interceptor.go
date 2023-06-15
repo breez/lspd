@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/interceptor"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -126,20 +127,10 @@ func (i *LndHtlcInterceptor) intercept() error {
 				break
 			}
 
-			nextHop := "<unknown>"
-			chanInfo, err := i.client.client.GetChanInfo(context.Background(), &lnrpc.ChanInfoRequest{ChanId: request.OutgoingRequestedChanId})
-			if err == nil && chanInfo != nil {
-				if chanInfo.Node1Pub == i.config.NodePubkey {
-					nextHop = chanInfo.Node2Pub
-				}
-				if chanInfo.Node2Pub == i.config.NodePubkey {
-					nextHop = chanInfo.Node1Pub
-				}
-			}
-
 			i.doneWg.Add(1)
 			go func() {
-				interceptResult := i.interceptor.Intercept(nextHop, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry, request.IncomingExpiry)
+				scid := basetypes.ShortChannelID(request.OutgoingRequestedChanId)
+				interceptResult := i.interceptor.Intercept(&scid, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry, request.IncomingExpiry)
 				switch interceptResult.Action {
 				case interceptor.INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{

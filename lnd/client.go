@@ -79,18 +79,18 @@ func (c *LndClient) GetInfo() (*lightning.GetInfoResult, error) {
 }
 
 func (c *LndClient) IsConnected(destination []byte) (bool, error) {
-	pubKey := hex.EncodeToString(destination)
+	pubkey := hex.EncodeToString(destination)
 
-	r, err := c.client.ListPeers(context.Background(), &lnrpc.ListPeersRequest{LatestError: true})
+	r, err := c.client.GetPeerConnected(context.Background(), &lnrpc.GetPeerConnectedRequest{
+		Pubkey: pubkey,
+	})
 	if err != nil {
-		log.Printf("LND: client.ListPeers() error: %v", err)
-		return false, fmt.Errorf("LND: client.ListPeers() error: %w", err)
+		log.Printf("LND: client.GetPeerConnected() error: %v", err)
+		return false, fmt.Errorf("LND: client.GetPeerConnected() error: %w", err)
 	}
-	for _, peer := range r.Peers {
-		if pubKey == peer.PubKey {
-			log.Printf("destination online: %x", destination)
-			return true, nil
-		}
+	if r.Connected {
+		log.Printf("LND: destination online: %x", destination)
+		return true, nil
 	}
 
 	log.Printf("LND: destination offline: %x", destination)
@@ -229,4 +229,21 @@ func (c *LndClient) getWaitingCloseChannels(nodeID string) ([]*lnrpc.PendingChan
 		}
 	}
 	return waitingCloseChannels, nil
+}
+
+func (c *LndClient) GetPeerId(scid *basetypes.ShortChannelID) ([]byte, error) {
+	scidu64 := uint64(*scid)
+	peer, err := c.client.GetPeerIdByScid(context.Background(), &lnrpc.GetPeerIdByScidRequest{
+		Scid: scidu64,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if peer.PeerId == "" {
+		return nil, nil
+	}
+
+	peerid, _ := hex.DecodeString(peer.PeerId)
+	return peerid, nil
 }
