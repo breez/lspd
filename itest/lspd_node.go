@@ -15,6 +15,7 @@ import (
 
 	"github.com/breez/lntest"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/notifications"
 	lspd "github.com/breez/lspd/rpc"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -45,6 +46,7 @@ type LspNode interface {
 	PublicKey() *btcec.PublicKey
 	EciesPublicKey() *ecies.PublicKey
 	Rpc() lspd.ChannelOpenerClient
+	NotificationsRpc() notifications.NotificationsClient
 	NodeId() []byte
 	LightningNode() lntest.LightningNode
 	PostgresBackend() *PostgresContainer

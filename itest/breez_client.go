@@ -3,6 +3,7 @@ package itest
 import (
 	"crypto/sha256"
 	"log"
+	"testing"
 
 	"github.com/breez/lntest"
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -19,6 +20,7 @@ type BreezClient interface {
 	Start()
 	Stop() error
 	SetHtlcAcceptor(totalMsat uint64)
+	ResetHtlcAcceptor()
 }
 
 type generateInvoicesRequest struct {
@@ -39,24 +41,55 @@ func GenerateInvoices(n BreezClient, req generateInvoicesRequest) (invoice, invo
 	preimage, err := GenerateRandomBytes(32)
 	lntest.CheckError(n.Harness().T, err)
 
-	lspNodeId, err := btcec.ParsePubKey(req.lsp.NodeId())
-	lntest.CheckError(n.Harness().T, err)
-
 	innerInvoice := n.Node().CreateBolt11Invoice(&lntest.CreateInvoiceOptions{
 		AmountMsat:  req.innerAmountMsat,
 		Description: &req.description,
 		Preimage:    &preimage,
 	})
-	outerInvoiceRaw, err := zpay32.Decode(innerInvoice.Bolt11, &chaincfg.RegressionNetParams)
+	outerInvoice := AddHopHint(n, innerInvoice.Bolt11, req.lsp, lntest.ShortChannelID{
+		BlockHeight: 1,
+		TxIndex:     0,
+		OutputIndex: 0,
+	}, &req.outerAmountMsat)
+
+	inner := invoice{
+		bolt11:          innerInvoice.Bolt11,
+		paymentHash:     innerInvoice.PaymentHash,
+		paymentSecret:   innerInvoice.PaymentSecret,
+		paymentPreimage: preimage,
+	}
+	outer := invoice{
+		bolt11:          outerInvoice,
+		paymentHash:     innerInvoice.PaymentHash[:],
+		paymentSecret:   innerInvoice.PaymentSecret,
+		paymentPreimage: preimage,
+	}
+
+	return inner, outer
+}
+
+func ContainsHopHint(t *testing.T, invoice string) bool {
+	rawInvoice, err := zpay32.Decode(invoice, &chaincfg.RegressionNetParams)
+	lntest.CheckError(t, err)
+
+	return len(rawInvoice.RouteHints) > 0
+}
+
+func AddHopHint(n BreezClient, invoice string, lsp LspNode, chanid lntest.ShortChannelID, amountMsat *uint64) string {
+	rawInvoice, err := zpay32.Decode(invoice, &chaincfg.RegressionNetParams)
 	lntest.CheckError(n.Harness().T, err)
 
-	milliSat := lnwire.MilliSatoshi(req.outerAmountMsat)
-	outerInvoiceRaw.MilliSat = &milliSat
-	fakeChanId := &lnwire.ShortChannelID{BlockHeight: 1, TxIndex: 0, TxPosition: 0}
-	outerInvoiceRaw.RouteHints = append(outerInvoiceRaw.RouteHints, []zpay32.HopHint{
+	if amountMsat != nil {
+		milliSat := lnwire.MilliSatoshi(*amountMsat)
+		rawInvoice.MilliSat = &milliSat
+	}
+
+	lspNodeId, err := btcec.ParsePubKey(lsp.NodeId())
+	lntest.CheckError(n.Harness().T, err)
+	rawInvoice.RouteHints = append(rawInvoice.RouteHints, []zpay32.HopHint{
 		{
 			NodeID:                    lspNodeId,
-			ChannelID:                 fakeChanId.ToUint64(),
+			ChannelID:                 chanid.ToUint64(),
 			FeeBaseMSat:               lspBaseFeeMsat,
 			FeeProportionalMillionths: lspFeeRatePpm,
 			CLTVExpiryDelta:           lspCltvDelta,
@@ -64,12 +97,12 @@ func GenerateInvoices(n BreezClient, req generateInvoicesRequest) (invoice, invo
 	})
 
 	log.Printf(
-		"Encoding outer invoice. privkey: '%x', invoice: '%+v', original bolt11: '%s'",
+		"Encoding invoice. privkey: '%x', invoice: '%+v', original bolt11: '%s'",
 		n.Node().PrivateKey().Serialize(),
-		outerInvoiceRaw,
-		innerInvoice.Bolt11,
+		rawInvoice,
+		invoice,
 	)
-	outerInvoice, err := outerInvoiceRaw.Encode(zpay32.MessageSigner{
+	newInvoice, err := rawInvoice.Encode(zpay32.MessageSigner{
 		SignCompact: func(msg []byte) ([]byte, error) {
 			hash := sha256.Sum256(msg)
 			sig, err := ecdsa.SignCompact(n.Node().PrivateKey(), hash[:], true)
@@ -85,18 +118,5 @@ func GenerateInvoices(n BreezClient, req generateInvoicesRequest) (invoice, invo
 	})
 	lntest.CheckError(n.Harness().T, err)
 
-	inner := invoice{
-		bolt11:          innerInvoice.Bolt11,
-		paymentHash:     innerInvoice.PaymentHash,
-		paymentSecret:   innerInvoice.PaymentSecret,
-		paymentPreimage: preimage,
-	}
-	outer := invoice{
-		bolt11:          outerInvoice,
-		paymentHash:     outerInvoiceRaw.PaymentHash[:],
-		paymentSecret:   innerInvoice.PaymentSecret,
-		paymentPreimage: preimage,
-	}
-
-	return inner, outer
+	return newInvoice
 }

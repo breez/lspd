@@ -14,6 +14,7 @@ import (
 
 	"github.com/breez/lntest"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/notifications"
 	lspd "github.com/breez/lspd/rpc"
 	"github.com/btcsuite/btcd/btcec/v2"
 	ecies "github.com/ecies/go/v2"
@@ -32,10 +33,11 @@ type LndLspNode struct {
 }
 
 type lndLspNodeRuntime struct {
-	logFile  *os.File
-	cmd      *exec.Cmd
-	rpc      lspd.ChannelOpenerClient
-	cleanups []*lntest.Cleanup
+	logFile         *os.File
+	cmd             *exec.Cmd
+	rpc             lspd.ChannelOpenerClient
+	notificationRpc notifications.NotificationsClient
+	cleanups        []*lntest.Cleanup
 }
 
 func NewLndLspdNode(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, name string, nodeConfig *config.NodeConfig) LspNode {
@@ -193,11 +195,13 @@ func (c *LndLspNode) Start() {
 	})
 
 	client := lspd.NewChannelOpenerClient(conn)
+	notifyClient := notifications.NewNotificationsClient(conn)
 	c.runtime = &lndLspNodeRuntime{
-		logFile:  logFile,
-		cmd:      cmd,
-		rpc:      client,
-		cleanups: cleanups,
+		logFile:         logFile,
+		cmd:             cmd,
+		rpc:             client,
+		notificationRpc: notifyClient,
+		cleanups:        cleanups,
 	}
 }
 
@@ -228,6 +232,10 @@ func (c *LndLspNode) EciesPublicKey() *ecies.PublicKey {
 
 func (c *LndLspNode) Rpc() lspd.ChannelOpenerClient {
 	return c.runtime.rpc
+}
+
+func (c *LndLspNode) NotificationsRpc() notifications.NotificationsClient {
+	return c.runtime.notificationRpc
 }
 
 func (l *LndLspNode) NodeId() []byte {

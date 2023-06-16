@@ -151,4 +151,16 @@ var allTestCases = []*testCase{
 		name: "testDynamicFeeFlow",
 		test: testDynamicFeeFlow,
 	},
+	{
+		name: "testOfflineNotificationPaymentRegistered",
+		test: testOfflineNotificationPaymentRegistered,
+	},
+	{
+		name: "testOfflineNotificationRegularForward",
+		test: testOfflineNotificationRegularForward,
+	},
+	{
+		name: "testOfflineNotificationZeroConfChannel",
+		test: testOfflineNotificationZeroConfChannel,
+	},
 }

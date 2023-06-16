@@ -123,6 +123,9 @@ func (c *clnBreezClient) Start() {
 	c.startHtlcAcceptor()
 }
 
+func (c *clnBreezClient) ResetHtlcAcceptor() {
+	c.htlcAcceptor = nil
+}
 func (c *clnBreezClient) SetHtlcAcceptor(totalMsat uint64) {
 	c.htlcAcceptor = func(htlc *proto.HtlcAccepted) *proto.HtlcResolution {
 		origPayload, err := hex.DecodeString(htlc.Onion.Payload)
@@ -230,13 +233,12 @@ func (c *clnBreezClient) startHtlcAcceptor() {
 			}
 
 			client := proto.NewClnPluginClient(conn)
+			acceptor, err := client.HtlcStream(ctx)
+			if err != nil {
+				log.Printf("%s: client.HtlcStream() error: %v", c.name, err)
+				break
+			}
 			for {
-				acceptor, err := client.HtlcStream(ctx)
-				if err != nil {
-					log.Printf("%s: client.HtlcStream() error: %v", c.name, err)
-					break
-				}
-
 				htlc, err := acceptor.Recv()
 				if err != nil {
 					log.Printf("%s: acceptor.Recv() error: %v", c.name, err)
