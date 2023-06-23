@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/breez/lspd/basetypes"
@@ -59,17 +60,19 @@ func (c *ClnClient) GetInfo() (*lightning.GetInfoResult, error) {
 
 func (c *ClnClient) IsConnected(destination []byte) (bool, error) {
 	pubKey := hex.EncodeToString(destination)
-	peers, err := c.client.ListPeers()
+	peer, err := c.client.GetPeer(pubKey)
 	if err != nil {
-		log.Printf("CLN: client.ListPeers() error: %v", err)
-		return false, fmt.Errorf("CLN: client.ListPeers() error: %w", err)
+		if strings.Contains(err.Error(), "not found") {
+			return false, nil
+		}
+
+		log.Printf("CLN: client.GetPeer(%v) error: %v", pubKey, err)
+		return false, fmt.Errorf("CLN: client.GetPeer(%v) error: %w", pubKey, err)
 	}
 
-	for _, peer := range peers {
-		if pubKey == peer.Id && peer.Connected {
-			log.Printf("destination online: %x", destination)
-			return true, nil
-		}
+	if peer.Connected {
+		log.Printf("CLN: destination online: %x", destination)
+		return true, nil
 	}
 
 	log.Printf("CLN: destination offline: %x", destination)
