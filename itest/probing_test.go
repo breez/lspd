@@ -70,6 +70,6 @@ func testProbing(p *testParams) {
 	log.Printf("Alice paying with fake payment hash with Bob offline %x", fakePaymentHash)
 	_, err = alice.PayViaRoute(outerAmountMsat, fakePaymentHash, outerInvoice.paymentSecret, route)
 
-	// Expect temporary channel failure if the peer is offline
-	assert.Contains(p.t, err.Error(), "WIRE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS")
+	// Expect unknown next peer if the peer is offline
+	assert.Contains(p.t, err.Error(), "WIRE_UNKNOWN_NEXT_PEER")
 }

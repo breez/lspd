@@ -90,6 +90,11 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 		}
 
 		isRegistered := paymentSecret != nil
+		// Sanity check. If the payment is registered, the destination is always set.
+		if isRegistered && (destination == nil || len(destination) != 33) {
+			log.Printf("ERROR: Payment was registered without destination. paymentHash: %s", reqPaymentHashStr)
+		}
+
 		isProbe := isRegistered && !bytes.Equal(paymentHash, reqPaymentHash)
 		nextHop, _ := i.client.GetPeerId(scid)
 		if err != nil {
@@ -101,121 +106,77 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 
 		// If the payment was registered, but the next hop is not the destination
 		// that means we are not the last hop of the payment, so we'll just forward.
-		if destination != nil && nextHop != nil && !bytes.Equal(nextHop, destination) {
+		if isRegistered && nextHop != nil && !bytes.Equal(nextHop, destination) {
 			return InterceptResult{
 				Action: INTERCEPT_RESUME,
 			}, nil
 		}
 
-		// nextHop is set if the sender's scid corresponds to a known channel
+		// nextHop is set if the sender's scid corresponds to a known channel.
 		// destination is set if the payment was registered for a channel open.
-		// The 'actual' next hop will be either of those. Or nil if the next hop
-		// is unknown.
+		// The 'actual' next hop will be either of those.
 		if nextHop == nil {
-			nextHop = destination
-		}
 
-		if nextHop != nil {
-			isConnected, err := i.client.IsConnected(nextHop)
-			if err != nil {
-				log.Printf("IsConnected(%x) error: %v", nextHop, err)
+			// If the next hop cannot be deduced from the scid, and the payment
+			// is not registered, there's nothing left to be done. Just continue.
+			if !isRegistered {
 				return InterceptResult{
-					Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-					FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					Action: INTERCEPT_RESUME,
 				}, nil
 			}
 
+			// The payment was registered, so the next hop is the registered
+			// destination
+			nextHop = destination
+		}
+
+		isConnected, err := i.client.IsConnected(nextHop)
+		if err != nil {
+			log.Printf("IsConnected(%x) error: %v", nextHop, err)
+			return &InterceptResult{
+				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+				FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
+			}, nil
+		}
+
+		if isProbe {
+			// If this is a known probe, we'll quit early for non-connected clients.
 			if !isConnected {
-				// If not connected, send a notification to the registered
-				// notification service for this client if available.
-				notified, err := i.notificationService.Notify(
-					hex.EncodeToString(nextHop),
-					reqPaymentHashStr,
-				)
+				return InterceptResult{
+					Action: INTERCEPT_RESUME,
+				}, nil
+			}
 
-				// If this errors or the client is not notified, the client
-				// is offline or unknown. We'll resume the HTLC (which will
-				// result in UNKOWN_NEXT_PEER)
-				if err != nil {
-					return InterceptResult{
-						Action: INTERCEPT_RESUME,
-					}, nil
-				}
-
-				if notified {
-					log.Printf("Notified %x of pending htlc", nextHop)
-					d, err := time.ParseDuration(i.config.NotificationTimeout)
-					if err != nil {
-						log.Printf("WARN: No NotificationTimeout set. Using default 1m")
-						d = time.Minute
-					}
-					timeout := time.Now().Add(d)
-					err = i.client.WaitOnline(nextHop, timeout)
-
-					// If there's an error waiting, resume the htlc. It will
-					// probably fail with UNKNOWN_NEXT_PEER.
-					if err != nil {
-						log.Printf(
-							"waiting for peer %x to come online failed with %v",
-							nextHop,
-							err,
-						)
-						return InterceptResult{
-							Action: INTERCEPT_RESUME,
-						}, nil
-					}
-
-					log.Printf("Peer %x is back online. Continue htlc.", nextHop)
-					// At this point we know a few things.
-					// - This is either a channel partner or a registered payment
-					// - they were offline
-					// - They got notified about the htlc
-					// - They came back online
-					// So if this payment was not registered, this is a channel
-					// partner and we have to wait for the channel to become active
-					// before we can forward.
-					if !isRegistered {
-						err = i.client.WaitChannelActive(nextHop, timeout)
-						if err != nil {
-							log.Printf(
-								"waiting for channnel with %x to become active failed with %v",
-								nextHop,
-								err,
-							)
-							return InterceptResult{
-								Action: INTERCEPT_RESUME,
-							}, nil
-						}
-					}
-				} else if isProbe {
-					return InterceptResult{
-						Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-						FailureCode: FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
-					}, nil
-				} else {
-					// If we haven't notified, resume the htlc. It will probably
-					// fail with UNKNOWN_NEXT_PEER.
-					return InterceptResult{
-						Action: INTERCEPT_RESUME,
-					}, nil
-				}
+			// If it's a probe, they are connected, but need a channel, we'll return
+			// INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS. This is an out-of-spec
+			// error code, because it shouldn't be returned by an intermediate
+			// node. But senders implementnig the probing-01: prefix should
+			// know that the actual payment would probably succeed.
+			if channelPoint == nil {
+				return InterceptResult{
+					Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureCode: FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
+				}, nil
 			}
 		}
 
+		if !isConnected {
+			// Make sure the client is connected by potentially notifying them to come online.
+			notifyResult := i.notify(reqPaymentHashStr, nextHop, isRegistered)
+			if notifyResult != nil {
+				return *notifyResult, nil
+			}
+		}
+
+		// The peer is online, we can resume the htlc if it's not a channel open.
 		if !isRegistered {
 			return InterceptResult{
 				Action: INTERCEPT_RESUME,
 			}, nil
 		}
 
+		// The first htlc of a MPP will open the channel.
 		if channelPoint == nil {
-			if isProbe {
-				return InterceptResult{
-					Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-					FailureCode: FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
-				}, nil
-			}
-
 			// TODO: When opening_fee_params is enforced, turn this check in a temporary channel failure.
 			if params == nil {
 				log.Printf("DEPRECATED: Intercepted htlc with deprecated fee mechanism. Using default fees. payment hash: %s", reqPaymentHashStr)
@@ -228,6 +189,7 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 				}
 			}
 
+			// Make sure the cltv delta is enough.
 			if int64(reqIncomingExpiry)-int64(reqOutgoingExpiry) < int64(i.config.TimeLockDelta) {
 				return InterceptResult{
 					Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
@@ -244,6 +206,8 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 				}, nil
 			}
 
+			// Make sure the opening_fee_params are not expired.
+			// If they are expired, but the current chain fee is fine, open channel anyway.
 			if time.Now().UTC().After(validUntil) {
 				if !i.isCurrentChainFeeCheaper(token, params) {
 					log.Printf("Intercepted expired payment registration. Failing payment. payment hash: %x, valid until: %s", paymentHash, params.ValidUntil)
@@ -395,6 +359,73 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 	})
 
 	return resp.(InterceptResult)
+}
+
+func (i *Interceptor) notify(reqPaymentHashStr string, nextHop []byte, isRegistered bool) *InterceptResult {
+	// If not connected, send a notification to the registered
+	// notification service for this client if available.
+	notified, err := i.notificationService.Notify(
+		hex.EncodeToString(nextHop),
+		reqPaymentHashStr,
+	)
+
+	// If this errors or the client is not notified, the client
+	// is offline or unknown. We'll resume the HTLC (which will
+	// result in UNKOWN_NEXT_PEER)
+	if err != nil || !notified {
+		return &InterceptResult{
+			Action: INTERCEPT_RESUME,
+		}
+	}
+
+	log.Printf("Notified %x of pending htlc", nextHop)
+	d, err := time.ParseDuration(i.config.NotificationTimeout)
+	if err != nil {
+		log.Printf("WARN: No NotificationTimeout set. Using default 1m")
+		d = time.Minute
+	}
+	timeout := time.Now().Add(d)
+
+	// Wait for a while to allow the client to come online.
+	err = i.client.WaitOnline(nextHop, timeout)
+
+	// If there's an error waiting, resume the htlc. It will
+	// probably fail with UNKNOWN_NEXT_PEER.
+	if err != nil {
+		log.Printf(
+			"waiting for peer %x to come online failed with %v",
+			nextHop,
+			err,
+		)
+		return &InterceptResult{
+			Action: INTERCEPT_RESUME,
+		}
+	}
+
+	log.Printf("Peer %x is back online. Continue htlc.", nextHop)
+	// At this point we know a few things.
+	// - This is either a channel partner or a registered payment
+	// - they were offline
+	// - They got notified about the htlc
+	// - They came back online
+	// So if this payment was not registered, this is a channel
+	// partner and we have to wait for the channel to become active
+	// before we can forward.
+	if !isRegistered {
+		err = i.client.WaitChannelActive(nextHop, timeout)
+		if err != nil {
+			log.Printf(
+				"waiting for channnel with %x to become active failed with %v",
+				nextHop,
+				err,
+			)
+			return &InterceptResult{
+				Action: INTERCEPT_RESUME,
+			}
+		}
+	}
+
+	return nil
 }
 
 func (i *Interceptor) isCurrentChainFeeCheaper(token string, params *OpeningFeeParams) bool {
