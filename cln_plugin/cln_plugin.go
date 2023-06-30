@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	SubscriberTimeoutOption = "lsp.subscribertimeout"
-	ListenAddressOption     = "lsp.listen"
+	SubscriberTimeoutOption = "lsp-subscribertimeout"
+	ListenAddressOption     = "lsp-listen"
 )
 
 var (
