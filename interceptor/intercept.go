@@ -14,12 +14,7 @@ import (
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/notifications"
-	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
-	sphinx "github.com/lightningnetwork/lightning-onion"
-	"github.com/lightningnetwork/lnd/lnwire"
-	"github.com/lightningnetwork/lnd/record"
-	"github.com/lightningnetwork/lnd/routing/route"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -40,13 +35,14 @@ var (
 )
 
 type InterceptResult struct {
-	Action       InterceptAction
-	FailureCode  InterceptFailureCode
-	Destination  []byte
-	AmountMsat   uint64
-	ChannelPoint *wire.OutPoint
-	ChannelId    uint64
-	OnionBlob    []byte
+	Action          InterceptAction
+	FailureCode     InterceptFailureCode
+	Destination     []byte
+	AmountMsat      uint64
+	TotalAmountMsat uint64
+	ChannelPoint    *wire.OutPoint
+	ChannelId       uint64
+	PaymentSecret   []byte
 }
 
 type Interceptor struct {
@@ -230,80 +226,8 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 			}
 		}
 
-		pubKey, err := btcec.ParsePubKey(destination)
-		if err != nil {
-			log.Printf("btcec.ParsePubKey(%x): %v", destination, err)
-			return InterceptResult{
-				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-				FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
-			}, nil
-		}
-
-		sessionKey, err := btcec.NewPrivateKey()
-		if err != nil {
-			log.Printf("btcec.NewPrivateKey(): %v", err)
-			return InterceptResult{
-				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-				FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
-			}, nil
-		}
-
 		var bigProd, bigAmt big.Int
 		amt := (bigAmt.Div(bigProd.Mul(big.NewInt(outgoingAmountMsat), big.NewInt(int64(reqOutgoingAmountMsat))), big.NewInt(incomingAmountMsat))).Int64()
-
-		var addr [32]byte
-		copy(addr[:], paymentSecret)
-		hop := route.Hop{
-			AmtToForward:     lnwire.MilliSatoshi(amt),
-			OutgoingTimeLock: reqOutgoingExpiry,
-			MPP:              record.NewMPP(lnwire.MilliSatoshi(outgoingAmountMsat), addr),
-			CustomRecords:    make(record.CustomSet),
-		}
-
-		var b bytes.Buffer
-		err = hop.PackHopPayload(&b, uint64(0))
-		if err != nil {
-			log.Printf("hop.PackHopPayload(): %v", err)
-			return InterceptResult{
-				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-				FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
-			}, nil
-		}
-
-		payload, err := sphinx.NewHopPayload(nil, b.Bytes())
-		if err != nil {
-			log.Printf("sphinx.NewHopPayload(): %v", err)
-			return InterceptResult{
-				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-				FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
-			}, nil
-		}
-
-		var sphinxPath sphinx.PaymentPath
-		sphinxPath[0] = sphinx.OnionHop{
-			NodePub:    *pubKey,
-			HopPayload: payload,
-		}
-		sphinxPacket, err := sphinx.NewOnionPacket(
-			&sphinxPath, sessionKey, reqPaymentHash,
-			sphinx.DeterministicPacketFiller,
-		)
-		if err != nil {
-			log.Printf("sphinx.NewOnionPacket(): %v", err)
-			return InterceptResult{
-				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-				FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
-			}, nil
-		}
-		var onionBlob bytes.Buffer
-		err = sphinxPacket.Encode(&onionBlob)
-		if err != nil {
-			log.Printf("sphinxPacket.Encode(): %v", err)
-			return InterceptResult{
-				Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
-				FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
-			}, nil
-		}
 
 		deadline := time.Now().Add(60 * time.Second)
 
@@ -334,12 +258,13 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 				}
 
 				return InterceptResult{
-					Action:       INTERCEPT_RESUME_WITH_ONION,
-					Destination:  destination,
-					ChannelPoint: channelPoint,
-					ChannelId:    channelID,
-					AmountMsat:   uint64(amt),
-					OnionBlob:    onionBlob.Bytes(),
+					Action:          INTERCEPT_RESUME_WITH_ONION,
+					Destination:     destination,
+					ChannelPoint:    channelPoint,
+					ChannelId:       channelID,
+					PaymentSecret:   paymentSecret,
+					AmountMsat:      uint64(amt),
+					TotalAmountMsat: uint64(outgoingAmountMsat),
 				}, nil
 			}
 

@@ -1,6 +1,7 @@
 package lnd
 
 import (
+	"bytes"
 	"context"
 	"log"
 	"sync"
@@ -9,8 +10,13 @@ import (
 	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/interceptor"
+	"github.com/btcsuite/btcd/btcec/v2"
+	sphinx "github.com/lightningnetwork/lightning-onion"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
+	"github.com/lightningnetwork/lnd/lnwire"
+	"github.com/lightningnetwork/lnd/record"
+	"github.com/lightningnetwork/lnd/routing/route"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -133,13 +139,23 @@ func (i *LndHtlcInterceptor) intercept() error {
 				interceptResult := i.interceptor.Intercept(&scid, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry, request.IncomingExpiry)
 				switch interceptResult.Action {
 				case interceptor.INTERCEPT_RESUME_WITH_ONION:
-					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
-						IncomingCircuitKey:      request.IncomingCircuitKey,
-						Action:                  routerrpc.ResolveHoldForwardAction_RESUME,
-						OutgoingAmountMsat:      interceptResult.AmountMsat,
-						OutgoingRequestedChanId: uint64(interceptResult.ChannelId),
-						OnionBlob:               interceptResult.OnionBlob,
-					})
+					onion, err := i.constructOnion(interceptResult, request.OutgoingExpiry, request.PaymentHash)
+					if err == nil {
+						interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
+							IncomingCircuitKey:      request.IncomingCircuitKey,
+							Action:                  routerrpc.ResolveHoldForwardAction_RESUME,
+							OutgoingAmountMsat:      interceptResult.AmountMsat,
+							OutgoingRequestedChanId: uint64(interceptResult.ChannelId),
+							OnionBlob:               onion,
+						})
+					} else {
+						interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
+							IncomingCircuitKey: request.IncomingCircuitKey,
+							Action:             routerrpc.ResolveHoldForwardAction_FAIL,
+							FailureCode:        lnrpc.Failure_TEMPORARY_CHANNEL_FAILURE,
+						})
+					}
+
 				case interceptor.INTERCEPT_FAIL_HTLC_WITH_CODE:
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
 						IncomingCircuitKey: request.IncomingCircuitKey,
@@ -178,4 +194,66 @@ func (i *LndHtlcInterceptor) mapFailureCode(original interceptor.InterceptFailur
 		log.Printf("Unknown failure code %v, default to temporary channel failure.", original)
 		return lnrpc.Failure_TEMPORARY_CHANNEL_FAILURE
 	}
+}
+
+func (i *LndHtlcInterceptor) constructOnion(
+	interceptResult interceptor.InterceptResult,
+	reqOutgoingExpiry uint32,
+	reqPaymentHash []byte,
+) ([]byte, error) {
+	pubKey, err := btcec.ParsePubKey(interceptResult.Destination)
+	if err != nil {
+		log.Printf("btcec.ParsePubKey(%x): %v", interceptResult.Destination, err)
+		return nil, err
+	}
+
+	sessionKey, err := btcec.NewPrivateKey()
+	if err != nil {
+		log.Printf("btcec.NewPrivateKey(): %v", err)
+		return nil, err
+	}
+
+	var addr [32]byte
+	copy(addr[:], interceptResult.PaymentSecret)
+	hop := route.Hop{
+		AmtToForward:     lnwire.MilliSatoshi(interceptResult.AmountMsat),
+		OutgoingTimeLock: reqOutgoingExpiry,
+		MPP:              record.NewMPP(lnwire.MilliSatoshi(interceptResult.TotalAmountMsat), addr),
+		CustomRecords:    make(record.CustomSet),
+	}
+
+	var b bytes.Buffer
+	err = hop.PackHopPayload(&b, uint64(0))
+	if err != nil {
+		log.Printf("hop.PackHopPayload(): %v", err)
+		return nil, err
+	}
+
+	payload, err := sphinx.NewHopPayload(nil, b.Bytes())
+	if err != nil {
+		log.Printf("sphinx.NewHopPayload(): %v", err)
+		return nil, err
+	}
+
+	var sphinxPath sphinx.PaymentPath
+	sphinxPath[0] = sphinx.OnionHop{
+		NodePub:    *pubKey,
+		HopPayload: payload,
+	}
+	sphinxPacket, err := sphinx.NewOnionPacket(
+		&sphinxPath, sessionKey, reqPaymentHash,
+		sphinx.DeterministicPacketFiller,
+	)
+	if err != nil {
+		log.Printf("sphinx.NewOnionPacket(): %v", err)
+		return nil, err
+	}
+	var onionBlob bytes.Buffer
+	err = sphinxPacket.Encode(&onionBlob)
+	if err != nil {
+		log.Printf("sphinxPacket.Encode(): %v", err)
+		return nil, err
+	}
+
+	return onionBlob.Bytes(), nil
 }
