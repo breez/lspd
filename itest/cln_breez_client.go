@@ -78,7 +78,7 @@ func newClnBreezClient(h *lntest.TestHarness, m *lntest.Miner, name string) Bree
 		name,
 		fmt.Sprintf("--plugin=%s", pluginFilePath),
 		fmt.Sprintf("--plugin=%s", *clnPluginExec),
-		fmt.Sprintf("--lsp.listen=%s", htlcAcceptorAddress),
+		fmt.Sprintf("--lsp-listen=%s", htlcAcceptorAddress),
 		// NOTE: max-concurrent-htlcs is 30 on mainnet by default. In cln V22.11
 		// there is a check for 'all dust' commitment transactions. The max
 		// concurrent HTLCs of both sides of the channel * dust limit must be

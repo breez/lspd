@@ -53,7 +53,7 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, nam
 
 	args := []string{
 		fmt.Sprintf("--plugin=%s", pluginBinary),
-		fmt.Sprintf("--lsp.listen=%s", pluginAddress),
+		fmt.Sprintf("--lsp-listen=%s", pluginAddress),
 		fmt.Sprintf("--fee-base=%d", lspBaseFeeMsat),
 		fmt.Sprintf("--fee-per-satoshi=%d", lspFeeRatePpm),
 		fmt.Sprintf("--cltv-delta=%d", lspCltvDelta),
