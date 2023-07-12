@@ -1,0 +1,16 @@
+name: 'Cache itest'
+description: 'Fetch LSPD Integration Test and cache the go directory'
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache itest
+      id: cache-itest
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/go
+        key: itest
+    - name: Get LSPD Integration Test
+      if: steps.cache-itest.outputs.cache-hit != 'true'
+      run: go get github.com/breez/lspd/itest
+      shell: bash

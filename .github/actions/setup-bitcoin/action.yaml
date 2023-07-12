@@ -1,0 +1,42 @@
+name: 'Setup Bitcoin Core'
+description: 'Download and install Bitcoin Core'
+inputs:
+  bitcoin-version:
+    description: 'Version of Bitcoin Core'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache Bitcoin Core
+      id: cache-bitcoin
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}/bin/bitcoind
+          ~/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}/bin/bitcoin-cli
+        key: bitcoin-core-${{ inputs.bitcoin-version }}
+
+    - name: Setup dependencies
+      if: steps.cache-bitcoin.outputs.cache-hit != 'true'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y axel
+      shell: bash
+
+    - name: Download and install Bitcoin Core
+      if: steps.cache-bitcoin.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p ~/bitcoin-core-${{ inputs.bitcoin-version }}
+        cd ~/bitcoin-core-${{ inputs.bitcoin-version }}
+        axel https://bitcoin.org/bin/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}-x86_64-linux-gnu.tar.gz
+        tar -xzf bitcoin-${{ inputs.bitcoin-version }}-x86_64-linux-gnu.tar.gz
+        rm bitcoin-${{ inputs.bitcoin-version }}-x86_64-linux-gnu.tar.gz
+        sudo cp ~/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}/bin/bitcoind /usr/bin/
+        sudo cp ~/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}/bin/bitcoin-cli /usr/bin/
+      shell: bash
+
+    - name: Copy Binaries
+      run: |
+        sudo cp ~/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}/bin/bitcoind /usr/bin/
+        sudo cp ~/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}/bin/bitcoin-cli /usr/bin/
+      shell: bash

@@ -1,0 +1,144 @@
+name: 'Test LSPD'
+description: 'Downloads artifacts, sets permissions, caches and runs a specified test and processes the result as an artifact.'
+inputs:
+  TESTRE:
+    description: 'Test regular expression to run.'
+    required: true
+  artifact-name:
+    description: 'Artifact name for the test state.'
+    required: true
+  bitcoin-version:
+    description: 'Bitcoin version.'
+    required: true
+  LSP_REF:
+    description: 'LSP reference.'
+    required: true
+  CLIENT_REF:
+    description: 'Client reference.'
+    required: true
+  GO_VERSION:
+    description: 'Go version.'
+    required: true
+  CLN_VERSION:
+    description: 'Core Lightning version.'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: build-artifacts
+  
+    - name: Set permissions
+      run: |
+        chmod 755 lspd
+        chmod 755 lspd_plugin
+      shell: bash
+
+    - name: Cache LND client
+      uses: actions/cache@v3
+      with:
+        path: ~/go_lnd_client/bin/lnd
+        key: go_lnd_client-${{ inputs.CLIENT_REF }}-${{ inputs.GO_VERSION }}
+
+    - name: Cache LND LSP
+      uses: actions/cache@v3
+      with:
+        path: ~/go_lnd_lsp/bin/lnd
+        key: go_lnd_lsp-${{ inputs.LSP_REF }}-${{ inputs.GO_VERSION }}
+
+    - name: Cache Core Lightning
+      uses: actions/cache@v3
+      with:
+        path: |
+          lightning_git/lightningd/lightning_hsmd
+          lightning_git/lightningd/lightning_gossipd
+          lightning_git/lightningd/lightning_openingd
+          lightning_git/lightningd/lightning_dualopend
+          lightning_git/lightningd/lightning_channeld
+          lightning_git/lightningd/lightning_closingd
+          lightning_git/lightningd/lightning_onchaind
+          lightning_git/lightningd/lightning_connectd
+          lightning_git/lightningd/lightning_websocketd
+          lightning_git/lightningd/lightningd
+          lightning_git/plugins/offers
+          lightning_git/plugins/topology
+          lightning_git/plugins/spenderp
+          lightning_git/plugins/test/run-route-overlong
+          lightning_git/plugins/test/run-funder_policy
+          lightning_git/plugins/pay
+          lightning_git/plugins/bkpr/test/run-bkpr_db
+          lightning_git/plugins/bkpr/test/run-recorder
+          lightning_git/plugins/funder
+          lightning_git/plugins/bookkeeper
+          lightning_git/plugins/txprepare
+          lightning_git/plugins/keysend
+          lightning_git/plugins/fetchinvoice
+          lightning_git/plugins/bcli
+          lightning_git/plugins/cln-grpc
+          lightning_git/plugins/commando
+          lightning_git/plugins/autoclean
+          lightning_git/plugins/chanbackup
+          lightning_git/plugins/sql
+          lightning_git/cli/lightning-cli
+          lightning_git/devtools/bolt11-cli
+          lightning_git/devtools/decodemsg
+          lightning_git/devtools/onion
+          lightning_git/devtools/dump-gossipstore
+          lightning_git/devtools/gossipwith
+          lightning_git/devtools/create-gossipstore
+          lightning_git/devtools/mkcommit
+          lightning_git/devtools/mkfunding
+          lightning_git/devtools/mkclose
+          lightning_git/devtools/mkgossip
+        key: core-lightning-${{ inputs.CLN_VERSION }}
+
+    - name: Cache Bitcoin Core
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}/bin/bitcoind
+          ~/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}/bin/bitcoin-cli
+        key: bitcoin-core-${{ inputs.bitcoin-version }}
+
+    - name: Cache itest
+      id: cache-itest
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/go
+        key: itest
+
+    - name: Test LSPD
+      run: |
+        go get github.com/breez/lspd/itest
+        go test -timeout 45m -v \
+          ./itest \
+          -test.run \
+          ${{ inputs.TESTRE }} \
+          --bitcoindexec ~/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}/bin/bitcoind \
+          --bitcoincliexec ~/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}/bin/bitcoin-cli \
+          --lightningdexec ${{ github.workspace }}/lightning_git/lightningd/lightningd \
+          --lndexec ~/go_lnd_lsp/bin/lnd \
+          --lndmobileexec ~/go_lnd_client/bin/lnd \
+          --clnpluginexec ${{ github.workspace }}/lspd_plugin \
+          --lspdexec ${{ github.workspace }}/lspd \
+          --lspdmigrationsdir ${{ github.workspace }}/postgresql/migrations \
+          --preservelogs \
+          --testdir /home/runner/test_state || echo "step_failed=true" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Process test state
+      uses: ./.github/actions/process-test-state
+      with:
+        artifact-name: ${{ inputs.artifact-name }}
+        test-state-path: /home/runner/test_state
+
+    - name: Fail the workflow if the tests failed
+      run: |
+        if [[ "${{ env.step_failed }}" == "true" ]]
+        then
+          exit 1
+        fi
+      shell: bash

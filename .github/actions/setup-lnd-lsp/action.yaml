@@ -1,0 +1,45 @@
+name: 'Setup LND LSP'
+description: 'Set up LND for LSP on the runner'
+
+inputs:
+  lsp-ref:
+    description: 'The Git reference for the LSP version of LND'
+    required: true
+    default: 'breez-node-v0.16.2-beta'
+
+  go-version:
+    description: 'The Go version for building LND'
+    required: true
+    default: ^1.19
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache LND LSP
+      id: cache-lnd-lsp
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/go_lnd_lsp/bin/lnd
+        key: go_lnd_lsp-${{ inputs.lsp-ref }}-${{ inputs.go-version }}
+
+    - name: Set up Go 1.x
+      if: steps.cache-lnd-lsp.outputs.cache-hit != 'true'
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ inputs.go-version }}
+
+    - name: Checkout LND for LSP
+      if: steps.cache-lnd-lsp.outputs.cache-hit != 'true'
+      uses: actions/checkout@v3
+      with:
+        repository: breez/lnd
+        ref: ${{ inputs.lsp-ref }}
+        path: lnd_lsp
+
+    - name: Build LND for LSP
+      if: steps.cache-lnd-lsp.outputs.cache-hit != 'true'
+      run: |
+        cd lnd_lsp
+        env GOPATH=~/go_lnd_lsp make install tags='submarineswaprpc chanreservedynamic routerrpc walletrpc chainrpc signrpc invoicesrpc'
+      shell: bash
