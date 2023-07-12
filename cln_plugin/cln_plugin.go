@@ -23,7 +23,8 @@ const (
 )
 
 var (
-	DefaultSubscriberTimeout = "1m"
+	DefaultSubscriberTimeout     = "1m"
+	DefaultChannelAcceptorScript = ""
 )
 
 const (
@@ -259,6 +260,7 @@ func (c *ClnPlugin) handleGetManifest(request *Request) {
 					Name:        channelAcceptScript,
 					Type:        "string",
 					Description: "starlark script for channel acceptor.",
+					Default:     &DefaultChannelAcceptorScript,
 				},
 			},
 			RpcMethods: []*RpcMethod{

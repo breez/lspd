@@ -12,6 +12,13 @@ func channelAcceptor(acceptScript string, method string, openChannel json.RawMes
 	reject, _ := json.Marshal(struct {
 		Result string `json:"result"`
 	}{Result: "reject"})
+	accept, _ := json.Marshal(struct {
+		Result string `json:"result"`
+	}{Result: "continue"})
+
+	if acceptScript == "" {
+		return accept, nil
+	}
 
 	sd := starlark.StringDict{
 		"method":      starlark.String(method),
