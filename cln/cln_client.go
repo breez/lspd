@@ -12,7 +12,7 @@ import (
 	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/niftynei/glightning/glightning"
+	"github.com/elementsproject/glightning/glightning"
 	"golang.org/x/exp/slices"
 )
 
@@ -122,7 +122,7 @@ func (c *ClnClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoi
 		minConfs,
 		glightning.NewMsat(0),
 		minDepth,
-		glightning.NewSat(0),
+		glightning.NewMsat(0),
 	)
 
 	if err != nil {

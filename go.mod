@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/aws/aws-sdk-go v1.34.0
-	github.com/breez/lntest v0.0.23
+	github.com/breez/lntest v0.0.25
 	github.com/btcsuite/btcd v0.23.5-0.20230228185050-38331963bddd
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.2
@@ -12,6 +12,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
 	github.com/docker/docker v20.10.24+incompatible
 	github.com/docker/go-connections v0.4.0
+	github.com/elementsproject/glightning v0.0.0-20230525134205-ef34d849f564
 	github.com/golang/protobuf v1.5.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/jackc/pgtype v1.8.1
@@ -19,7 +20,6 @@ require (
 	github.com/lightningnetwork/lightning-onion v1.2.1-0.20221202012345-ca23184850a1
 	github.com/lightningnetwork/lnd v0.16.2-beta
 	github.com/lightningnetwork/lnd/tlv v1.1.0
-	github.com/niftynei/glightning v0.8.2
 	github.com/stretchr/testify v1.8.1
 	go.starlark.net v0.0.0-20230612165344-9532f5667272
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
@@ -189,5 +189,4 @@ require (
 )
 
 replace github.com/lightningnetwork/lnd v0.16.2-beta => github.com/breez/lnd v0.15.0-beta.rc6.0.20230501134702-cebcdf1b17fd
-
-replace github.com/niftynei/glightning v0.8.2 => github.com/breez/glightning v0.0.0-20221219103549-0e2a13b9b3ed
+replace github.com/elementsproject/glightning => github.com/breez/glightning v0.0.1-breez
