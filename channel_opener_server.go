@@ -105,6 +105,10 @@ func (s *channelOpenerServer) createOpeningParamsMenu(
 	}
 
 	sort.Slice(menu, func(i, j int) bool {
+		if menu[i].MinMsat == menu[j].MinMsat {
+			return menu[i].Proportional < menu[j].Proportional
+		}
+
 		return menu[i].MinMsat < menu[j].MinMsat
 	})
 	return menu, nil
