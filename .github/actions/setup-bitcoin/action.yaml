@@ -28,7 +28,7 @@ runs:
       run: |
         mkdir -p ~/bitcoin-core-${{ inputs.bitcoin-version }}
         cd ~/bitcoin-core-${{ inputs.bitcoin-version }}
-        axel https://bitcoin.org/bin/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}-x86_64-linux-gnu.tar.gz
+        axel https://bitcoincore.org/bin/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}-x86_64-linux-gnu.tar.gz
         tar -xzf bitcoin-${{ inputs.bitcoin-version }}-x86_64-linux-gnu.tar.gz
         rm bitcoin-${{ inputs.bitcoin-version }}-x86_64-linux-gnu.tar.gz
         sudo cp ~/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}/bin/bitcoind /usr/bin/
