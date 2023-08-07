@@ -30,7 +30,7 @@ require (
 require (
 	github.com/Microsoft/go-winio v0.5.2 // indirect
 	github.com/Yawning/aez v0.0.0-20211027044916-e49e68abd344 // indirect
-	github.com/docker/distribution v2.8.1+incompatible // indirect
+	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ethereum/go-ethereum v1.10.17 // indirect
 	github.com/golang-jwt/jwt/v4 v4.4.2 // indirect
@@ -189,4 +189,5 @@ require (
 )
 
 replace github.com/lightningnetwork/lnd v0.16.2-beta => github.com/breez/lnd v0.15.0-beta.rc6.0.20230501134702-cebcdf1b17fd
+
 replace github.com/elementsproject/glightning => github.com/breez/glightning v0.0.1-breez
