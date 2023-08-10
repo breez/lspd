@@ -149,6 +149,30 @@ func (c *ClnPlugin) htlcListenServer() {
 	}
 }
 
+// Listens to responses to custommsg requests from the grpc server.
+func (c *ClnPlugin) custommsgListenServer() {
+	for {
+		select {
+		case <-c.done:
+			return
+		default:
+			id, result := c.server.ReceiveCustomMessageResponse()
+
+			// The server may return nil if it is stopped.
+			if result == nil {
+				continue
+			}
+
+			serid, _ := json.Marshal(&id)
+			c.sendToCln(&Response{
+				Id:      serid,
+				JsonRpc: SpecVersion,
+				Result:  result,
+			})
+		}
+	}
+}
+
 // processes a single message from cln. Sends the message to the appropriate
 // handler.
 func (c *ClnPlugin) processMsg(msg []byte) {
@@ -277,6 +301,7 @@ func (c *ClnPlugin) handleGetManifest(request *Request) {
 			},
 			Dynamic: true,
 			Hooks: []Hook{
+				{Name: "custommsg"},
 				{Name: "htlc_accepted"},
 				{Name: "openchannel"},
 				{Name: "openchannel2"},
@@ -406,8 +431,9 @@ func (c *ClnPlugin) handleInit(request *Request) {
 		return
 	}
 
-	// Listen for htlc responses from the grpc server.
+	// Listen for htlc and custommsg responses from the grpc server.
 	go c.htlcListenServer()
+	go c.custommsgListenServer()
 
 	// Let cln know the plugin is initialized.
 	c.sendToCln(&Response{
@@ -464,6 +490,25 @@ func (c *ClnPlugin) handleSetChannelAcceptScript(request *Request) {
 		Id:      request.Id,
 		Result:  c.channelAcceptScript,
 	})
+}
+
+func (c *ClnPlugin) handleCustomMsg(request *Request) {
+	var custommsg CustomMessageRequest
+	err := json.Unmarshal(request.Params, &custommsg)
+	if err != nil {
+		c.sendError(
+			request.Id,
+			ParseError,
+			fmt.Sprintf(
+				"Failed to unmarshal custommsg params:%s [%s]",
+				err.Error(),
+				request.Params,
+			),
+		)
+		return
+	}
+
+	c.server.SendCustomMessage(idToString(request.Id), &custommsg)
 }
 
 func unmarshalOpenChannel(request *Request) (r json.RawMessage, err error) {
