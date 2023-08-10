@@ -126,13 +126,13 @@ func (c *ClnPlugin) listenRequests() error {
 }
 
 // Listens to responses to htlc_accepted requests from the grpc server.
-func (c *ClnPlugin) listenServer() {
+func (c *ClnPlugin) htlcListenServer() {
 	for {
 		select {
 		case <-c.done:
 			return
 		default:
-			id, result := c.server.Receive()
+			id, result := c.server.ReceiveHtlcResolution()
 
 			// The server may return nil if it is stopped.
 			if result == nil {
@@ -227,6 +227,8 @@ func (c *ClnPlugin) processRequest(request *Request) {
 		})
 	case "setchannelacceptscript":
 		c.handleSetChannelAcceptScript(request)
+	case "custommsg":
+		c.handleCustomMsg(request)
 	default:
 		c.sendError(
 			request.Id,
@@ -404,8 +406,8 @@ func (c *ClnPlugin) handleInit(request *Request) {
 		return
 	}
 
-	// Listen for responses from the grpc server.
-	go c.listenServer()
+	// Listen for htlc responses from the grpc server.
+	go c.htlcListenServer()
 
 	// Let cln know the plugin is initialized.
 	c.sendToCln(&Response{
@@ -436,7 +438,7 @@ func (c *ClnPlugin) handleHtlcAccepted(request *Request) {
 		return
 	}
 
-	c.server.Send(idToString(request.Id), &htlc)
+	c.server.SendHtlcAccepted(idToString(request.Id), &htlc)
 }
 
 func (c *ClnPlugin) handleSetChannelAcceptScript(request *Request) {
