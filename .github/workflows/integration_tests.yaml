@@ -121,3 +121,35 @@ jobs:
           CLIENT_REF: ${{ env.CLIENT_REF }}
           GO_VERSION: ${{ env.GO_VERSION }}
           CLN_VERSION: ${{ env.CLN_VERSION }}
+  
+  run-lsps2-test:
+    runs-on: ubuntu-22.04
+    needs:
+      - setup-itest
+      - setup-bitcoin-core
+      - setup-cln
+      - build-lspd
+    name: test ${{ matrix.implementation }} ${{ matrix.test }}
+    strategy:
+      max-parallel: 6
+      matrix:
+        test: [
+          testLsps0GetProtocolVersions
+        ]
+        implementation: [
+          CLN
+        ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Run and Process Test State
+        uses: ./.github/actions/test-lspd
+        with:
+          TESTRE: "TestLspd/${{ matrix.implementation }}-lspd:_${{ matrix.test }}"
+          artifact-name: TestLspd-${{ matrix.implementation }}-lspd_${{ matrix.test }}
+          bitcoin-version: ${{ env.BITCOIN_VERSION }}
+          LSP_REF: ${{ env.LSP_REF }}
+          CLIENT_REF: ${{ env.CLIENT_REF }}
+          GO_VERSION: ${{ env.GO_VERSION }}
+          CLN_VERSION: ${{ env.CLN_VERSION }}
