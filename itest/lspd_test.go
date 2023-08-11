@@ -174,4 +174,8 @@ var allTestCases = []*testCase{
 		name: "testOfflineNotificationZeroConfChannel",
 		test: testOfflineNotificationZeroConfChannel,
 	},
+	{
+		name: "testLsps0GetProtocolVersions",
+		test: testLsps0GetProtocolVersions,
+	},
 }

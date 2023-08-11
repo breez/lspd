@@ -21,6 +21,7 @@ type BreezClient interface {
 	Stop() error
 	SetHtlcAcceptor(totalMsat uint64)
 	ResetHtlcAcceptor()
+	ReceiveCustomMessage() *lntest.CustomMsgRequest
 }
 
 type generateInvoicesRequest struct {
