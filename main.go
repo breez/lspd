@@ -15,6 +15,7 @@ import (
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lnd"
+	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/mempool"
 	"github.com/breez/lspd/notifications"
 	"github.com/breez/lspd/postgresql"
@@ -110,6 +111,15 @@ func main() {
 			if err != nil {
 				log.Fatalf("failed to initialize CLN interceptor: %v", err)
 			}
+
+			msgClient := cln.NewCustomMsgClient(node.Cln, client)
+			go msgClient.Start()
+			msgServer := lsps0.NewServer()
+			protocolServer := lsps0.NewProtocolServer([]uint32{2})
+			lsps0.RegisterProtocolServer(msgServer, protocolServer)
+			msgClient.WaitStarted()
+			defer msgClient.Stop()
+			go msgServer.Serve(msgClient)
 		}
 
 		if htlcInterceptor == nil {
