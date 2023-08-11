@@ -16,6 +16,7 @@ import (
 	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lnd"
 	"github.com/breez/lspd/lsps0"
+	"github.com/breez/lspd/lsps2"
 	"github.com/breez/lspd/mempool"
 	"github.com/breez/lspd/notifications"
 	"github.com/breez/lspd/postgresql"
@@ -116,7 +117,9 @@ func main() {
 			go msgClient.Start()
 			msgServer := lsps0.NewServer()
 			protocolServer := lsps0.NewProtocolServer([]uint32{2})
+			lsps2Server := lsps2.NewLsps2Server()
 			lsps0.RegisterProtocolServer(msgServer, protocolServer)
+			lsps2.RegisterLsps2Server(msgServer, lsps2Server)
 			msgClient.WaitStarted()
 			defer msgClient.Stop()
 			go msgServer.Serve(msgClient)
