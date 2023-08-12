@@ -138,7 +138,8 @@ jobs:
       matrix:
         test: [
           testLsps0GetProtocolVersions,
-          testLsps2GetVersions
+          testLsps2GetVersions,
+          testLsps2GetInfo
         ]
         implementation: [
           CLN
