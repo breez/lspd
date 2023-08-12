@@ -155,3 +155,20 @@ jobs:
           CLIENT_REF: ${{ env.CLIENT_REF }}
           GO_VERSION: ${{ env.GO_VERSION }}
           CLN_VERSION: ${{ env.CLN_VERSION }}
+
+  run-unit-tests:
+    runs-on: ubuntu-22.04
+    name: Run unit tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Get dependencies
+        run: |
+          go get github.com/breez/lspd
+          go get github.com/breez/lspd/cln_plugin
+          go get github.com/breez/lspd/itest
+
+      - name: Test
+        run: go test -short `go list ./... | grep -v /itest`
+      
