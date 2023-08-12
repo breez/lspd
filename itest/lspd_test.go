@@ -13,6 +13,10 @@ import (
 var defaultTimeout time.Duration = time.Second * 120
 
 func TestLspd(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+		return
+	}
 	testCases := allTestCases
 	runTests(t, testCases, "LND-lspd", lndLspFunc, lndClientFunc)
 	runTests(t, testCases, "CLN-lspd", clnLspFunc, clnClientFunc)

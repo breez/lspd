@@ -284,7 +284,7 @@ func encodePayloadWithNextHop(payload []byte, channelId uint64, amountToForward 
 	tlvRecords := tlv.MapToRecords(uTlvMap)
 	s, err = tlv.NewStream(tlvRecords...)
 	if err != nil {
-		return nil, fmt.Errorf("tlv.NewStream(%x) error: %v", tlvRecords, err)
+		return nil, fmt.Errorf("tlv.NewStream(%v) error: %v", tlvRecords, err)
 	}
 	var newPayloadBuf bytes.Buffer
 	err = s.Encode(&newPayloadBuf)
