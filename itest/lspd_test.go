@@ -171,4 +171,8 @@ var allTestCases = []*testCase{
 		name: "testLsps2GetVersions",
 		test: testLsps2GetVersions,
 	},
+	{
+		name: "testLsps2GetInfo",
+		test: testLsps2GetInfo,
+	},
 }
