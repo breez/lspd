@@ -125,7 +125,7 @@ func main() {
 			go msgClient.Start()
 			msgServer := lsps0.NewServer()
 			protocolServer := lsps0.NewProtocolServer([]uint32{2})
-			lsps2Server := lsps2.NewLsps2Server()
+			lsps2Server := lsps2.NewLsps2Server(openingService, nodesService, node)
 			lsps0.RegisterProtocolServer(msgServer, protocolServer)
 			lsps2.RegisterLsps2Server(msgServer, lsps2Server)
 			msgClient.WaitStarted()

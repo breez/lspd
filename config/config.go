@@ -75,6 +75,9 @@ type NodeConfig struct {
 	// peer is offline.
 	NotificationTimeout string `json:"notificationTimeout,string"`
 
+	MinPaymentSizeMsat uint64 `json:"minPaymentSizeMsat,string"`
+	MaxPaymentSizeMsat uint64 `json:"maxPaymentSizeMsat,string"`
+
 	// Set this field to connect to an LND node.
 	Lnd *LndConfig `json:"lnd,omitempty"`
 
