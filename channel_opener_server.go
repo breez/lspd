@@ -2,12 +2,10 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
-	"sort"
 	"time"
 
 	"github.com/breez/lspd/basetypes"
@@ -22,7 +20,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/lnwire"
@@ -30,14 +27,17 @@ import (
 
 type channelOpenerServer struct {
 	lspdrpc.ChannelOpenerServer
-	store interceptor.InterceptStore
+	store          interceptor.InterceptStore
+	openingService shared.OpeningService
 }
 
 func NewChannelOpenerServer(
 	store interceptor.InterceptStore,
+	openingService shared.OpeningService,
 ) *channelOpenerServer {
 	return &channelOpenerServer{
-		store: store,
+		store:          store,
+		openingService: openingService,
 	}
 }
 
@@ -49,9 +49,21 @@ func (s *channelOpenerServer) ChannelInformation(ctx context.Context, in *lspdrp
 		return nil, err
 	}
 
-	params, err := s.createOpeningParamsMenu(ctx, node, token)
+	params, err := s.openingService.GetFeeParamsMenu(token, node.PrivateKey)
 	if err != nil {
 		return nil, err
+	}
+
+	var menu []*lspdrpc.OpeningFeeParams
+	for _, p := range params {
+		menu = append(menu, &lspdrpc.OpeningFeeParams{
+			MinMsat:              p.MinFeeMsat,
+			Proportional:         p.Proportional,
+			ValidUntil:           p.ValidUntil,
+			MaxIdleTime:          p.MinLifetime,
+			MaxClientToSelfDelay: p.MaxClientToSelfDelay,
+			Promise:              p.Promise,
+		})
 	}
 
 	return &lspdrpc.ChannelInformationReply{
@@ -68,130 +80,8 @@ func (s *channelOpenerServer) ChannelInformation(ctx context.Context, in *lspdrp
 		ChannelMinimumFeeMsat: int64(node.NodeConfig.ChannelMinimumFeeMsat),
 		LspPubkey:             node.PublicKey.SerializeCompressed(), // TODO: Is the publicKey different from the ecies public key?
 		MaxInactiveDuration:   int64(node.NodeConfig.MaxInactiveDuration),
-		OpeningFeeParamsMenu:  params,
+		OpeningFeeParamsMenu:  menu,
 	}, nil
-}
-
-func (s *channelOpenerServer) createOpeningParamsMenu(
-	ctx context.Context,
-	node *shared.Node,
-	token string,
-) ([]*lspdrpc.OpeningFeeParams, error) {
-	var menu []*lspdrpc.OpeningFeeParams
-
-	settings, err := s.store.GetFeeParamsSettings(token)
-	if err != nil {
-		log.Printf("Failed to fetch fee params settings: %v", err)
-		return nil, fmt.Errorf("failed to get opening_fee_params")
-	}
-
-	for _, setting := range settings {
-		validUntil := time.Now().UTC().Add(setting.Validity)
-		params := &lspdrpc.OpeningFeeParams{
-			MinMsat:              setting.Params.MinMsat,
-			Proportional:         setting.Params.Proportional,
-			ValidUntil:           validUntil.Format(basetypes.TIME_FORMAT),
-			MaxIdleTime:          setting.Params.MaxIdleTime,
-			MaxClientToSelfDelay: setting.Params.MaxClientToSelfDelay,
-		}
-
-		promise, err := createPromise(node, params)
-		if err != nil {
-			log.Printf("Failed to create promise: %v", err)
-			return nil, err
-		}
-
-		params.Promise = *promise
-		menu = append(menu, params)
-	}
-
-	sort.Slice(menu, func(i, j int) bool {
-		if menu[i].MinMsat == menu[j].MinMsat {
-			return menu[i].Proportional < menu[j].Proportional
-		}
-
-		return menu[i].MinMsat < menu[j].MinMsat
-	})
-	return menu, nil
-}
-
-func paramsHash(params *lspdrpc.OpeningFeeParams) ([]byte, error) {
-	// First hash all the values in the params in a fixed order.
-	items := []interface{}{
-		params.MinMsat,
-		params.Proportional,
-		params.ValidUntil,
-		params.MaxIdleTime,
-		params.MaxClientToSelfDelay,
-	}
-	blob, err := json.Marshal(items)
-	if err != nil {
-		log.Printf("paramsHash error: %v", err)
-		return nil, err
-	}
-	hash := sha256.Sum256(blob)
-	return hash[:], nil
-}
-
-func createPromise(node *shared.Node, params *lspdrpc.OpeningFeeParams) (*string, error) {
-	hash, err := paramsHash(params)
-	if err != nil {
-		return nil, err
-	}
-	// Sign the hash with the private key of the LSP id.
-	sig, err := ecdsa.SignCompact(node.PrivateKey, hash[:], true)
-	if err != nil {
-		log.Printf("createPromise: SignCompact error: %v", err)
-		return nil, err
-	}
-	promise := hex.EncodeToString(sig)
-	return &promise, nil
-}
-
-func verifyPromise(node *shared.Node, params *lspdrpc.OpeningFeeParams) error {
-	hash, err := paramsHash(params)
-	if err != nil {
-		return err
-	}
-	sig, err := hex.DecodeString(params.Promise)
-	if err != nil {
-		log.Printf("verifyPromise: hex.DecodeString error: %v", err)
-		return err
-	}
-	pub, _, err := ecdsa.RecoverCompact(sig, hash)
-	if err != nil {
-		log.Printf("verifyPromise: RecoverCompact(%x) error: %v", sig, err)
-		return err
-	}
-	if !node.PublicKey.IsEqual(pub) {
-		log.Print("verifyPromise: not signed by us", err)
-		return fmt.Errorf("invalid promise")
-	}
-	return nil
-}
-
-func validateOpeningFeeParams(node *shared.Node, params *lspdrpc.OpeningFeeParams) bool {
-	if params == nil {
-		return false
-	}
-
-	err := verifyPromise(node, params)
-	if err != nil {
-		return false
-	}
-
-	t, err := time.Parse(basetypes.TIME_FORMAT, params.ValidUntil)
-	if err != nil {
-		log.Printf("validateOpeningFeeParams: time.Parse(%v, %v) error: %v", basetypes.TIME_FORMAT, params.ValidUntil, err)
-		return false
-	}
-
-	if time.Now().UTC().After(t) {
-		log.Printf("validateOpeningFeeParams: promise not valid anymore: %v", t)
-		return false
-	}
-
-	return true
 }
 
 func (s *channelOpenerServer) RegisterPayment(
@@ -237,7 +127,17 @@ func (s *channelOpenerServer) RegisterPayment(
 	// TODO: Remove this nil check and the else cluase when we enforce all
 	// clients to use opening_fee_params.
 	if pi.OpeningFeeParams != nil {
-		valid := validateOpeningFeeParams(node, pi.OpeningFeeParams)
+		valid := s.openingService.ValidateOpeningFeeParams(
+			&shared.OpeningFeeParams{
+				MinFeeMsat:           pi.OpeningFeeParams.MinMsat,
+				Proportional:         pi.OpeningFeeParams.Proportional,
+				ValidUntil:           pi.OpeningFeeParams.ValidUntil,
+				MinLifetime:          pi.OpeningFeeParams.MaxIdleTime,
+				MaxClientToSelfDelay: pi.OpeningFeeParams.MaxClientToSelfDelay,
+				Promise:              pi.OpeningFeeParams.Promise,
+			},
+			node.PublicKey,
+		)
 		if !valid {
 			return nil, fmt.Errorf("invalid opening_fee_params")
 		}

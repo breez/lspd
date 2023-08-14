@@ -89,6 +89,7 @@ func main() {
 	notificationsStore := postgresql.NewNotificationsStore(pool)
 	notificationService := notifications.NewNotificationService(notificationsStore)
 
+	openingService := shared.NewOpeningService(interceptStore, nodesService)
 	var interceptors []interceptor.HtlcInterceptor
 	nodes := nodesService.GetNodes()
 	for _, node := range nodes {
@@ -141,7 +142,7 @@ func main() {
 
 	address := os.Getenv("LISTEN_ADDRESS")
 	certMagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
-	cs := NewChannelOpenerServer(interceptStore)
+	cs := NewChannelOpenerServer(interceptStore, openingService)
 	ns := notifications.NewNotificationsServer(notificationsStore)
 	s, err := NewGrpcServer(nodesService, address, certMagicDomain, cs, ns)
 	if err != nil {
