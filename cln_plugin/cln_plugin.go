@@ -25,6 +25,7 @@ const (
 var (
 	DefaultSubscriberTimeout     = "1m"
 	DefaultChannelAcceptorScript = ""
+	LspsFeatureBit               = "0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 )
 
 const (
@@ -299,7 +300,7 @@ func (c *ClnPlugin) handleGetManifest(request *Request) {
 					Description: "Set the startlark channel acceptor script",
 				},
 			},
-			Dynamic: true,
+			Dynamic: false,
 			Hooks: []Hook{
 				{Name: "custommsg"},
 				{Name: "htlc_accepted"},
@@ -309,6 +310,9 @@ func (c *ClnPlugin) handleGetManifest(request *Request) {
 			NonNumericIds: true,
 			Subscriptions: []string{
 				"shutdown",
+			},
+			FeatureBits: &FeatureBits{
+				Node: &LspsFeatureBit,
 			},
 		},
 	})
