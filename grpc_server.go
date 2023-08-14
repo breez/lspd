@@ -3,23 +3,16 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
 	"strings"
 
-	"github.com/breez/lspd/cln"
-	"github.com/breez/lspd/config"
-	"github.com/breez/lspd/lightning"
-	"github.com/breez/lspd/lnd"
 	"github.com/breez/lspd/notifications"
 	lspdrpc "github.com/breez/lspd/rpc"
-	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/breez/lspd/shared"
 	"github.com/caddyserver/certmagic"
-	ecies "github.com/ecies/go/v2"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -27,119 +20,38 @@ import (
 )
 
 type grpcServer struct {
+	nodesService    shared.NodesService
 	address         string
 	certmagicDomain string
 	lis             net.Listener
 	s               *grpc.Server
-	nodes           map[string]*node
 	c               lspdrpc.ChannelOpenerServer
 	n               notifications.NotificationsServer
 }
 
 type nodeContext struct {
 	token string
-	node  *node
-}
-
-type node struct {
-	client              lightning.Client
-	nodeConfig          *config.NodeConfig
-	privateKey          *btcec.PrivateKey
-	publicKey           *btcec.PublicKey
-	eciesPrivateKey     *ecies.PrivateKey
-	eciesPublicKey      *ecies.PublicKey
-	openChannelReqGroup singleflight.Group
+	node  *shared.Node
 }
 
 func NewGrpcServer(
-	configs []*config.NodeConfig,
+	nodesService shared.NodesService,
 	address string,
 	certmagicDomain string,
 	c lspdrpc.ChannelOpenerServer,
 	n notifications.NotificationsServer,
 ) (*grpcServer, error) {
-	if len(configs) == 0 {
-		return nil, fmt.Errorf("no nodes supplied")
-	}
-
-	nodes := make(map[string]*node)
-	for _, config := range configs {
-		pk, err := hex.DecodeString(config.LspdPrivateKey)
-		if err != nil {
-			return nil, fmt.Errorf("hex.DecodeString(config.lspdPrivateKey=%v) error: %v", config.LspdPrivateKey, err)
-		}
-
-		eciesPrivateKey := ecies.NewPrivateKeyFromBytes(pk)
-		eciesPublicKey := eciesPrivateKey.PublicKey
-		privateKey, publicKey := btcec.PrivKeyFromBytes(pk)
-
-		node := &node{
-			nodeConfig:      config,
-			privateKey:      privateKey,
-			publicKey:       publicKey,
-			eciesPrivateKey: eciesPrivateKey,
-			eciesPublicKey:  eciesPublicKey,
-		}
-
-		if config.Lnd == nil && config.Cln == nil {
-			return nil, fmt.Errorf("node has to be either cln or lnd")
-		}
-
-		if config.Lnd != nil && config.Cln != nil {
-			return nil, fmt.Errorf("node cannot be both cln and lnd")
-		}
-
-		if config.Lnd != nil {
-			node.client, err = lnd.NewLndClient(config.Lnd)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if config.Cln != nil {
-			node.client, err = cln.NewClnClient(config.Cln.SocketPath)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		for _, token := range config.Tokens {
-			_, exists := nodes[token]
-			if exists {
-				return nil, fmt.Errorf("cannot have multiple nodes with the same token")
-			}
-
-			nodes[token] = node
-		}
-	}
 
 	return &grpcServer{
+		nodesService:    nodesService,
 		address:         address,
 		certmagicDomain: certmagicDomain,
-		nodes:           nodes,
 		c:               c,
 		n:               n,
 	}, nil
 }
 
 func (s *grpcServer) Start() error {
-	// Make sure all nodes are available and set name and pubkey if not set
-	// in config.
-	for _, n := range s.nodes {
-		info, err := n.client.GetInfo()
-		if err != nil {
-			return fmt.Errorf("failed to get info from host %s", n.nodeConfig.Host)
-		}
-
-		if n.nodeConfig.Name == "" {
-			n.nodeConfig.Name = info.Alias
-		}
-
-		if n.nodeConfig.NodePubkey == "" {
-			n.nodeConfig.NodePubkey = info.Pubkey
-		}
-	}
-
 	var lis net.Listener
 	if s.certmagicDomain == "" {
 		var err error
@@ -167,8 +79,8 @@ func (s *grpcServer) Start() error {
 					}
 
 					token := strings.Replace(auth, "Bearer ", "", 1)
-					node, ok := s.nodes[token]
-					if !ok {
+					node, err := s.nodesService.GetNode(token)
+					if err != nil {
 						continue
 					}
 

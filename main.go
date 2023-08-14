@@ -20,6 +20,7 @@ import (
 	"github.com/breez/lspd/mempool"
 	"github.com/breez/lspd/notifications"
 	"github.com/breez/lspd/postgresql"
+	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/btcec/v2"
 )
 
@@ -42,6 +43,11 @@ func main() {
 
 	if len(nodes) == 0 {
 		log.Fatalf("need at least one node configured in NODES.")
+	}
+
+	nodesService, err := shared.NewNodesService(nodes)
+	if err != nil {
+		log.Fatalf("failed to create nodes service: %v", err)
 	}
 
 	mempoolUrl := os.Getenv("MEMPOOL_API_BASE_URL")
@@ -136,7 +142,7 @@ func main() {
 	certMagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
 	cs := NewChannelOpenerServer(interceptStore)
 	ns := notifications.NewNotificationsServer(notificationsStore)
-	s, err := NewGrpcServer(nodes, address, certMagicDomain, cs, ns)
+	s, err := NewGrpcServer(nodesService, address, certMagicDomain, cs, ns)
 	if err != nil {
 		log.Fatalf("failed to initialize grpc server: %v", err)
 	}
