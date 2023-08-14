@@ -15,6 +15,7 @@ import (
 	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lightning"
 	lspdrpc "github.com/breez/lspd/rpc"
+	"github.com/breez/lspd/shared"
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/codes"
@@ -54,26 +55,26 @@ func (s *channelOpenerServer) ChannelInformation(ctx context.Context, in *lspdrp
 	}
 
 	return &lspdrpc.ChannelInformationReply{
-		Name:                  node.nodeConfig.Name,
-		Pubkey:                node.nodeConfig.NodePubkey,
-		Host:                  node.nodeConfig.Host,
-		ChannelCapacity:       int64(node.nodeConfig.PublicChannelAmount),
-		TargetConf:            int32(node.nodeConfig.TargetConf),
-		MinHtlcMsat:           int64(node.nodeConfig.MinHtlcMsat),
-		BaseFeeMsat:           int64(node.nodeConfig.BaseFeeMsat),
-		FeeRate:               node.nodeConfig.FeeRate,
-		TimeLockDelta:         node.nodeConfig.TimeLockDelta,
-		ChannelFeePermyriad:   int64(node.nodeConfig.ChannelFeePermyriad),
-		ChannelMinimumFeeMsat: int64(node.nodeConfig.ChannelMinimumFeeMsat),
-		LspPubkey:             node.publicKey.SerializeCompressed(), // TODO: Is the publicKey different from the ecies public key?
-		MaxInactiveDuration:   int64(node.nodeConfig.MaxInactiveDuration),
+		Name:                  node.NodeConfig.Name,
+		Pubkey:                node.NodeConfig.NodePubkey,
+		Host:                  node.NodeConfig.Host,
+		ChannelCapacity:       int64(node.NodeConfig.PublicChannelAmount),
+		TargetConf:            int32(node.NodeConfig.TargetConf),
+		MinHtlcMsat:           int64(node.NodeConfig.MinHtlcMsat),
+		BaseFeeMsat:           int64(node.NodeConfig.BaseFeeMsat),
+		FeeRate:               node.NodeConfig.FeeRate,
+		TimeLockDelta:         node.NodeConfig.TimeLockDelta,
+		ChannelFeePermyriad:   int64(node.NodeConfig.ChannelFeePermyriad),
+		ChannelMinimumFeeMsat: int64(node.NodeConfig.ChannelMinimumFeeMsat),
+		LspPubkey:             node.PublicKey.SerializeCompressed(), // TODO: Is the publicKey different from the ecies public key?
+		MaxInactiveDuration:   int64(node.NodeConfig.MaxInactiveDuration),
 		OpeningFeeParamsMenu:  params,
 	}, nil
 }
 
 func (s *channelOpenerServer) createOpeningParamsMenu(
 	ctx context.Context,
-	node *node,
+	node *shared.Node,
 	token string,
 ) ([]*lspdrpc.OpeningFeeParams, error) {
 	var menu []*lspdrpc.OpeningFeeParams
@@ -136,13 +137,13 @@ func paramsHash(params *lspdrpc.OpeningFeeParams) ([]byte, error) {
 	return hash[:], nil
 }
 
-func createPromise(node *node, params *lspdrpc.OpeningFeeParams) (*string, error) {
+func createPromise(node *shared.Node, params *lspdrpc.OpeningFeeParams) (*string, error) {
 	hash, err := paramsHash(params)
 	if err != nil {
 		return nil, err
 	}
 	// Sign the hash with the private key of the LSP id.
-	sig, err := ecdsa.SignCompact(node.privateKey, hash[:], true)
+	sig, err := ecdsa.SignCompact(node.PrivateKey, hash[:], true)
 	if err != nil {
 		log.Printf("createPromise: SignCompact error: %v", err)
 		return nil, err
@@ -151,7 +152,7 @@ func createPromise(node *node, params *lspdrpc.OpeningFeeParams) (*string, error
 	return &promise, nil
 }
 
-func verifyPromise(node *node, params *lspdrpc.OpeningFeeParams) error {
+func verifyPromise(node *shared.Node, params *lspdrpc.OpeningFeeParams) error {
 	hash, err := paramsHash(params)
 	if err != nil {
 		return err
@@ -166,14 +167,14 @@ func verifyPromise(node *node, params *lspdrpc.OpeningFeeParams) error {
 		log.Printf("verifyPromise: RecoverCompact(%x) error: %v", sig, err)
 		return err
 	}
-	if !node.publicKey.IsEqual(pub) {
+	if !node.PublicKey.IsEqual(pub) {
 		log.Print("verifyPromise: not signed by us", err)
 		return fmt.Errorf("invalid promise")
 	}
 	return nil
 }
 
-func validateOpeningFeeParams(node *node, params *lspdrpc.OpeningFeeParams) bool {
+func validateOpeningFeeParams(node *shared.Node, params *lspdrpc.OpeningFeeParams) bool {
 	if params == nil {
 		return false
 	}
@@ -206,10 +207,10 @@ func (s *channelOpenerServer) RegisterPayment(
 		return nil, err
 	}
 
-	data, err := ecies.Decrypt(node.eciesPrivateKey, in.Blob)
+	data, err := ecies.Decrypt(node.EciesPrivateKey, in.Blob)
 	if err != nil {
 		log.Printf("ecies.Decrypt(%x) error: %v", in.Blob, err)
-		data, err = btceclegacy.Decrypt(node.privateKey, in.Blob)
+		data, err = btceclegacy.Decrypt(node.PrivateKey, in.Blob)
 		if err != nil {
 			log.Printf("btcec.Decrypt(%x) error: %v", in.Blob, err)
 			return nil, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Blob, err)
@@ -247,10 +248,10 @@ func (s *channelOpenerServer) RegisterPayment(
 	} else {
 		log.Printf("DEPRECATED: RegisterPayment with deprecated fee mechanism.")
 		pi.OpeningFeeParams = &lspdrpc.OpeningFeeParams{
-			MinMsat:              uint64(node.nodeConfig.ChannelMinimumFeeMsat),
-			Proportional:         uint32(node.nodeConfig.ChannelFeePermyriad * 100),
+			MinMsat:              uint64(node.NodeConfig.ChannelMinimumFeeMsat),
+			Proportional:         uint32(node.NodeConfig.ChannelFeePermyriad * 100),
 			ValidUntil:           time.Now().UTC().Add(time.Duration(time.Hour * 24)).Format(basetypes.TIME_FORMAT),
-			MaxIdleTime:          uint32(node.nodeConfig.MaxInactiveDuration / 600),
+			MaxIdleTime:          uint32(node.NodeConfig.MaxInactiveDuration / 600),
 			MaxClientToSelfDelay: uint32(10000),
 		}
 	}
@@ -282,25 +283,25 @@ func (s *channelOpenerServer) OpenChannel(ctx context.Context, in *lspdrpc.OpenC
 		return nil, err
 	}
 
-	r, err, _ := node.openChannelReqGroup.Do(in.Pubkey, func() (interface{}, error) {
+	r, err, _ := node.OpenChannelReqGroup.Do(in.Pubkey, func() (interface{}, error) {
 		pubkey, err := hex.DecodeString(in.Pubkey)
 		if err != nil {
 			return nil, err
 		}
 
-		channelCount, err := node.client.GetNodeChannelCount(pubkey)
+		channelCount, err := node.Client.GetNodeChannelCount(pubkey)
 		if err != nil {
 			return nil, err
 		}
 
 		var outPoint *wire.OutPoint
 		if channelCount == 0 {
-			outPoint, err = node.client.OpenChannel(&lightning.OpenChannelRequest{
-				CapacitySat: node.nodeConfig.ChannelAmount,
+			outPoint, err = node.Client.OpenChannel(&lightning.OpenChannelRequest{
+				CapacitySat: node.NodeConfig.ChannelAmount,
 				Destination: pubkey,
-				TargetConf:  &node.nodeConfig.TargetConf,
-				MinHtlcMsat: node.nodeConfig.MinHtlcMsat,
-				IsPrivate:   node.nodeConfig.ChannelPrivate,
+				TargetConf:  &node.NodeConfig.TargetConf,
+				MinHtlcMsat: node.NodeConfig.MinHtlcMsat,
+				IsPrivate:   node.NodeConfig.ChannelPrivate,
 			})
 
 			if err != nil {
@@ -320,13 +321,13 @@ func (s *channelOpenerServer) OpenChannel(ctx context.Context, in *lspdrpc.OpenC
 	return r.(*lspdrpc.OpenChannelReply), err
 }
 
-func (n *node) getSignedEncryptedData(in *lspdrpc.Encrypted) (string, []byte, bool, error) {
+func getSignedEncryptedData(n *shared.Node, in *lspdrpc.Encrypted) (string, []byte, bool, error) {
 	usedEcies := true
-	signedBlob, err := ecies.Decrypt(n.eciesPrivateKey, in.Data)
+	signedBlob, err := ecies.Decrypt(n.EciesPrivateKey, in.Data)
 	if err != nil {
 		log.Printf("ecies.Decrypt(%x) error: %v", in.Data, err)
 		usedEcies = false
-		signedBlob, err = btceclegacy.Decrypt(n.privateKey, in.Data)
+		signedBlob, err = btceclegacy.Decrypt(n.PrivateKey, in.Data)
 		if err != nil {
 			log.Printf("btcec.Decrypt(%x) error: %v", in.Data, err)
 			return "", nil, usedEcies, fmt.Errorf("btcec.Decrypt(%x) error: %w", in.Data, err)
@@ -366,7 +367,7 @@ func (s *channelOpenerServer) CheckChannels(ctx context.Context, in *lspdrpc.Enc
 		return nil, err
 	}
 
-	nodeID, data, usedEcies, err := node.getSignedEncryptedData(in)
+	nodeID, data, usedEcies, err := getSignedEncryptedData(node, in)
 	if err != nil {
 		log.Printf("getSignedEncryptedData error: %v", err)
 		return nil, fmt.Errorf("getSignedEncryptedData error: %v", err)
@@ -377,7 +378,7 @@ func (s *channelOpenerServer) CheckChannels(ctx context.Context, in *lspdrpc.Enc
 		log.Printf("proto.Unmarshal(%x) error: %v", data, err)
 		return nil, fmt.Errorf("proto.Unmarshal(%x) error: %w", data, err)
 	}
-	closedChannels, err := node.client.GetClosedChannels(nodeID, checkChannelsRequest.WaitingCloseChannels)
+	closedChannels, err := node.Client.GetClosedChannels(nodeID, checkChannelsRequest.WaitingCloseChannels)
 	if err != nil {
 		log.Printf("GetClosedChannels(%v) error: %v", checkChannelsRequest.FakeChannels, err)
 		return nil, fmt.Errorf("GetClosedChannels(%v) error: %w", checkChannelsRequest.FakeChannels, err)
@@ -399,7 +400,7 @@ func (s *channelOpenerServer) CheckChannels(ctx context.Context, in *lspdrpc.Enc
 
 	var encrypted []byte
 	if usedEcies {
-		encrypted, err = ecies.Encrypt(node.eciesPublicKey, dataReply)
+		encrypted, err = ecies.Encrypt(node.EciesPublicKey, dataReply)
 		if err != nil {
 			log.Printf("ecies.Encrypt() error: %v", err)
 			return nil, fmt.Errorf("ecies.Encrypt() error: %w", err)
@@ -415,7 +416,7 @@ func (s *channelOpenerServer) CheckChannels(ctx context.Context, in *lspdrpc.Enc
 	return &lspdrpc.Encrypted{Data: encrypted}, nil
 }
 
-func (s *channelOpenerServer) getNode(ctx context.Context) (*node, string, error) {
+func (s *channelOpenerServer) getNode(ctx context.Context) (*shared.Node, string, error) {
 	nd := ctx.Value(contextKey("node"))
 	if nd == nil {
 		return nil, "", status.Errorf(codes.PermissionDenied, "Not authorized")
