@@ -26,9 +26,11 @@ type Node struct {
 
 type NodesService interface {
 	GetNode(token string) (*Node, error)
+	GetNodes() []*Node
 }
 type nodesService struct {
-	nodes map[string]*Node
+	nodes      []*Node
+	nodeLookup map[string]*Node
 }
 
 func NewNodesService(configs []*config.NodeConfig) (NodesService, error) {
@@ -36,7 +38,8 @@ func NewNodesService(configs []*config.NodeConfig) (NodesService, error) {
 		return nil, fmt.Errorf("no nodes supplied")
 	}
 
-	nodes := make(map[string]*Node)
+	nodes := []*Node{}
+	nodeLookup := make(map[string]*Node)
 	for _, config := range configs {
 		pk, err := hex.DecodeString(config.LspdPrivateKey)
 		if err != nil {
@@ -91,28 +94,34 @@ func NewNodesService(configs []*config.NodeConfig) (NodesService, error) {
 			node.NodeConfig.NodePubkey = info.Pubkey
 		}
 
+		nodes = append(nodes, node)
 		for _, token := range config.Tokens {
-			_, exists := nodes[token]
+			_, exists := nodeLookup[token]
 			if exists {
 				return nil, fmt.Errorf("cannot have multiple nodes with the same token")
 			}
 
-			nodes[token] = node
+			nodeLookup[token] = node
 		}
 	}
 
 	return &nodesService{
-		nodes: nodes,
+		nodes:      nodes,
+		nodeLookup: nodeLookup,
 	}, nil
 }
 
 var ErrNodeNotFound = errors.New("node not found")
 
 func (s *nodesService) GetNode(token string) (*Node, error) {
-	node, ok := s.nodes[token]
+	node, ok := s.nodeLookup[token]
 	if !ok {
 		return nil, ErrNodeNotFound
 	}
 
 	return node, nil
+}
+
+func (s *nodesService) GetNodes() []*Node {
+	return s.nodes
 }
