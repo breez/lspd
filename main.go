@@ -35,17 +35,17 @@ func main() {
 	}
 
 	n := os.Getenv("NODES")
-	var nodes []*config.NodeConfig
-	err := json.Unmarshal([]byte(n), &nodes)
+	var nodeConfigs []*config.NodeConfig
+	err := json.Unmarshal([]byte(n), &nodeConfigs)
 	if err != nil {
 		log.Fatalf("failed to unmarshal NODES env: %v", err)
 	}
 
-	if len(nodes) == 0 {
+	if len(nodeConfigs) == 0 {
 		log.Fatalf("need at least one node configured in NODES.")
 	}
 
-	nodesService, err := shared.NewNodesService(nodes)
+	nodesService, err := shared.NewNodesService(nodeConfigs)
 	if err != nil {
 		log.Fatalf("failed to create nodes service: %v", err)
 	}
@@ -90,36 +90,37 @@ func main() {
 	notificationService := notifications.NewNotificationService(notificationsStore)
 
 	var interceptors []interceptor.HtlcInterceptor
+	nodes := nodesService.GetNodes()
 	for _, node := range nodes {
 		var htlcInterceptor interceptor.HtlcInterceptor
-		if node.Lnd != nil {
-			client, err := lnd.NewLndClient(node.Lnd)
+		if node.NodeConfig.Lnd != nil {
+			client, err := lnd.NewLndClient(node.NodeConfig.Lnd)
 			if err != nil {
 				log.Fatalf("failed to initialize LND client: %v", err)
 			}
 
 			client.StartListeners()
 			fwsync := lnd.NewForwardingHistorySync(client, interceptStore, forwardingStore)
-			interceptor := interceptor.NewInterceptor(client, node, interceptStore, feeEstimator, feeStrategy, notificationService)
-			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node, client, fwsync, interceptor)
+			interceptor := interceptor.NewInterceptor(client, node.NodeConfig, interceptStore, feeEstimator, feeStrategy, notificationService)
+			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node.NodeConfig, client, fwsync, interceptor)
 			if err != nil {
 				log.Fatalf("failed to initialize LND interceptor: %v", err)
 			}
 		}
 
-		if node.Cln != nil {
-			client, err := cln.NewClnClient(node.Cln.SocketPath)
+		if node.NodeConfig.Cln != nil {
+			client, err := cln.NewClnClient(node.NodeConfig.Cln.SocketPath)
 			if err != nil {
 				log.Fatalf("failed to initialize CLN client: %v", err)
 			}
 
-			interceptor := interceptor.NewInterceptor(client, node, interceptStore, feeEstimator, feeStrategy, notificationService)
-			htlcInterceptor, err = cln.NewClnHtlcInterceptor(node, client, interceptor)
+			interceptor := interceptor.NewInterceptor(client, node.NodeConfig, interceptStore, feeEstimator, feeStrategy, notificationService)
+			htlcInterceptor, err = cln.NewClnHtlcInterceptor(node.NodeConfig, client, interceptor)
 			if err != nil {
 				log.Fatalf("failed to initialize CLN interceptor: %v", err)
 			}
 
-			msgClient := cln.NewCustomMsgClient(node.Cln, client)
+			msgClient := cln.NewCustomMsgClient(node.NodeConfig.Cln, client)
 			go msgClient.Start()
 			msgServer := lsps0.NewServer()
 			protocolServer := lsps0.NewProtocolServer([]uint32{2})
