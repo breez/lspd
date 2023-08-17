@@ -87,6 +87,7 @@ func main() {
 	interceptStore := postgresql.NewPostgresInterceptStore(pool)
 	forwardingStore := postgresql.NewForwardingEventStore(pool)
 	notificationsStore := postgresql.NewNotificationsStore(pool)
+	lsps2Store := postgresql.NewLsps2Store(pool)
 	notificationService := notifications.NewNotificationService(notificationsStore)
 
 	openingService := shared.NewOpeningService(interceptStore, nodesService)
@@ -125,7 +126,7 @@ func main() {
 			go msgClient.Start()
 			msgServer := lsps0.NewServer()
 			protocolServer := lsps0.NewProtocolServer([]uint32{2})
-			lsps2Server := lsps2.NewLsps2Server(openingService, nodesService, node)
+			lsps2Server := lsps2.NewLsps2Server(openingService, nodesService, node, lsps2Store)
 			lsps0.RegisterProtocolServer(msgServer, protocolServer)
 			lsps2.RegisterLsps2Server(msgServer, lsps2Server)
 			msgClient.WaitStarted()

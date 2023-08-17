@@ -179,4 +179,8 @@ var allTestCases = []*testCase{
 		name: "testLsps2GetInfo",
 		test: testLsps2GetInfo,
 	},
+	{
+		name: "testLsps2Buy",
+		test: testLsps2Buy,
+	},
 }
