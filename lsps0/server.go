@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"reflect"
 	"sync"
 	"time"
 
@@ -139,17 +140,17 @@ func (s *Server) Serve(lis lightning.CustomMsgClient) error {
 			defer func() { <-guard }()
 
 			// Call the method handler for the requested method.
-		r, err := m.method.Handler(m.service.serviceImpl, context.TODO(), df)
-		if err != nil {
-			s, ok := status.FromError(err)
-			if !ok {
-				log.Printf("Internal error when processing custom message '%s' from peer '%s': %v", string(msg.Data), msg.PeerId, err)
-				s = status.New(codes.InternalError, InternalError)
-			}
+			r, err := m.method.Handler(m.service.serviceImpl, context.TODO(), df)
+			if err != nil {
+				s, ok := status.FromError(err)
+				if !ok {
+					log.Printf("Internal error when processing custom message '%s' from peer '%s': %v", string(msg.Data), msg.PeerId, err)
+					s = status.New(codes.InternalError, InternalError)
+				}
 
 				sendError(lis, msg, req, s)
 				return
-		}
+			}
 
 			sendResponse(lis, msg, req, r)
 		}()
@@ -234,6 +235,16 @@ func sendError(
 }
 
 func (s *Server) RegisterService(desc *ServiceDesc, impl interface{}) {
+	if impl == nil {
+		log.Fatalf("lsps0: Server.RegisterService got nil service implementation")
+	}
+
+	ht := reflect.TypeOf(desc.HandlerType).Elem()
+	st := reflect.TypeOf(impl)
+	if !st.Implements(ht) {
+		log.Fatalf("lsps0: Server.RegisterService found the handler of type %v that does not satisfy %v", st, ht)
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	log.Printf("RegisterService(%q)", desc.ServiceName)
