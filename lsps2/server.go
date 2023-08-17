@@ -39,25 +39,48 @@ type OpeningFeeParams struct {
 	Promise              string `json:"promise"`
 }
 
+type BuyRequest struct {
+	Version          uint32           `json:"version"`
+	OpeningFeeParams OpeningFeeParams `json:"opening_fee_params"`
+	PaymentSizeMsat  *uint64          `json:"payment_size_msat,string,omitempty"`
+}
+
+type BuyResponse struct {
+	JitChannelScid     string `json:"jit_channel_scid"`
+	LspCltvExpiryDelta uint32 `json:"lsp_cltv_expiry_delta"`
+	ClientTrustsLsp    bool   `json:"client_trusts_lsp"`
+}
+
 type Lsps2Server interface {
 	GetVersions(ctx context.Context, request *GetVersionsRequest) (*GetVersionsResponse, error)
 	GetInfo(ctx context.Context, request *GetInfoRequest) (*GetInfoResponse, error)
+	Buy(ctx context.Context, request *BuyRequest) (*BuyResponse, error)
 }
 type server struct {
 	openingService shared.OpeningService
 	nodesService   shared.NodesService
 	node           *shared.Node
+	store          Lsps2Store
 }
+
+type OpeningMode int
+
+const (
+	OpeningMode_NoMppVarInvoice OpeningMode = 1
+	OpeningMode_MppFixedInvoice OpeningMode = 2
+)
 
 func NewLsps2Server(
 	openingService shared.OpeningService,
 	nodesService shared.NodesService,
 	node *shared.Node,
+	store Lsps2Store,
 ) Lsps2Server {
 	return &server{
 		openingService: openingService,
 		nodesService:   nodesService,
 		node:           node,
+		store:          store,
 	}
 }
 
@@ -127,6 +150,108 @@ func (s *server) GetInfo(
 	}, nil
 }
 
+func (s *server) Buy(
+	ctx context.Context,
+	request *BuyRequest,
+) (*BuyResponse, error) {
+	if request.Version != uint32(SupportedVersion) {
+		return nil, status.New(codes.Code(1), "unsupported_version").Err()
+	}
+
+	params := &shared.OpeningFeeParams{
+		MinFeeMsat:           request.OpeningFeeParams.MinFeeMsat,
+		Proportional:         request.OpeningFeeParams.Proportional,
+		ValidUntil:           request.OpeningFeeParams.ValidUntil,
+		MinLifetime:          request.OpeningFeeParams.MinLifetime,
+		MaxClientToSelfDelay: request.OpeningFeeParams.MaxClientToSelfDelay,
+		Promise:              request.OpeningFeeParams.Promise,
+	}
+	paramsValid := s.openingService.ValidateOpeningFeeParams(
+		params,
+		s.node.PublicKey,
+	)
+	if !paramsValid {
+		return nil, status.New(codes.Code(2), "invalid_opening_fee_params").Err()
+	}
+
+	var mode OpeningMode
+	if request.PaymentSizeMsat == nil || *request.PaymentSizeMsat == 0 {
+		mode = OpeningMode_NoMppVarInvoice
+	} else {
+		mode = OpeningMode_MppFixedInvoice
+		if *request.PaymentSizeMsat < s.node.NodeConfig.MinPaymentSizeMsat {
+			return nil, status.New(codes.Code(3), "payment_size_too_small").Err()
+		}
+		if *request.PaymentSizeMsat > s.node.NodeConfig.MaxPaymentSizeMsat {
+			return nil, status.New(codes.Code(4), "payment_size_too_large").Err()
+		}
+
+		openingFee, err := computeOpeningFee(
+			*request.PaymentSizeMsat,
+			request.OpeningFeeParams.Proportional,
+			request.OpeningFeeParams.MinFeeMsat,
+		)
+		if err == ErrOverflow {
+			return nil, status.New(codes.Code(4), "payment_size_too_large").Err()
+		}
+		if err != nil {
+			log.Printf(
+				"Lsps2Server.Buy: computeOpeningFee(%d, %d, %d) err: %v",
+				*request.PaymentSizeMsat,
+				request.OpeningFeeParams.Proportional,
+				request.OpeningFeeParams.MinFeeMsat,
+				err,
+			)
+			return nil, status.New(codes.InternalError, "internal error").Err()
+		}
+
+		if openingFee >= *request.PaymentSizeMsat {
+			return nil, status.New(codes.Code(3), "payment_size_too_small").Err()
+		}
+
+		// NOTE: There's an option here to check for sufficient inbound liquidity as well.
+	}
+
+	// TODO: Restrict buying only one channel at a time?
+	peerId, ok := ctx.Value(lsps0.PeerContextKey).(string)
+	if !ok {
+		log.Printf("Lsps2Server.Buy: Error: No peer id found on context.")
+		return nil, status.New(codes.InternalError, "internal error").Err()
+	}
+
+	// Note, the odds to generate an already existing scid is about 10e-9 if you
+	// have 100_000 channels with aliases. And about 10e-11 for 10_000 channels.
+	// We call that negligable, and we'll assume the generated scid is unique.
+	// (to calculate the odds, use the birthday paradox)
+	scid, err := newScid()
+	if err != nil {
+		log.Printf("Lsps2Server.Buy: error generating new scid err: %v", err)
+		return nil, status.New(codes.InternalError, "internal error").Err()
+	}
+
+	// RegisterBuy errors if the scid is not unique. But the node could have
+	// 'actual' scids to collide with the newly generated scid. These are not in
+	// our database.
+	err = s.store.RegisterBuy(ctx, &RegisterBuy{
+		LspId:            s.node.NodeConfig.NodePubkey,
+		PeerId:           peerId,
+		Scid:             *scid,
+		OpeningFeeParams: *params,
+		PaymentSizeMsat:  request.PaymentSizeMsat,
+		Mode:             mode,
+	})
+	if err != nil {
+		log.Printf("Lsps2Server.Buy: store.RegisterBuy err: %v", err)
+		return nil, status.New(codes.InternalError, "internal error").Err()
+	}
+
+	return &BuyResponse{
+		JitChannelScid:     scid.ToString(),
+		LspCltvExpiryDelta: s.node.NodeConfig.TimeLockDelta,
+		ClientTrustsLsp:    false,
+	}, nil
+}
+
 func RegisterLsps2Server(s lsps0.ServiceRegistrar, l Lsps2Server) {
 	s.RegisterService(
 		&lsps0.ServiceDesc{
@@ -151,6 +276,16 @@ func RegisterLsps2Server(s lsps0.ServiceRegistrar, l Lsps2Server) {
 							return nil, err
 						}
 						return srv.(Lsps2Server).GetInfo(ctx, in)
+					},
+				},
+				{
+					MethodName: "lsps2.buy",
+					Handler: func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+						in := new(BuyRequest)
+						if err := dec(in); err != nil {
+							return nil, err
+						}
+						return srv.(Lsps2Server).Buy(ctx, in)
 					},
 				},
 			},
