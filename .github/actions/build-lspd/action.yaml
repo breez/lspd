@@ -1,0 +1,23 @@
+name: 'Build LSPD'
+description: 'Build LSPD and upload the build artifacts.'
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Build LSPD
+      run: |
+        go get github.com/breez/lspd
+        go get github.com/breez/lspd/cln_plugin
+        go build .
+        go build -o lspd_plugin ./cln_plugin/cmd
+      shell: bash
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifacts
+        path: |
+          ./lspd
+          ./lspd_plugin

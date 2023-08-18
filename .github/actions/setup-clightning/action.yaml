@@ -1,0 +1,109 @@
+name: 'Setup Core Lightning'
+description: 'Set up Core Lightning on the runner'
+
+inputs:
+  checkout-version:
+    description: 'v23.05.1'
+    required: true
+    default: 'v23.05.1'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache Core Lightning
+      id: cache-core-lightning
+      uses: actions/cache@v3
+      with:
+        path: |
+          lightning_git/lightningd/lightning_hsmd
+          lightning_git/lightningd/lightning_gossipd
+          lightning_git/lightningd/lightning_openingd
+          lightning_git/lightningd/lightning_dualopend
+          lightning_git/lightningd/lightning_channeld
+          lightning_git/lightningd/lightning_closingd
+          lightning_git/lightningd/lightning_onchaind
+          lightning_git/lightningd/lightning_connectd
+          lightning_git/lightningd/lightning_websocketd
+          lightning_git/lightningd/lightningd
+          lightning_git/plugins/offers
+          lightning_git/plugins/topology
+          lightning_git/plugins/spenderp
+          lightning_git/plugins/test/run-route-overlong
+          lightning_git/plugins/test/run-funder_policy
+          lightning_git/plugins/pay
+          lightning_git/plugins/bkpr/test/run-bkpr_db
+          lightning_git/plugins/bkpr/test/run-recorder
+          lightning_git/plugins/funder
+          lightning_git/plugins/bookkeeper
+          lightning_git/plugins/txprepare
+          lightning_git/plugins/keysend
+          lightning_git/plugins/fetchinvoice
+          lightning_git/plugins/bcli
+          lightning_git/plugins/cln-grpc
+          lightning_git/plugins/commando
+          lightning_git/plugins/autoclean
+          lightning_git/plugins/chanbackup
+          lightning_git/plugins/sql
+          lightning_git/cli/lightning-cli
+          lightning_git/devtools/bolt11-cli
+          lightning_git/devtools/decodemsg
+          lightning_git/devtools/onion
+          lightning_git/devtools/dump-gossipstore
+          lightning_git/devtools/gossipwith
+          lightning_git/devtools/create-gossipstore
+          lightning_git/devtools/mkcommit
+          lightning_git/devtools/mkfunding
+          lightning_git/devtools/mkclose
+          lightning_git/devtools/mkgossip
+        key: core-lightning-${{ inputs.checkout-version }}
+
+    - name: Setup Python 3.8
+      if: steps.cache-core-lightning.outputs.cache-hit != 'true'
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.8
+
+    - name: Setup Rust
+      if: steps.cache-core-lightning.outputs.cache-hit != 'true'
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+
+    - name: Install dependencies
+      if: steps.cache-core-lightning.outputs.cache-hit != 'true'
+      run: |
+        sudo apt-get install -y autoconf automake build-essential git libtool libgmp-dev libsqlite3-dev python3 python3-pip net-tools zlib1g-dev libsodium-dev gettext valgrind libpq-dev shellcheck cppcheck libsecp256k1-dev jq 
+        sudo apt-get remove -y protobuf-compiler
+        curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v3.12.0/protoc-3.12.0-linux-x86_64.zip
+        sudo unzip -o protoc-3.12.0-linux-x86_64.zip -d /usr/local bin/protoc
+        sudo unzip -o protoc-3.12.0-linux-x86_64.zip -d /usr/local 'include/*'
+        rm -f protoc-3.12.0-linux-x86_64.zip
+        sudo chmod 755 /usr/local/bin/protoc
+      shell: bash
+
+    - name: Install Python dependencies
+      if: steps.cache-core-lightning.outputs.cache-hit != 'true'
+      run: |
+        pip3 install --upgrade pip
+        pip3 install poetry mako
+        pip install grpcio-tools
+      shell: bash
+
+    - name: Checkout and build lightning
+      if: steps.cache-core-lightning.outputs.cache-hit != 'true'
+      uses: actions/checkout@v3
+      with:
+        repository: ElementsProject/lightning
+        ref: ${{ inputs.checkout-version }}
+        path: lightning_git
+
+    - name: Build Lightning
+      if: steps.cache-core-lightning.outputs.cache-hit != 'true'
+      run: |
+        cd lightning_git
+        ./configure --enable-developer --enable-rust
+        poetry install
+        poetry run make -j `nproc`
+      shell: bash

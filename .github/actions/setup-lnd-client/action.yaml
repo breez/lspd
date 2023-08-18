@@ -1,0 +1,45 @@
+name: 'Setup LND Client'
+description: 'Set up LND for the Client on the runner'
+
+inputs:
+  client-ref:
+    description: 'The Git reference for the Client version of LND'
+    required: true
+    default: 'v0.16.2-breez'
+
+  go-version:
+    description: 'The Go version for building LND'
+    required: true
+    default: ^1.19
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache LND client
+      id: cache-lnd-client
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/go_lnd_client/bin/lnd
+        key: go_lnd_client-${{ inputs.client-ref }}-${{ inputs.go-version }}
+
+    - name: Set up Go 1.x
+      if: steps.cache-lnd-client.outputs.cache-hit != 'true'
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ inputs.go-version }}
+
+    - name: Checkout LND for Client
+      if: steps.cache-lnd-client.outputs.cache-hit != 'true'
+      uses: actions/checkout@v3
+      with:
+        repository: breez/lnd
+        ref: ${{ inputs.client-ref }}
+        path: lnd_client
+
+    - name: Build LND for Client
+      if: steps.cache-lnd-client.outputs.cache-hit != 'true'
+      run: |
+        cd lnd_client
+        env GOPATH=~/go_lnd_client make install
+      shell: bash

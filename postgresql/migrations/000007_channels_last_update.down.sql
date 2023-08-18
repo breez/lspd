@@ -1,0 +1,1 @@
+ALTER TABLE public.channels DROP COLUMN last_update;

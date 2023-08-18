@@ -1,0 +1,126 @@
+name: integration tests
+on: 
+  push:
+    branches: [ master ]
+  pull_request:    
+env:
+  BITCOIN_VERSION: '25.0'
+  LSP_REF: 'breez-node-v0.16.4-beta'
+  CLIENT_REF: 'v0.16.4-breez-2'
+  GO_VERSION: '^1.19'
+  CLN_VERSION: 'v23.05.1'
+jobs:
+
+  setup-bitcoin-core:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Bitcoin Core
+        if: steps.cache-bitcoin.outputs.cache-hit != 'true'
+        uses: ./.github/actions/setup-bitcoin
+        with:
+          bitcoin-version: ${{ env.BITCOIN_VERSION }}
+  
+  setup-lnd-lsp:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up LND LSP
+        if: steps.cache-lnd-lsp.outputs.cache-hit != 'true'
+        uses: ./.github/actions/setup-lnd-lsp
+        with:
+          lsp-ref: ${{ env.LSP_REF }}
+          go-version: ${{ env.GO_VERSION }}
+
+  setup-lnd-client:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up LND client
+        if: steps.cache-lnd-client.outputs.cache-hit != 'true'
+        uses: ./.github/actions/setup-lnd-client
+        with:
+          client-ref: ${{ env.CLIENT_REF }}
+          go-version: ${{ env.GO_VERSION }}
+
+  setup-cln:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Core Lightning
+        uses: ./.github/actions/setup-clightning
+        with:
+          checkout-version: ${{ env.CLN_VERSION }}
+
+  build-lspd:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Build LSPD and Upload Artifacts
+        uses: ./.github/actions/build-lspd
+
+  setup-itest:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup itest
+        uses: ./.github/actions/setup-itest
+
+
+  run-test:
+    runs-on: ubuntu-22.04
+    needs:
+      - setup-itest
+      - setup-bitcoin-core
+      - setup-lnd-client
+      - setup-lnd-lsp
+      - setup-cln
+      - build-lspd
+    name: test ${{ matrix.implementation }} ${{ matrix.test }}
+    strategy:
+      max-parallel: 6
+      matrix:
+        test: [
+          testOpenZeroConfChannelOnReceive,
+          testOpenZeroConfSingleHtlc,
+          testZeroReserve,
+          testFailureBobOffline,
+          testNoBalance,
+          testRegularForward,
+          testProbing,
+          testInvalidCltv,
+          registerPaymentWithTag,
+          testOpenZeroConfUtxo,
+          testDynamicFeeFlow,
+          testOfflineNotificationPaymentRegistered,
+          testOfflineNotificationRegularForward,
+          testOfflineNotificationZeroConfChannel,
+        ]
+        implementation: [
+          LND,
+          CLN
+        ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Run and Process Test State
+        uses: ./.github/actions/test-lspd
+        with:
+          TESTRE: "TestLspd/${{ matrix.implementation }}-lspd:_${{ matrix.test }}"
+          artifact-name: TestLspd-${{ matrix.implementation }}-lspd_${{ matrix.test }}
+          bitcoin-version: ${{ env.BITCOIN_VERSION }}
+          LSP_REF: ${{ env.LSP_REF }}
+          CLIENT_REF: ${{ env.CLIENT_REF }}
+          GO_VERSION: ${{ env.GO_VERSION }}
+          CLN_VERSION: ${{ env.CLN_VERSION }}
