@@ -169,4 +169,4 @@ up some artefacts. Here's where to look:
 - docker container for postgres with default name
 
 It may be a good idea to clean your testdir every once in a while if you're 
-using the `preservel
+using the `preservelogs` or `preservestate` flags.
