@@ -20,7 +20,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	ecies "github.com/ecies/go/v2"
-	"google.golang.org/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 

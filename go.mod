@@ -25,7 +25,6 @@ require (
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	golang.org/x/sync v0.1.0
 	google.golang.org/grpc v1.50.1
-	google.golang.org/protobuf v1.27.1
 )
 
 require (
@@ -35,7 +34,6 @@ require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ethereum/go-ethereum v1.10.17 // indirect
 	github.com/golang-jwt/jwt/v4 v4.4.2 // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/lightninglabs/neutrino/cache v1.1.1 // indirect
@@ -179,6 +177,7 @@ require (
 	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba // indirect
 	google.golang.org/genproto v0.0.0-20210617175327-b9e0b3197ced // indirect
+	google.golang.org/protobuf v1.27.1
 	gopkg.in/errgo.v1 v1.0.1 // indirect
 	gopkg.in/macaroon-bakery.v2 v2.0.1 // indirect
 	gopkg.in/macaroon.v2 v2.0.0 // indirect
