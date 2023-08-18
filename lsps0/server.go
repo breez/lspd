@@ -23,6 +23,10 @@ var BadMessageFormatError string = "bad message format"
 var InternalError string = "internal error"
 var MaxSimultaneousRequests = 25
 
+type ContextKey string
+
+var PeerContextKey = ContextKey("peerId")
+
 // ServiceDesc and is constructed from it for internal purposes.
 type serviceInfo struct {
 	// Contains the implementation for the methods in this service.
@@ -139,8 +143,11 @@ func (s *Server) Serve(lis lightning.CustomMsgClient) error {
 			// another simultaneous request.
 			defer func() { <-guard }()
 
+			ctx := context.Background()
+			ctx = context.WithValue(ctx, PeerContextKey, msg.PeerId)
+
 			// Call the method handler for the requested method.
-			r, err := m.method.Handler(m.service.serviceImpl, context.TODO(), df)
+			r, err := m.method.Handler(m.service.serviceImpl, ctx, df)
 			if err != nil {
 				s, ok := status.FromError(err)
 				if !ok {
