@@ -11,7 +11,7 @@
 Follow compilation steps for CLN [here](https://github.com/ElementsProject/lightning/blob/master/doc/getting-started/getting-started/installation.md) to enable developer mode.
 
 #### lspd
-Needs to be build from source:
+Needs to be built from source:
 ```
 git clone https://github.com/breez/lspd 
 cd lspd
