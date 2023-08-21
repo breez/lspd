@@ -46,7 +46,7 @@ ENV variables:
 - `DATABASE_URL` postgresql db url
 - `AWS_REGION` AWS region for SES emailing 
 - `AWS_ACCESS_KEY_ID` API key for SES emailing 
-- `AWS_SECRET_ACCESS_KEY`API secret  for SES emailing 
+- `AWS_SECRET_ACCESS_KEY`API secret for SES emailing 
 - `MEMPOOL_API_BASE_URL` uses fee estimation for opening new channels (default: https://mempool.space/api/v1/)
 - `MEMPOOL_PRIORITY` priority with which open new channels using mempool api (default: economy)
 
