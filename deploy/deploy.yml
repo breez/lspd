@@ -230,7 +230,7 @@ Resources:
 
             cat <<EOL | sudo tee /etc/systemd/system/lspd.service
             [Unit]
-            Description=Lightning Service Daemon (lspd)
+            Description=Lightning Service Provider Daemon (lspd)
             After=network.target
             [Service]
             User=lspd
