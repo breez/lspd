@@ -1,7 +1,7 @@
 
 ## Installation instructions for core lightning and lspd
 ### Requirements 
-- CLN (complied with developer mode on) or LND
+- CLN (compiled with developer mode on)
 - lspd
 - lspd plugin for cln
 - postgresql
