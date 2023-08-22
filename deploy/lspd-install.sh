@@ -94,11 +94,10 @@ Description=Bitcoin daemon
 After=network.target
 [Service]
 WorkingDirectory=/var/lib/bitcoind
-ExecStart=bitcoind -daemon -pid=/run/bitcoind/bitcoind.pid -conf=/etc/bitcoin/bitcoin.conf  -datadir=/var/lib/bitcoind -startupnotify='systemd-notify --ready' -shutdownnotify='systemd-notify --stopping'
+ExecStart=bitcoind -pid=/run/bitcoind/bitcoind.pid -conf=/etc/bitcoin/bitcoin.conf 
 PermissionsStartOnly=true
 ExecStartPre=/bin/chgrp bitcoin /var/lib/bitcoind
-Type=notify
-NotifyAccess=all
+Type=forking
 PIDFile=/run/bitcoind/bitcoind.pid
 Restart=on-failure
 TimeoutStartSec=infinity
@@ -123,21 +122,26 @@ EOL
 # cat to a bitcoin.conf file
 RPCPASSWORD=$(</dev/urandom tr -dc 'A-Za-z0-9' | head -c 20)
 echo "### Bitcoin Configuration ###" >> "$CREDENTIALS"
-echo "rpcuser: lnd" >> "$CREDENTIALS"
+echo "rpcuser: cln" >> "$CREDENTIALS"
 echo "rpcpassword: $RPCPASSWORD" >> "$CREDENTIALS"
 sudo mkdir  /etc/bitcoin/
 sudo touch /etc/bitcoin/bitcoin.conf
 cat <<EOL | sudo tee /etc/bitcoin/bitcoin.conf
 txindex=1
 daemon=1
-rpcuser=lnd
+datadir=/var/lib/bitcoind
+startupnotify='systemd-notify --ready' 
+shutdownnotify='systemd-notify --stopping'
+rpcuser=cln
 rpcpassword=$RPCPASSWORD
 minrelaytxfee=0.00000000
 incrementalrelayfee=0.00000010
 zmqpubrawblock=tcp://127.0.0.1:28332
 zmqpubrawtx=tcp://127.0.0.1:28333
 EOL
-chmod 710  /etc/bitcoin
+
+chown -R bitcoin:bitcoin /etc/bitcoin
+chmod 755  /etc/bitcoin
 sudo mkdir /home/lightning/.bitcoin/
 sudo mkdir /root/.bitcoin/
 sudo ln -s /etc/bitcoin/bitcoin.conf /home/lightning/.bitcoin/bitcoin.conf
@@ -146,8 +150,10 @@ sudo ln -s /etc/bitcoin/bitcoin.conf /root/.bitcoin/bitcoin.conf
 ######## Install lightning ########
 ###################################
 sudo mkdir /home/lightning/.lightning/
-cat <<EOL | sudo tee /home/lightning/.lightning/config
-bitcoin-rpcuser=lnd
+sudo mkdir /etc/lightningd
+#cat <<EOL | sudo tee /home/lightning/.lightning/config
+cat <<EOL | sudo tee /etc/lightningd/lightningd.conf
+bitcoin-rpcuser=cln
 bitcoin-rpcpassword=$RPCPASSWORD
 bitcoin-rpcconnect=127.0.0.1
 bitcoin-rpcport=8332
@@ -155,8 +161,14 @@ addr=:9735
 bitcoin-retry-timeout=3600
 alias="${LSPName}"
 wallet=postgres://lightning:$LIGHTNING_DB_PASSWORD@localhost:5432/lightning
-
+plugin=/home/lightning/.lightning/plugins/lspd_plugin
+lsp-listen=127.0.0.1:12312
+max-concurrent-htlcs=30
+dev-allowdustreserve=true
+allow-deprecated-apis=true
+log-file=/var/log/lightningd/lightningd.log
 EOL
+chmod 755 /etc/lightningd/
 git clone https://github.com/ElementsProject/lightning.git /opt/lightning
 cd /opt/lightning
 git checkout v23.05
@@ -166,17 +178,24 @@ make install
 cat <<EOL | sudo tee /etc/systemd/system/lightningd.service
 [Unit]
 Description=Lightning Network Daemon (lightningd)
+Wants=network-online.target
 After=network.target
 [Service]
-ExecStart=/usr/local/bin/lightningd --plugin=/home/lightning/.lightning/plugins/lspd_plugin  --lsp-listen=127.0.0.1:12312 --max-concurrent-htlcs=30
+ExecStart=/usr/local/bin/lightningd  --daemon --conf /etc/lightningd/lightningd.conf --pid-file=/run/lightningd/lightningd.pid
 MemoryDenyWriteExecute=true
 NoNewPrivileges=true
 PrivateDevices=true
+Type=forking
 PrivateTmp=true
 ProtectSystem=full
 Restart=on-failure
 User=lightning
 Group=lightning
+RuntimeDirectory=lightningd
+ConfigurationDirectory=lightningd
+LogsDirectory=lightningd
+[Install]
+WantedBy=multi-user.target
 EOL
 
 # Install lspd

@@ -12,10 +12,43 @@ Parameters:
   VPCID:
     Description: The ID of the VPC in which to create the resources
     Type: 'AWS::EC2::VPC::Id'
-  
-  LatestAmiId:
-    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-    Default: '/aws/service/canonical/ubuntu/server/jammy/stable/current/amd64/hvm/ebs-gp2/ami-id'    
+
+Mappings:
+  AMIRegionMap:
+    ap-northeast-1:
+      AMIID: ami-0deffe25fb08894f5
+    ap-northeast-2:
+      AMIID: ami-097243fad67b35a40
+    ap-northeast-3:
+      AMIID: ami-03ad2f651aaddff3a
+    ap-south-1:
+      AMIID: ami-0361008010558ea2d
+    ap-southeast-1:
+      AMIID: ami-07bf64b7ca62c96ee
+    ap-southeast-2:
+      AMIID: ami-0cc8e61f3957442b8
+    ca-central-1:
+      AMIID: ami-0cfe1aac5d0b881ff
+    eu-central-1:
+      AMIID: ami-0042e6537994c4181
+    eu-north-1:
+      AMIID: ami-00347e40213620217
+    eu-west-1:
+      AMIID: ami-04620cb5b85309067
+    eu-west-2:
+      AMIID: ami-0315c69b482426e70
+    eu-west-3:
+      AMIID: ami-0dcc6ef9e7a6e70f2
+    sa-east-1:
+      AMIID: ami-027ba68d27297f530
+    us-east-1:
+      AMIID: ami-01e8fbda99c153c6b
+    us-east-2:
+      AMIID: ami-0ef27e70f95b439e8
+    us-west-1:
+      AMIID: ami-09d529cbaf5cc7e6f
+    us-west-2:
+      AMIID: ami-0acfc42b227d0b719
 
 Resources:
   # EC2 Instance
@@ -23,10 +56,10 @@ Resources:
     Type: 'AWS::EC2::Instance'
     Properties:
       InstanceType: m6a.xlarge
-      ImageId: !Ref LatestAmiId
+      ImageId: !FindInMap [AMIRegionMap, !Ref "AWS::Region", AMIID]
       KeyName: !Ref KeyName
-      BlockDeviceMappings:
-        - DeviceName: "/dev/sda1"
+      BlockDeviceMappings: # resize root volume to 1TB
+        - DeviceName: "/dev/xvda"
           Ebs:
             VolumeSize: 1024
             VolumeType: gp2
@@ -130,11 +163,10 @@ Resources:
             After=network.target
             [Service]
             WorkingDirectory=/var/lib/bitcoind
-            ExecStart=bitcoind -daemon -pid=/run/bitcoind/bitcoind.pid -conf=/etc/bitcoin/bitcoin.conf  -datadir=/var/lib/bitcoind -startupnotify='systemd-notify --ready' -shutdownnotify='systemd-notify --stopping'
+            ExecStart=bitcoind -pid=/run/bitcoind/bitcoind.pid -conf=/etc/bitcoin/bitcoin.conf 
             PermissionsStartOnly=true
             ExecStartPre=/bin/chgrp bitcoin /var/lib/bitcoind
-            Type=notify
-            NotifyAccess=all
+            Type=forking
             PIDFile=/run/bitcoind/bitcoind.pid
             Restart=on-failure
             TimeoutStartSec=infinity
@@ -159,21 +191,26 @@ Resources:
             # cat to a bitcoin.conf file
             RPCPASSWORD=$(</dev/urandom tr -dc 'A-Za-z0-9' | head -c 20)
             echo "### Bitcoin Configuration ###" >> "$CREDENTIALS"
-            echo "rpcuser: lnd" >> "$CREDENTIALS"
+            echo "rpcuser: cln" >> "$CREDENTIALS"
             echo "rpcpassword: $RPCPASSWORD" >> "$CREDENTIALS"
             sudo mkdir  /etc/bitcoin/
             sudo touch /etc/bitcoin/bitcoin.conf
             cat <<EOL | sudo tee /etc/bitcoin/bitcoin.conf
             txindex=1
             daemon=1
-            rpcuser=lnd
+            datadir=/var/lib/bitcoind
+            startupnotify='systemd-notify --ready' 
+            shutdownnotify='systemd-notify --stopping'
+            rpcuser=cln
             rpcpassword=$RPCPASSWORD
             minrelaytxfee=0.00000000
             incrementalrelayfee=0.00000010
             zmqpubrawblock=tcp://127.0.0.1:28332
             zmqpubrawtx=tcp://127.0.0.1:28333
             EOL
-            chmod 710  /etc/bitcoin
+            
+            chown -R bitcoin:bitcoin /etc/bitcoin
+            chmod 755  /etc/bitcoin
             sudo mkdir /home/lightning/.bitcoin/
             sudo mkdir /root/.bitcoin/
             sudo ln -s /etc/bitcoin/bitcoin.conf /home/lightning/.bitcoin/bitcoin.conf
@@ -182,8 +219,10 @@ Resources:
             ######## Install lightning ########
             ###################################
             sudo mkdir /home/lightning/.lightning/
-            cat <<EOL | sudo tee /home/lightning/.lightning/config
-            bitcoin-rpcuser=lnd
+            sudo mkdir /etc/lightningd
+            #cat <<EOL | sudo tee /home/lightning/.lightning/config
+            cat <<EOL | sudo tee /etc/lightningd/lightningd.conf
+            bitcoin-rpcuser=cln
             bitcoin-rpcpassword=$RPCPASSWORD
             bitcoin-rpcconnect=127.0.0.1
             bitcoin-rpcport=8332
@@ -191,8 +230,14 @@ Resources:
             bitcoin-retry-timeout=3600
             alias="${LSPName}"
             wallet=postgres://lightning:$LIGHTNING_DB_PASSWORD@localhost:5432/lightning
-
+            plugin=/home/lightning/.lightning/plugins/lspd_plugin
+            lsp-listen=127.0.0.1:12312
+            max-concurrent-htlcs=30
+            dev-allowdustreserve=true
+            allow-deprecated-apis=true
+            log-file=/var/log/lightningd/lightningd.log
             EOL
+            chmod 755 /etc/lightningd/
             git clone https://github.com/ElementsProject/lightning.git /opt/lightning
             cd /opt/lightning
             git checkout v23.05
@@ -202,17 +247,24 @@ Resources:
             cat <<EOL | sudo tee /etc/systemd/system/lightningd.service
             [Unit]
             Description=Lightning Network Daemon (lightningd)
+            Wants=network-online.target
             After=network.target
             [Service]
-            ExecStart=/usr/local/bin/lightningd --plugin=/home/lightning/.lightning/plugins/lspd_plugin  --lsp-listen=127.0.0.1:12312 --max-concurrent-htlcs=30
+            ExecStart=/usr/local/bin/lightningd  --daemon --conf /etc/lightningd/lightningd.conf --pid-file=/run/lightningd/lightningd.pid
             MemoryDenyWriteExecute=true
             NoNewPrivileges=true
             PrivateDevices=true
+            Type=forking
             PrivateTmp=true
             ProtectSystem=full
             Restart=on-failure
             User=lightning
             Group=lightning
+            RuntimeDirectory=lightningd
+            ConfigurationDirectory=lightningd
+            LogsDirectory=lightningd
+            [Install]
+            WantedBy=multi-user.target
             EOL
 
             # Install lspd
@@ -230,7 +282,7 @@ Resources:
 
             cat <<EOL | sudo tee /etc/systemd/system/lspd.service
             [Unit]
-            Description=Lightning Service Provider Daemon (lspd)
+            Description=Lightning Service Daemon (lspd)
             After=network.target
             [Service]
             User=lspd
