@@ -309,6 +309,7 @@ func (c *LndClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 			return &lightning.GetChannelResult{
 				InitialChannelID:   basetypes.ShortChannelID(c.ChanId),
 				ConfirmedChannelID: basetypes.ShortChannelID(confirmedChanId),
+				HtlcMinimumMsat:    c.LocalConstraints.MinHtlcMsat,
 			}, nil
 		}
 	}
