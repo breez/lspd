@@ -170,6 +170,7 @@ func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 			return &lightning.GetChannelResult{
 				InitialChannelID:   *initialChanID,
 				ConfirmedChannelID: *confirmedChanID,
+				HtlcMinimumMsat:    c.HtlcMinMilliSatoshi,
 			}, nil
 		}
 	}
