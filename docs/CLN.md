@@ -69,10 +69,3 @@ In order to run lspd on top of CLN, you need to run the lspd process and run cln
 
 ### Final step
 1. Share with Breez the TOKEN and the LISTEN_ADDRESS you've defined (send to contact@breez.technology)
-
-
-            plugin=/home/lightning/.lightning/plugins/lspd_plugin
-            lsp-listen=127.0.0.1:12312
-            max-concurrent-htlcs=30
-            dev-allowdustreserve=true
-            allow-deprecated-apis=true
