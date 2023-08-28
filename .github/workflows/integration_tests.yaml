@@ -6,9 +6,9 @@ on:
 env:
   BITCOIN_VERSION: '25.0'
   LSP_REF: 'breez-node-v0.16.4-beta'
-  CLIENT_REF: 'v0.16.4-breez-2'
+  CLIENT_REF: 'v0.16.4-breez-3'
   GO_VERSION: '^1.19'
-  CLN_VERSION: 'v23.05.1'
+  CLN_VERSION: 'v23.08'
 jobs:
 
   setup-bitcoin-core:
@@ -18,7 +18,6 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Bitcoin Core
-        if: steps.cache-bitcoin.outputs.cache-hit != 'true'
         uses: ./.github/actions/setup-bitcoin
         with:
           bitcoin-version: ${{ env.BITCOIN_VERSION }}
@@ -30,7 +29,6 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up LND LSP
-        if: steps.cache-lnd-lsp.outputs.cache-hit != 'true'
         uses: ./.github/actions/setup-lnd-lsp
         with:
           lsp-ref: ${{ env.LSP_REF }}
@@ -43,7 +41,6 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up LND client
-        if: steps.cache-lnd-client.outputs.cache-hit != 'true'
         uses: ./.github/actions/setup-lnd-client
         with:
           client-ref: ${{ env.CLIENT_REF }}

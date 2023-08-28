@@ -3,9 +3,9 @@ description: 'Set up Core Lightning on the runner'
 
 inputs:
   checkout-version:
-    description: 'v23.05.1'
+    description: Core lightning version
     required: true
-    default: 'v23.05.1'
+    default: 'v23.08'
 
 runs:
   using: 'composite'
