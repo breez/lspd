@@ -8,7 +8,7 @@ Cloudformation template for automated deployment of lspd, bitcoind and cln with 
 [Cloudformation template](../deploy/deploy.yml) will automatically deploy several things:
 - new ec2 instance (m6a.xlarge) to your selected VPC
 - bitcoind
-- clnd (with postgresql as backend)
+- cln (with postgresql as backend)
 - lspd
 
 ### After deployment steps
