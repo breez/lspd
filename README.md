@@ -3,44 +3,14 @@ lspd is a simple deamon that provides [LSP](https://medium.com/breez-technology/
 
 This is a simple example of an lspd that works with an [lnd](https://github.com/lightningnetwork/lnd) node or a [cln](https://github.com/ElementsProject/lightning) node.
 
-## Installation
-### Build
-1. git clone https://github.com/breez/lspd (or fork)
-1. Compile lspd using `go build .`
-
-### Before running
-1. Create a random token (for instance using the command `openssl rand -base64 48`, or `./lspd genkey`)
-1. Define the environment variables as described in sample.env. If `CERTMAGIC_DOMAIN` is defined, certificate for this domain is automatically obtained and renewed from Let's Encrypt. In this case, the port needs to be 443. If `CERTMAGIC_DOMAIN` is not defined, lspd needs to run behind a reverse proxy like treafik or nginx.
-
-### Running lspd on LND
-1. Run LND with the following options set:
-   - `--protocol.zero-conf`: for being able to open zero conf channels
-   - `--protocol.option-scid-alias`: required for zero conf channels
-	- `--requireinterceptor`: to make sure all htlcs are intercepted by lspd
-   - `--bitcoin.chanreservescript="0"` to allow the client to have zero reserve on their side
-1. Run lspd
-
-### Running lspd on CLN
-In order to run lspd on top of CLN, you need to run the lspd process and run cln with the provided cln plugin.
-
-The cln plugin (go build -o lspd_plugin cln_plugin/cmd) is best started with a bash script to pass environment variables (note this LISTEN_ADDRESS is the listen address for communication between lspd and the plugin, this is not the listen address mentioned in the 'final step')
-
-```bash
-#!/bin/bash
-
-export LISTEN_ADDRESS=<listen address>
-/path/to/lspd_plugin
-```
-
-1. Run cln with the following options set:
-    - `--plugin=/path/to/shell/script.sh`: to use lspd as plugin
-    - `--max-concurrent-htlcs=30`: In order to use zero reserve channels on the client side, (local max_accepted_htlcs + remote max_accepted_htlcs + 2) * dust limit must be lower than the channel capacity. Reduce max-concurrent-htlcs or increase channel capacity accordingly.
-    - `--dev-allowdustreserve=true`: In order to allow zero reserve on the client side, you'll need to enable developer mode on cln (`./configure --enable-developer`)
-    - `--experimental-anchors`: In order to allow opening anchor channels.
-1. Run lspd
-
-### Final step
-1. Share with Breez the TOKEN and the LISTEN_ADDRESS you've defined (send to contact@breez.technology)
+## Deployment
+Installation and configuration instructions for both implementations can be found here:
+### Manual install 
+- [CLN](./docs/CLN.md) - step by step installation instructions for CLN
+- [LND](./docs/LND.md) - step by step installation instructions for LND
+### Automated deployment
+- [AWS](./docs/aws.md) - automated deployment of bitcoind, CLN and lspd to AWS, together with 
+- [Bash](./docs/bash.md) - install everything on any debian/ubuntu server
 
 ## Implement your own lspd
 You can create your own lsdp by implementing the grpc methods described [here](https://github.com/breez/lspd/blob/master/rpc/lspd.md).
@@ -98,5 +68,4 @@ up some artefacts. Here's where to look:
 - bitcoind process
 - docker container for postgres with default name
 
-It may be a good idea to clean your testdir every once in a while if you're 
-using the `preservelogs` or `preservestate` flags.
+It may be a good idea to clean your testdir every once in a while if you're using the `preservelogs` or `preservestate` flags.
