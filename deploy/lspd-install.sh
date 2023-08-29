@@ -177,7 +177,7 @@ make
 make install
 cat <<EOL | sudo tee /etc/systemd/system/lightningd.service
 [Unit]
-Description=Lightning Network Daemon (lightningd)
+Description=Lightning Network Provider Daemon (lightningd)
 Wants=network-online.target
 After=network.target
 [Service]

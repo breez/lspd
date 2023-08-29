@@ -15,7 +15,6 @@ Needs to be build from source:
 git clone https://github.com/breez/lspd 
 cd lspd
 go build .                      # compile lspd
-go build -o lspd_plugin         # compile lspd cln plugin
 ```
 ### Postgresql
 Lspd supports postgresql backend. Create new database and user for lspd:
