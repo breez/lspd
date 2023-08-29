@@ -27,7 +27,7 @@ The lsp supports probing non-mpp payments if the payment hash for probing is sha
 In order to run the integration tests, you need:
 - Docker running
 - python3 installed
-- A development build of lightningd v23.05.1
+- A development build of lightningd v23.08
 - lnd v0.16.4 lsp version https://github.com/breez/lnd/commit/cebcdf1b17fdedf7d69207d98c31cf8c3b257531
 - lnd v0.16.4 breez client version https://github.com/breez/lnd/commit/3c0854adcfc924a6d759a6ee4640c41266b9f8b4
 - bitcoind (tested with v23.0)
