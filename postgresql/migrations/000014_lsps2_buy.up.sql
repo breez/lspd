@@ -15,3 +15,18 @@ CREATE TABLE lsps2.buy_registrations (
 );
 CREATE UNIQUE INDEX idx_lsps2_buy_registrations_scid ON lsps2.buy_registrations (scid);
 CREATE INDEX idx_lsps2_buy_registrations_valid_until ON lsps2.buy_registrations (params_valid_until);
+
+CREATE TABLE lsps2.bought_channels (
+	id bigserial PRIMARY KEY,
+	registration_id bigint NOT NULL,
+	funding_tx_id bytea NOT NULL,
+	funding_tx_outnum bigint NOT NULL,
+	fee_msat bigint NOT NULL,
+	payment_size_msat bigint NOT NULL,
+	is_completed boolean NOT NULL,
+	CONSTRAINT fk_buy_registration
+	  FOREIGN KEY(registration_id)
+	  REFERENCES lsps2.buy_registrations(id)
+	  ON DELETE CASCADE
+);
+CREATE INDEX idx_lsps2_bought_channels_registration_id ON lsps2.bought_channels (registration_id);
