@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/breez/lspd/cln_plugin/proto"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 )
@@ -52,6 +53,7 @@ type server struct {
 	htlcStream             proto.ClnPlugin_HtlcStreamServer
 	htlcSendQueue          chan *htlcAcceptedMsg
 	htlcRecvQueue          chan *htlcResultMsg
+	inflightHtlcs          *orderedmap.OrderedMap[string, *htlcAcceptedMsg]
 	custommsgNewSubscriber chan struct{}
 	custommsgStream        proto.ClnPlugin_CustomMsgStreamServer
 	custommsgSendQueue     chan *custommsgMsg
@@ -71,6 +73,7 @@ func NewServer(listenAddress string, subscriberTimeout time.Duration) *server {
 		// cln plugin. If there is no subscriber active within the subscriber
 		// timeout period these results can be put directly on the receive queue.
 		htlcRecvQueue:      make(chan *htlcResultMsg, 10000),
+		inflightHtlcs:      orderedmap.New[string, *htlcAcceptedMsg](),
 		custommsgRecvQueue: make(chan *custommsgResultMsg, 10000),
 		started:            make(chan struct{}),
 		startError:         make(chan error, 1),
@@ -162,6 +165,19 @@ func (s *server) HtlcStream(stream proto.ClnPlugin_HtlcStreamServer) error {
 		return fmt.Errorf("already subscribed")
 	}
 
+	newTimeout := time.Now().Add(s.subscriberTimeout)
+	// Replay in-flight htlcs in fifo order
+	for pair := s.inflightHtlcs.Oldest(); pair != nil; pair = pair.Next() {
+		err := sendHtlcAccepted(stream, pair.Value)
+		if err != nil {
+			s.mtx.Unlock()
+			return err
+		}
+
+		// Reset the subscriber timeout for this htlc.
+		pair.Value.timeout = newTimeout
+	}
+
 	s.htlcStream = stream
 
 	// Notify listeners that a new subscriber is active. Replace the chan with
@@ -199,6 +215,9 @@ func (s *server) ReceiveHtlcResolution() (string, interface{}) {
 	case <-s.done:
 		return "", nil
 	case msg := <-s.htlcRecvQueue:
+		s.mtx.Lock()
+		s.inflightHtlcs.Delete(msg.id)
+		s.mtx.Unlock()
 		return msg.id, msg.result
 	}
 }
@@ -258,31 +277,22 @@ func (s *server) handleHtlcAccepted(msg *htlcAcceptedMsg) {
 			}
 		}
 
+		// Add the htlc to in-flight htlcs
+		s.mtx.Lock()
+		s.inflightHtlcs.Set(msg.id, msg)
+
 		// There is a subscriber. Attempt to send the htlc_accepted message.
-		err := stream.Send(&proto.HtlcAccepted{
-			Correlationid: msg.id,
-			Onion: &proto.Onion{
-				Payload:           msg.htlc.Onion.Payload,
-				ShortChannelId:    msg.htlc.Onion.ShortChannelId,
-				ForwardMsat:       msg.htlc.Onion.ForwardMsat,
-				OutgoingCltvValue: msg.htlc.Onion.OutgoingCltvValue,
-				SharedSecret:      msg.htlc.Onion.SharedSecret,
-				NextOnion:         msg.htlc.Onion.NextOnion,
-			},
-			Htlc: &proto.Htlc{
-				ShortChannelId:     msg.htlc.Htlc.ShortChannelId,
-				Id:                 msg.htlc.Htlc.Id,
-				AmountMsat:         msg.htlc.Htlc.AmountMsat,
-				CltvExpiry:         msg.htlc.Htlc.CltvExpiry,
-				CltvExpiryRelative: msg.htlc.Htlc.CltvExpiryRelative,
-				PaymentHash:        msg.htlc.Htlc.PaymentHash,
-			},
-			ForwardTo: msg.htlc.ForwardTo,
-		})
+		err := sendHtlcAccepted(stream, msg)
 
 		// If there is no error, we're done.
 		if err == nil {
+			s.mtx.Unlock()
 			return
+		} else {
+			// Remove the htlc from inflight htlcs again on error, so it won't
+			// get replayed twice in a row.
+			s.inflightHtlcs.Delete(msg.id)
+			s.mtx.Unlock()
 		}
 
 		// If we end up here, there was an error sending the message to the
@@ -324,6 +334,11 @@ func (s *server) recvHtlcResolution() *proto.HtlcResolution {
 		s.mtx.Lock()
 		stream := s.htlcStream
 		ns := s.htlcnewSubscriber
+		oldestHtlc := s.inflightHtlcs.Oldest()
+		var htlcTimeout time.Duration = 1 << 62 // practically infinite
+		if oldestHtlc != nil {
+			htlcTimeout = time.Until(oldestHtlc.Value.timeout)
+		}
 		s.mtx.Unlock()
 
 		if stream == nil {
@@ -335,6 +350,24 @@ func (s *server) recvHtlcResolution() *proto.HtlcResolution {
 			case <-ns:
 				log.Printf("New subscription available for htlc receive, continue receive.")
 				continue
+			case <-time.After(htlcTimeout):
+				log.Printf(
+					"WARNING: htlc with id '%s' timed out after '%v' waiting "+
+						"for grpc subscriber: %+v",
+					oldestHtlc.Value.id,
+					s.subscriberTimeout,
+					oldestHtlc.Value.htlc,
+				)
+
+				// If the subscriber timeout expires while holding a htlc
+				// we short circuit the htlc by sending the default result
+				// (continue) to cln.
+				return &proto.HtlcResolution{
+					Correlationid: oldestHtlc.Value.id,
+					Outcome: &proto.HtlcResolution_Continue{
+						Continue: &proto.HtlcContinue{},
+					},
+				}
 			}
 		}
 
@@ -560,4 +593,27 @@ func (s *server) defaultResult() interface{} {
 	return map[string]interface{}{
 		"result": "continue",
 	}
+}
+
+func sendHtlcAccepted(stream proto.ClnPlugin_HtlcStreamServer, msg *htlcAcceptedMsg) error {
+	return stream.Send(&proto.HtlcAccepted{
+		Correlationid: msg.id,
+		Onion: &proto.Onion{
+			Payload:           msg.htlc.Onion.Payload,
+			ShortChannelId:    msg.htlc.Onion.ShortChannelId,
+			ForwardMsat:       msg.htlc.Onion.ForwardMsat,
+			OutgoingCltvValue: msg.htlc.Onion.OutgoingCltvValue,
+			SharedSecret:      msg.htlc.Onion.SharedSecret,
+			NextOnion:         msg.htlc.Onion.NextOnion,
+		},
+		Htlc: &proto.Htlc{
+			ShortChannelId:     msg.htlc.Htlc.ShortChannelId,
+			Id:                 msg.htlc.Htlc.Id,
+			AmountMsat:         msg.htlc.Htlc.AmountMsat,
+			CltvExpiry:         msg.htlc.Htlc.CltvExpiry,
+			CltvExpiryRelative: msg.htlc.Htlc.CltvExpiryRelative,
+			PaymentHash:        msg.htlc.Htlc.PaymentHash,
+		},
+		ForwardTo: msg.htlc.ForwardTo,
+	})
 }
