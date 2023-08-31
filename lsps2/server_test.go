@@ -9,52 +9,8 @@ import (
 	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/lsps0/status"
 	"github.com/breez/lspd/shared"
-	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/stretchr/testify/assert"
 )
-
-type mockNodesService struct {
-	node *shared.Node
-	err  error
-}
-
-func (m *mockNodesService) GetNode(token string) (*shared.Node, error) {
-	return m.node, m.err
-}
-
-func (m *mockNodesService) GetNodes() []*shared.Node {
-	return []*shared.Node{m.node}
-}
-
-type mockOpeningService struct {
-	menu    []*shared.OpeningFeeParams
-	err     error
-	invalid bool
-}
-
-func (m *mockOpeningService) GetFeeParamsMenu(
-	token string,
-	privateKey *btcec.PrivateKey,
-) ([]*shared.OpeningFeeParams, error) {
-	return m.menu, m.err
-}
-
-func (m *mockOpeningService) ValidateOpeningFeeParams(
-	params *shared.OpeningFeeParams,
-	publicKey *btcec.PublicKey,
-) bool {
-	return !m.invalid
-}
-
-type mockLsps2Store struct {
-	err error
-	req *RegisterBuy
-}
-
-func (s *mockLsps2Store) RegisterBuy(ctx context.Context, req *RegisterBuy) error {
-	s.req = req
-	return s.err
-}
 
 var token = "blah"
 var node = func() *shared.Node {
