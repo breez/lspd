@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -22,6 +23,7 @@ import (
 	"github.com/breez/lspd/postgresql"
 	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/btcec/v2"
+	ecies "github.com/ecies/go/v2"
 )
 
 func main() {
@@ -45,7 +47,12 @@ func main() {
 		log.Fatalf("need at least one node configured in NODES.")
 	}
 
-	nodesService, err := shared.NewNodesService(nodeConfigs)
+	nodes, err := initializeNodes(nodeConfigs)
+	if err != nil {
+		log.Fatalf("failed to initialize nodes: %v", err)
+	}
+
+	nodesService, err := shared.NewNodesService(nodes)
 	if err != nil {
 		log.Fatalf("failed to create nodes service: %v", err)
 	}
@@ -92,7 +99,6 @@ func main() {
 
 	openingService := shared.NewOpeningService(interceptStore, nodesService)
 	var interceptors []interceptor.HtlcInterceptor
-	nodes := nodesService.GetNodes()
 	for _, node := range nodes {
 		var htlcInterceptor interceptor.HtlcInterceptor
 		if node.NodeConfig.Lnd != nil {
@@ -204,4 +210,71 @@ func main() {
 
 	wg.Wait()
 	log.Printf("lspd exited")
+}
+
+func initializeNodes(configs []*config.NodeConfig) ([]*shared.Node, error) {
+	if len(configs) == 0 {
+		return nil, fmt.Errorf("no nodes supplied")
+	}
+
+	nodes := []*shared.Node{}
+	for _, config := range configs {
+		pk, err := hex.DecodeString(config.LspdPrivateKey)
+		if err != nil {
+			return nil, fmt.Errorf("hex.DecodeString(config.lspdPrivateKey=%v) error: %v", config.LspdPrivateKey, err)
+		}
+
+		eciesPrivateKey := ecies.NewPrivateKeyFromBytes(pk)
+		eciesPublicKey := eciesPrivateKey.PublicKey
+		privateKey, publicKey := btcec.PrivKeyFromBytes(pk)
+		node := &shared.Node{
+			NodeConfig:      config,
+			PrivateKey:      privateKey,
+			PublicKey:       publicKey,
+			EciesPrivateKey: eciesPrivateKey,
+			EciesPublicKey:  eciesPublicKey,
+		}
+
+		if config.Lnd == nil && config.Cln == nil {
+			return nil, fmt.Errorf("node has to be either cln or lnd")
+		}
+
+		if config.Lnd != nil && config.Cln != nil {
+			return nil, fmt.Errorf("node cannot be both cln and lnd")
+		}
+
+		if config.Lnd != nil {
+			node.Client, err = lnd.NewLndClient(config.Lnd)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if config.Cln != nil {
+			node.Client, err = cln.NewClnClient(config.Cln.SocketPath)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// Make sure the nodes is available and set name and pubkey if not set
+		// in config.
+		info, err := node.Client.GetInfo()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get info from host %s", node.NodeConfig.Host)
+		}
+
+		if node.NodeConfig.Name == "" {
+			node.NodeConfig.Name = info.Alias
+		}
+
+		if node.NodeConfig.NodePubkey == "" {
+			node.NodeConfig.NodePubkey = info.Pubkey
+		}
+
+		node.Tokens = config.Tokens
+		nodes = append(nodes, node)
+	}
+
+	return nodes, nil
 }

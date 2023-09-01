@@ -1,14 +1,11 @@
 package shared
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 
-	"github.com/breez/lspd/cln"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lightning"
-	"github.com/breez/lspd/lnd"
 	"github.com/btcsuite/btcd/btcec/v2"
 	ecies "github.com/ecies/go/v2"
 	"golang.org/x/sync/singleflight"
@@ -22,6 +19,7 @@ type Node struct {
 	EciesPrivateKey     *ecies.PrivateKey
 	EciesPublicKey      *ecies.PublicKey
 	OpenChannelReqGroup singleflight.Group
+	Tokens              []string
 }
 
 type NodesService interface {
@@ -33,69 +31,10 @@ type nodesService struct {
 	nodeLookup map[string]*Node
 }
 
-func NewNodesService(configs []*config.NodeConfig) (NodesService, error) {
-	if len(configs) == 0 {
-		return nil, fmt.Errorf("no nodes supplied")
-	}
-
-	nodes := []*Node{}
+func NewNodesService(nodes []*Node) (NodesService, error) {
 	nodeLookup := make(map[string]*Node)
-	for _, config := range configs {
-		pk, err := hex.DecodeString(config.LspdPrivateKey)
-		if err != nil {
-			return nil, fmt.Errorf("hex.DecodeString(config.lspdPrivateKey=%v) error: %v", config.LspdPrivateKey, err)
-		}
-
-		eciesPrivateKey := ecies.NewPrivateKeyFromBytes(pk)
-		eciesPublicKey := eciesPrivateKey.PublicKey
-		privateKey, publicKey := btcec.PrivKeyFromBytes(pk)
-		node := &Node{
-			NodeConfig:      config,
-			PrivateKey:      privateKey,
-			PublicKey:       publicKey,
-			EciesPrivateKey: eciesPrivateKey,
-			EciesPublicKey:  eciesPublicKey,
-		}
-
-		if config.Lnd == nil && config.Cln == nil {
-			return nil, fmt.Errorf("node has to be either cln or lnd")
-		}
-
-		if config.Lnd != nil && config.Cln != nil {
-			return nil, fmt.Errorf("node cannot be both cln and lnd")
-		}
-
-		if config.Lnd != nil {
-			node.Client, err = lnd.NewLndClient(config.Lnd)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if config.Cln != nil {
-			node.Client, err = cln.NewClnClient(config.Cln.SocketPath)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		// Make sure the nodes is available and set name and pubkey if not set
-		// in config.
-		info, err := node.Client.GetInfo()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get info from host %s", node.NodeConfig.Host)
-		}
-
-		if node.NodeConfig.Name == "" {
-			node.NodeConfig.Name = info.Alias
-		}
-
-		if node.NodeConfig.NodePubkey == "" {
-			node.NodeConfig.NodePubkey = info.Pubkey
-		}
-
-		nodes = append(nodes, node)
-		for _, token := range config.Tokens {
+	for _, node := range nodes {
+		for _, token := range node.Tokens {
 			_, exists := nodeLookup[token]
 			if exists {
 				return nil, fmt.Errorf("cannot have multiple nodes with the same token")
