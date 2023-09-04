@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/breez/lspd/basetypes"
+	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/wire"
 )
@@ -33,9 +34,9 @@ type BuyRegistration struct {
 }
 
 func (b *BuyRegistration) IsExpired() bool {
-	t, err := time.Parse(basetypes.TIME_FORMAT, b.OpeningFeeParams.ValidUntil)
+	t, err := time.Parse(lsps0.TIME_FORMAT, b.OpeningFeeParams.ValidUntil)
 	if err != nil {
-		log.Printf("BuyRegistration.IsExpired(): time.Parse(%v, %v) error: %v", basetypes.TIME_FORMAT, b.OpeningFeeParams.ValidUntil, err)
+		log.Printf("BuyRegistration.IsExpired(): time.Parse(%v, %v) error: %v", lsps0.TIME_FORMAT, b.OpeningFeeParams.ValidUntil, err)
 		return true
 	}
 
