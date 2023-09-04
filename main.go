@@ -110,7 +110,7 @@ func main() {
 
 			client.StartListeners()
 			fwsync := lnd.NewForwardingHistorySync(client, interceptStore, forwardingStore)
-			interceptor := interceptor.NewInterceptor(client, node.NodeConfig, interceptStore, openingStore, feeEstimator, feeStrategy, notificationService)
+			interceptor := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, openingStore, feeEstimator, feeStrategy, notificationService)
 			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node.NodeConfig, client, fwsync, interceptor)
 			if err != nil {
 				log.Fatalf("failed to initialize LND interceptor: %v", err)
@@ -123,8 +123,7 @@ func main() {
 				log.Fatalf("failed to initialize CLN client: %v", err)
 			}
 
-			interceptor := interceptor.NewInterceptor(client, node.NodeConfig, interceptStore, openingStore, feeEstimator, feeStrategy, notificationService)
-			htlcInterceptor, err = cln.NewClnHtlcInterceptor(node.NodeConfig, client, interceptor)
+			interceptor := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, openingStore, feeEstimator, feeStrategy, notificationService)
 			if err != nil {
 				log.Fatalf("failed to initialize CLN interceptor: %v", err)
 			}
