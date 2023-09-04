@@ -79,6 +79,10 @@ func (s *mockLsps2Store) SetCompleted(ctx context.Context, registrationId uint64
 	return nil
 }
 
+func (s *mockLsps2Store) SavePromises(ctx context.Context, req *SavePromises) error {
+	return nil
+}
+
 type mockLightningClient struct {
 	openResponses    []*wire.OutPoint
 	openRequests     []*lightning.OpenChannelRequest

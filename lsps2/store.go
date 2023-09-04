@@ -12,6 +12,11 @@ import (
 	"github.com/btcsuite/btcd/wire"
 )
 
+type SavePromises struct {
+	Menu  []*shared.OpeningFeeParams
+	Token string
+}
+
 type RegisterBuy struct {
 	LspId            string
 	PeerId           string
@@ -59,6 +64,7 @@ var ErrScidExists = errors.New("scid exists")
 var ErrNotFound = errors.New("not found")
 
 type Lsps2Store interface {
+	SavePromises(ctx context.Context, req *SavePromises) error
 	RegisterBuy(ctx context.Context, req *RegisterBuy) error
 	GetBuyRegistration(ctx context.Context, scid lightning.ShortChannelID) (*BuyRegistration, error)
 	SetChannelOpened(ctx context.Context, channelOpened *ChannelOpened) error
