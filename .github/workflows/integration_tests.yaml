@@ -145,7 +145,11 @@ jobs:
           testLsps0GetProtocolVersions,
           testLsps2GetVersions,
           testLsps2GetInfo,
-          testLsps2Buy
+          testLsps2Buy,
+          testLsps2HappyFlow,
+          testLsps2Cltv,
+          testLsps2NoBalance,
+          testLsps2ZeroConfUtxo
         ]
         implementation: [
           CLN

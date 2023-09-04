@@ -7,7 +7,10 @@ import (
 	"time"
 
 	"github.com/breez/lntest"
+	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
+	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/stretchr/testify/assert"
 )
 
 func testLsps2Buy(p *testParams) {
@@ -62,12 +65,12 @@ func testLsps2Buy(p *testParams) {
 		Type:   lsps0.Lsps0MessageType,
 		Data: append(append(
 			[]byte(`{
-			"method": "lsps2.get_info",
+			"method": "lsps2.buy",
 			"jsonrpc": "2.0",
-			"id": "example#3cad6a54d302edba4c9ade2f7ffac098",
+			"id": "example#3cad6a54d302edba4c9ade2f7ffac099",
 			"params": {
 				"version": 1,
-				"payment_size_msat": "42000",
+				"payment_size_msat": "42000000",
 				"opening_fee_params":`),
 			pr...),
 			[]byte(`}}`)...,
@@ -75,7 +78,7 @@ func testLsps2Buy(p *testParams) {
 	})
 
 	buyResp := p.BreezClient().ReceiveCustomMessage()
-	log.Print(string(resp.Data))
+	log.Print(string(buyResp.Data))
 	b := new(struct {
 		Result struct {
 			Jit_channel_scid      string `json:"jit_channel_scid"`
@@ -85,4 +88,37 @@ func testLsps2Buy(p *testParams) {
 	})
 	err = json.Unmarshal(buyResp.Data, b)
 	lntest.CheckError(p.t, err)
+
+	pgxPool, err := pgxpool.Connect(p.h.Ctx, p.lsp.PostgresBackend().ConnectionString())
+	if err != nil {
+		p.h.T.Fatalf("Failed to connect to postgres backend: %v", err)
+	}
+	defer pgxPool.Close()
+
+	scid, err := lightning.NewShortChannelIDFromString(b.Result.Jit_channel_scid)
+	lntest.CheckError(p.t, err)
+
+	rows, err := pgxPool.Query(
+		p.h.Ctx,
+		`SELECT token 
+		 FROM lsps2.buy_registrations
+		 WHERE scid = $1`,
+		int64(uint64(*scid)),
+	)
+	if err != nil {
+		p.h.T.Fatalf("Failed to query token: %v", err)
+	}
+
+	defer rows.Close()
+	if !rows.Next() {
+		p.h.T.Fatal("No rows found")
+	}
+
+	var actual string
+	err = rows.Scan(&actual)
+	if err != nil {
+		p.h.T.Fatalf("Failed to get token from row: %v", err)
+	}
+
+	assert.Equal(p.h.T, "hello", actual)
 }
