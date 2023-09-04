@@ -25,7 +25,20 @@ func (s *Lsps2Store) RegisterBuy(
 	ctx context.Context,
 	req *lsps2.RegisterBuy,
 ) error {
-	_, err := s.pool.Exec(
+	row := s.pool.QueryRow(
+		ctx,
+		`SELECT token
+		 FROM lsps2.promises
+		 WHERE promise = $1`,
+		req.OpeningFeeParams.Promise,
+	)
+	var token string
+	err := row.Scan(&token)
+	if err != nil {
+		return fmt.Errorf("promise does not have matching token")
+	}
+
+	_, err = s.pool.Exec(
 		ctx,
 		`INSERT INTO lsps2.buy_registrations (
 			lsp_id
@@ -39,6 +52,7 @@ func (s *Lsps2Store) RegisterBuy(
 		 ,  params_min_lifetime
 		 ,  params_max_client_to_self_delay
 		 ,  params_promise
+		 ,  token
 		 )
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
 		req.LspId,
@@ -52,6 +66,7 @@ func (s *Lsps2Store) RegisterBuy(
 		req.OpeningFeeParams.MinLifetime,
 		req.OpeningFeeParams.MaxClientToSelfDelay,
 		req.OpeningFeeParams.Promise,
+		token,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "idx_lsps2_buy_registrations_scid") {
@@ -79,6 +94,7 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 		,       r.params_min_lifetime
 		,       r.params_max_client_to_self_delay
 		,       r.params_promise
+		,       r.token
 		,       c.funding_tx_id
 		,       c.funding_tx_outnum
 		,       c.is_completed
@@ -99,6 +115,7 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 	var db_params_min_lifetime uint32
 	var db_params_max_client_to_self_delay uint32
 	var db_params_promise string
+	var db_token string
 	var db_funding_tx_id []byte
 	var db_funding_tx_outnum uint32
 	var db_is_completed bool
@@ -114,6 +131,7 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 		&db_params_min_lifetime,
 		&db_params_max_client_to_self_delay,
 		&db_params_promise,
+		&db_token,
 		&db_funding_tx_id,
 		&db_funding_tx_outnum,
 		&db_is_completed,

@@ -25,6 +25,7 @@ type BuyRegistration struct {
 	Id               uint64
 	LspId            string
 	PeerId           string // TODO: Make peerId in the registration a byte array.
+	Token            string
 	Scid             lightning.ShortChannelID
 	OpeningFeeParams shared.OpeningFeeParams
 	PaymentSizeMsat  *uint64
