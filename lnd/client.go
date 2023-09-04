@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -275,7 +274,7 @@ func (c *LndClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoi
 		return nil, fmt.Errorf("LND: OpenChannel() error: %w", err)
 	}
 
-	result, err := basetypes.NewOutPoint(channelPoint.GetFundingTxidBytes(), channelPoint.OutputIndex)
+	result, err := lightning.NewOutPoint(channelPoint.GetFundingTxidBytes(), channelPoint.OutputIndex)
 	if err != nil {
 		log.Printf("LND: OpenChannel returned invalid outpoint. error: %v", err)
 		return nil, err
@@ -307,8 +306,8 @@ func (c *LndClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 				}
 			}
 			return &lightning.GetChannelResult{
-				InitialChannelID:   basetypes.ShortChannelID(c.ChanId),
-				ConfirmedChannelID: basetypes.ShortChannelID(confirmedChanId),
+				InitialChannelID:   lightning.ShortChannelID(c.ChanId),
+				ConfirmedChannelID: lightning.ShortChannelID(confirmedChanId),
 				HtlcMinimumMsat:    c.LocalConstraints.MinHtlcMsat,
 			}, nil
 		}
@@ -380,7 +379,7 @@ func (c *LndClient) getWaitingCloseChannels(nodeID string) ([]*lnrpc.PendingChan
 	return waitingCloseChannels, nil
 }
 
-func (c *LndClient) GetPeerId(scid *basetypes.ShortChannelID) ([]byte, error) {
+func (c *LndClient) GetPeerId(scid *lightning.ShortChannelID) ([]byte, error) {
 	scidu64 := uint64(*scid)
 	peer, err := c.client.GetPeerIdByScid(context.Background(), &lnrpc.GetPeerIdByScidRequest{
 		Scid: scidu64,

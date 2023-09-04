@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/shared"
@@ -61,7 +60,7 @@ func (s *mockLsps2Store) RegisterBuy(ctx context.Context, req *RegisterBuy) erro
 	return s.err
 }
 
-func (s *mockLsps2Store) GetBuyRegistration(ctx context.Context, scid basetypes.ShortChannelID) (*BuyRegistration, error) {
+func (s *mockLsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.ShortChannelID) (*BuyRegistration, error) {
 	if s.delay.Nanoseconds() != 0 {
 		<-time.After(s.delay)
 	}
@@ -119,7 +118,7 @@ func (c *mockLightningClient) GetChannel(peerID []byte, channelPoint wire.OutPoi
 	return res, nil
 }
 
-func (c *mockLightningClient) GetPeerId(scid *basetypes.ShortChannelID) ([]byte, error) {
+func (c *mockLightningClient) GetPeerId(scid *lightning.ShortChannelID) ([]byte, error) {
 	return nil, ErrNotImplemented
 }
 func (c *mockLightningClient) GetNodeChannelCount(nodeID []byte) (int, error) {

@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/breez/lspd/basetypes"
+	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/jackc/pgtype"
@@ -45,7 +45,7 @@ func (s *PostgresInterceptStore) PaymentInfo(htlcPaymentHash []byte) (string, *s
 
 	var cp *wire.OutPoint
 	if fundingTxID != nil {
-		cp, err = basetypes.NewOutPoint(fundingTxID, uint32(fundingTxOutnum.Int))
+		cp, err = lightning.NewOutPoint(fundingTxID, uint32(fundingTxOutnum.Int))
 		if err != nil {
 			log.Printf("invalid funding txid in database %x", fundingTxID)
 		}

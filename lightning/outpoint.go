@@ -1,4 +1,4 @@
-package basetypes
+package lightning
 
 import (
 	"log"

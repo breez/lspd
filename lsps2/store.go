@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/breez/lspd/basetypes"
+	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/wire"
@@ -15,7 +15,7 @@ import (
 type RegisterBuy struct {
 	LspId            string
 	PeerId           string
-	Scid             basetypes.ShortChannelID
+	Scid             lightning.ShortChannelID
 	OpeningFeeParams shared.OpeningFeeParams
 	PaymentSizeMsat  *uint64
 	Mode             OpeningMode
@@ -25,7 +25,7 @@ type BuyRegistration struct {
 	Id               uint64
 	LspId            string
 	PeerId           string // TODO: Make peerId in the registration a byte array.
-	Scid             basetypes.ShortChannelID
+	Scid             lightning.ShortChannelID
 	OpeningFeeParams shared.OpeningFeeParams
 	PaymentSizeMsat  *uint64
 	Mode             OpeningMode
@@ -59,7 +59,7 @@ var ErrNotFound = errors.New("not found")
 
 type Lsps2Store interface {
 	RegisterBuy(ctx context.Context, req *RegisterBuy) error
-	GetBuyRegistration(ctx context.Context, scid basetypes.ShortChannelID) (*BuyRegistration, error)
+	GetBuyRegistration(ctx context.Context, scid lightning.ShortChannelID) (*BuyRegistration, error)
 	SetChannelOpened(ctx context.Context, channelOpened *ChannelOpened) error
 	SetCompleted(ctx context.Context, registrationId uint64) error
 }

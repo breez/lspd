@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
@@ -136,7 +135,7 @@ func (c *ClnClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoi
 		return nil, err
 	}
 
-	channelPoint, err := basetypes.NewOutPoint(fundingTxId[:], uint32(fundResult.FundingTxOutputNum))
+	channelPoint, err := lightning.NewOutPoint(fundingTxId[:], uint32(fundResult.FundingTxOutputNum))
 	if err != nil {
 		log.Printf("CLN: NewOutPoint(%s, %d) error: %v", fundingTxId.String(), fundResult.FundingTxOutputNum, err)
 		return nil, err
@@ -157,12 +156,12 @@ func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 	for _, c := range peer.Channels {
 		log.Printf("getChannel destination: %s, Short channel id: %v, local alias: %v , FundingTxID:%v, State:%v ", pubkey, c.ShortChannelId, c.Alias.Local, c.FundingTxId, c.State)
 		if slices.Contains(OPEN_STATUSES, c.State) && c.FundingTxId == fundingTxID {
-			confirmedChanID, err := basetypes.NewShortChannelIDFromString(c.ShortChannelId)
+			confirmedChanID, err := lightning.NewShortChannelIDFromString(c.ShortChannelId)
 			if err != nil {
 				fmt.Printf("NewShortChannelIDFromString %v error: %v", c.ShortChannelId, err)
 				return nil, err
 			}
-			initialChanID, err := basetypes.NewShortChannelIDFromString(c.Alias.Local)
+			initialChanID, err := lightning.NewShortChannelIDFromString(c.Alias.Local)
 			if err != nil {
 				fmt.Printf("NewShortChannelIDFromString %v error: %v", c.Alias.Local, err)
 				return nil, err
@@ -213,7 +212,7 @@ func (c *ClnClient) GetClosedChannels(nodeID string, channelPoints map[string]ui
 	lookup := make(map[string]uint64)
 	for _, c := range peer.Channels {
 		if slices.Contains(CLOSING_STATUSES, c.State) {
-			cid, err := basetypes.NewShortChannelIDFromString(c.ShortChannelId)
+			cid, err := lightning.NewShortChannelIDFromString(c.ShortChannelId)
 			if err != nil {
 				log.Printf("CLN: GetClosedChannels NewShortChannelIDFromString(%v) error: %v", c.ShortChannelId, err)
 				continue
@@ -234,7 +233,7 @@ func (c *ClnClient) GetClosedChannels(nodeID string, channelPoints map[string]ui
 	return r, nil
 }
 
-func (c *ClnClient) GetPeerId(scid *basetypes.ShortChannelID) ([]byte, error) {
+func (c *ClnClient) GetPeerId(scid *lightning.ShortChannelID) ([]byte, error) {
 	scidStr := scid.ToString()
 	peers, err := c.client.ListPeers()
 	if err != nil {
