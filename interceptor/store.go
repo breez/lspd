@@ -3,26 +3,13 @@ package interceptor
 import (
 	"time"
 
+	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/wire"
 )
 
-type OpeningFeeParamsSetting struct {
-	Validity time.Duration
-	Params   *OpeningFeeParams
-}
-type OpeningFeeParams struct {
-	MinMsat              uint64 `json:"min_msat,string"`
-	Proportional         uint32 `json:"proportional"`
-	ValidUntil           string `json:"valid_until"`
-	MaxIdleTime          uint32 `json:"max_idle_time"`
-	MaxClientToSelfDelay uint32 `json:"max_client_to_self_delay"`
-	Promise              string `json:"promise"`
-}
-
 type InterceptStore interface {
-	PaymentInfo(htlcPaymentHash []byte) (string, *OpeningFeeParams, []byte, []byte, []byte, int64, int64, *wire.OutPoint, *string, error)
+	PaymentInfo(htlcPaymentHash []byte) (string, *shared.OpeningFeeParams, []byte, []byte, []byte, int64, int64, *wire.OutPoint, *string, error)
 	SetFundingTx(paymentHash []byte, channelPoint *wire.OutPoint) error
-	RegisterPayment(token string, params *OpeningFeeParams, destination, paymentHash, paymentSecret []byte, incomingAmountMsat, outgoingAmountMsat int64, tag string) error
+	RegisterPayment(token string, params *shared.OpeningFeeParams, destination, paymentHash, paymentSecret []byte, incomingAmountMsat, outgoingAmountMsat int64, tag string) error
 	InsertChannel(initialChanID, confirmedChanId uint64, channelPoint string, nodeID []byte, lastUpdate time.Time) error
-	GetFeeParamsSettings(token string) ([]*OpeningFeeParamsSetting, error)
 }

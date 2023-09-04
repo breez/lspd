@@ -8,17 +8,12 @@ import (
 	"time"
 
 	"github.com/breez/lspd/basetypes"
-	"github.com/breez/lspd/interceptor"
+	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
-
-type extendedParams struct {
-	Token  string                       `json:"token"`
-	Params interceptor.OpeningFeeParams `json:"fees_params"`
-}
 
 type PostgresInterceptStore struct {
 	pool *pgxpool.Pool
@@ -28,7 +23,7 @@ func NewPostgresInterceptStore(pool *pgxpool.Pool) *PostgresInterceptStore {
 	return &PostgresInterceptStore{pool: pool}
 }
 
-func (s *PostgresInterceptStore) PaymentInfo(htlcPaymentHash []byte) (string, *interceptor.OpeningFeeParams, []byte, []byte, []byte, int64, int64, *wire.OutPoint, *string, error) {
+func (s *PostgresInterceptStore) PaymentInfo(htlcPaymentHash []byte) (string, *shared.OpeningFeeParams, []byte, []byte, []byte, int64, int64, *wire.OutPoint, *string, error) {
 	var (
 		p, tag                                  *string
 		paymentHash, paymentSecret, destination []byte
@@ -77,7 +72,7 @@ func (s *PostgresInterceptStore) SetFundingTx(paymentHash []byte, channelPoint *
 	return err
 }
 
-func (s *PostgresInterceptStore) RegisterPayment(token string, params *interceptor.OpeningFeeParams, destination, paymentHash, paymentSecret []byte, incomingAmountMsat, outgoingAmountMsat int64, tag string) error {
+func (s *PostgresInterceptStore) RegisterPayment(token string, params *shared.OpeningFeeParams, destination, paymentHash, paymentSecret []byte, incomingAmountMsat, outgoingAmountMsat int64, tag string) error {
 	var t *string
 	if tag != "" {
 		t = &tag
@@ -126,37 +121,4 @@ func (s *PostgresInterceptStore) InsertChannel(initialChanID, confirmedChanId ui
 	log.Printf("insertChannel(%v, %v, %x) result: %v",
 		initialChanID, confirmedChanId, nodeID, c.String())
 	return nil
-}
-
-func (s *PostgresInterceptStore) GetFeeParamsSettings(token string) ([]*interceptor.OpeningFeeParamsSetting, error) {
-	rows, err := s.pool.Query(context.Background(), `SELECT validity, params FROM new_channel_params WHERE token=$1`, token)
-	if err != nil {
-		log.Printf("GetFeeParamsSettings(%v) error: %v", token, err)
-		return nil, err
-	}
-
-	var settings []*interceptor.OpeningFeeParamsSetting
-	for rows.Next() {
-		var validity int64
-		var param string
-		err = rows.Scan(&validity, &param)
-		if err != nil {
-			return nil, err
-		}
-
-		var params *interceptor.OpeningFeeParams
-		err := json.Unmarshal([]byte(param), &params)
-		if err != nil {
-			log.Printf("Failed to unmarshal fee param '%v': %v", param, err)
-			return nil, err
-		}
-
-		duration := time.Second * time.Duration(validity)
-		settings = append(settings, &interceptor.OpeningFeeParamsSetting{
-			Validity: duration,
-			Params:   params,
-		})
-	}
-
-	return settings, nil
 }

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/breez/lspd/basetypes"
-	"github.com/breez/lspd/interceptor"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 )
@@ -21,27 +20,18 @@ type OpeningService interface {
 }
 
 type openingService struct {
-	store        interceptor.InterceptStore
+	store        OpeningStore
 	nodesService NodesService
 }
 
 func NewOpeningService(
-	store interceptor.InterceptStore,
+	store OpeningStore,
 	nodesService NodesService,
 ) OpeningService {
 	return &openingService{
 		store:        store,
 		nodesService: nodesService,
 	}
-}
-
-type OpeningFeeParams struct {
-	MinFeeMsat           uint64 `json:"min_fee_msat,string"`
-	Proportional         uint32 `json:"proportional"`
-	ValidUntil           string `json:"valid_until"`
-	MinLifetime          uint32 `json:"min_lifetime"`
-	MaxClientToSelfDelay uint32 `json:"max_client_to_self_delay"`
-	Promise              string `json:"promise"`
 }
 
 func (s *openingService) GetFeeParamsMenu(token string, privateKey *btcec.PrivateKey) ([]*OpeningFeeParams, error) {
@@ -55,10 +45,10 @@ func (s *openingService) GetFeeParamsMenu(token string, privateKey *btcec.Privat
 	for _, setting := range settings {
 		validUntil := time.Now().UTC().Add(setting.Validity)
 		params := &OpeningFeeParams{
-			MinFeeMsat:           setting.Params.MinMsat,
+			MinFeeMsat:           setting.Params.MinFeeMsat,
 			Proportional:         setting.Params.Proportional,
 			ValidUntil:           validUntil.Format(basetypes.TIME_FORMAT),
-			MinLifetime:          setting.Params.MaxIdleTime,
+			MinLifetime:          setting.Params.MinLifetime,
 			MaxClientToSelfDelay: setting.Params.MaxClientToSelfDelay,
 		}
 

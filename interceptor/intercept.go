@@ -14,6 +14,7 @@ import (
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/notifications"
+	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/wire"
 	"golang.org/x/sync/singleflight"
 )
@@ -49,6 +50,7 @@ type Interceptor struct {
 	client              lightning.Client
 	config              *config.NodeConfig
 	store               InterceptStore
+	openingStore        shared.OpeningStore
 	feeEstimator        chain.FeeEstimator
 	feeStrategy         chain.FeeStrategy
 	payHashGroup        singleflight.Group
@@ -59,6 +61,7 @@ func NewInterceptor(
 	client lightning.Client,
 	config *config.NodeConfig,
 	store InterceptStore,
+	openingStore shared.OpeningStore,
 	feeEstimator chain.FeeEstimator,
 	feeStrategy chain.FeeStrategy,
 	notificationService *notifications.NotificationService,
@@ -67,6 +70,7 @@ func NewInterceptor(
 		client:              client,
 		config:              config,
 		store:               store,
+		openingStore:        openingStore,
 		feeEstimator:        feeEstimator,
 		feeStrategy:         feeStrategy,
 		notificationService: notificationService,
@@ -176,11 +180,11 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 			// TODO: When opening_fee_params is enforced, turn this check in a temporary channel failure.
 			if params == nil {
 				log.Printf("DEPRECATED: Intercepted htlc with deprecated fee mechanism. Using default fees. payment hash: %s", reqPaymentHashStr)
-				params = &OpeningFeeParams{
-					MinMsat:              uint64(i.config.ChannelMinimumFeeMsat),
+				params = &shared.OpeningFeeParams{
+					MinFeeMsat:           uint64(i.config.ChannelMinimumFeeMsat),
 					Proportional:         uint32(i.config.ChannelFeePermyriad * 100),
 					ValidUntil:           time.Now().UTC().Add(time.Duration(time.Hour * 24)).Format(basetypes.TIME_FORMAT),
-					MaxIdleTime:          uint32(i.config.MaxInactiveDuration / 600),
+					MinLifetime:          uint32(i.config.MaxInactiveDuration / 600),
 					MaxClientToSelfDelay: uint32(10000),
 				}
 			}
@@ -353,15 +357,15 @@ func (i *Interceptor) notify(reqPaymentHashStr string, nextHop []byte, isRegiste
 	return nil
 }
 
-func (i *Interceptor) isCurrentChainFeeCheaper(token string, params *OpeningFeeParams) bool {
-	settings, err := i.store.GetFeeParamsSettings(token)
+func (i *Interceptor) isCurrentChainFeeCheaper(token string, params *shared.OpeningFeeParams) bool {
+	settings, err := i.openingStore.GetFeeParamsSettings(token)
 	if err != nil {
 		log.Printf("Failed to get fee params settings: %v", err)
 		return false
 	}
 
 	for _, setting := range settings {
-		if setting.Params.MinMsat <= params.MinMsat {
+		if setting.Params.MinFeeMsat <= params.MinFeeMsat {
 			return true
 		}
 	}
