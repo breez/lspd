@@ -14,6 +14,7 @@ import (
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lightning"
+	"github.com/breez/lspd/shared"
 	sphinx "github.com/lightningnetwork/lightning-onion"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/record"
@@ -147,15 +148,23 @@ func (i *ClnHtlcInterceptor) intercept() error {
 					return
 				}
 
-				interceptResult := i.interceptor.Intercept(scid, paymentHash, request.Onion.ForwardMsat, request.Onion.OutgoingCltvValue, request.Htlc.CltvExpiry)
+				interceptResult := i.interceptor.Intercept(shared.InterceptRequest{
+					Identifier:         request.Onion.SharedSecret,
+					Scid:               *scid,
+					PaymentHash:        paymentHash,
+					IncomingAmountMsat: request.Htlc.AmountMsat,
+					OutgoingAmountMsat: request.Onion.ForwardMsat,
+					IncomingExpiry:     request.Htlc.CltvExpiry,
+					OutgoingExpiry:     request.Onion.OutgoingCltvValue,
+				})
 				switch interceptResult.Action {
-				case interceptor.INTERCEPT_RESUME_WITH_ONION:
+				case shared.INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(i.resumeWithOnion(request, interceptResult))
-				case interceptor.INTERCEPT_FAIL_HTLC_WITH_CODE:
+				case shared.INTERCEPT_FAIL_HTLC_WITH_CODE:
 					interceptorClient.Send(
 						i.failWithCode(request, interceptResult.FailureCode),
 					)
-				case interceptor.INTERCEPT_RESUME:
+				case shared.INTERCEPT_RESUME:
 					fallthrough
 				default:
 					interceptorClient.Send(
@@ -187,17 +196,17 @@ func (i *ClnHtlcInterceptor) WaitStarted() {
 	i.initWg.Wait()
 }
 
-func (i *ClnHtlcInterceptor) resumeWithOnion(request *proto.HtlcAccepted, interceptResult interceptor.InterceptResult) *proto.HtlcResolution {
+func (i *ClnHtlcInterceptor) resumeWithOnion(request *proto.HtlcAccepted, interceptResult shared.InterceptResult) *proto.HtlcResolution {
 	//decoding and encoding onion with alias in type 6 record.
 	payload, err := hex.DecodeString(request.Onion.Payload)
 	if err != nil {
 		log.Printf("resumeWithOnion: hex.DecodeString(%v) error: %v", request.Onion.Payload, err)
-		return i.failWithCode(request, interceptor.FAILURE_TEMPORARY_CHANNEL_FAILURE)
+		return i.failWithCode(request, shared.FAILURE_TEMPORARY_CHANNEL_FAILURE)
 	}
-	newPayload, err := encodePayloadWithNextHop(payload, interceptResult.ChannelId, interceptResult.AmountMsat)
+	newPayload, err := encodePayloadWithNextHop(payload, interceptResult.Scid, interceptResult.AmountMsat)
 	if err != nil {
 		log.Printf("encodePayloadWithNextHop error: %v", err)
-		return i.failWithCode(request, interceptor.FAILURE_TEMPORARY_CHANNEL_FAILURE)
+		return i.failWithCode(request, shared.FAILURE_TEMPORARY_CHANNEL_FAILURE)
 	}
 
 	newPayloadStr := hex.EncodeToString(newPayload)
@@ -224,7 +233,7 @@ func (i *ClnHtlcInterceptor) defaultResolution(request *proto.HtlcAccepted) *pro
 	}
 }
 
-func (i *ClnHtlcInterceptor) failWithCode(request *proto.HtlcAccepted, code interceptor.InterceptFailureCode) *proto.HtlcResolution {
+func (i *ClnHtlcInterceptor) failWithCode(request *proto.HtlcAccepted, code shared.InterceptFailureCode) *proto.HtlcResolution {
 	return &proto.HtlcResolution{
 		Correlationid: request.Correlationid,
 		Outcome: &proto.HtlcResolution_Fail{
@@ -237,7 +246,7 @@ func (i *ClnHtlcInterceptor) failWithCode(request *proto.HtlcAccepted, code inte
 	}
 }
 
-func encodePayloadWithNextHop(payload []byte, channelId uint64, amountToForward uint64) ([]byte, error) {
+func encodePayloadWithNextHop(payload []byte, scid lightning.ShortChannelID, amountToForward uint64) ([]byte, error) {
 	bufReader := bytes.NewBuffer(payload)
 	var b [8]byte
 	varInt, err := sphinx.ReadVarInt(bufReader, &b)
@@ -256,6 +265,7 @@ func encodePayloadWithNextHop(payload []byte, channelId uint64, amountToForward 
 		return nil, fmt.Errorf("DecodeWithParsedTypes failed for %x: %v", innerPayload[:], err)
 	}
 
+	channelId := uint64(scid)
 	tt := record.NewNextHopIDRecord(&channelId)
 	ttbuf := bytes.NewBuffer([]byte{})
 	if err := tt.Encode(ttbuf); err != nil {
@@ -294,13 +304,13 @@ func encodePayloadWithNextHop(payload []byte, channelId uint64, amountToForward 
 	return newPayloadBuf.Bytes(), nil
 }
 
-func (i *ClnHtlcInterceptor) mapFailureCode(original interceptor.InterceptFailureCode) string {
+func (i *ClnHtlcInterceptor) mapFailureCode(original shared.InterceptFailureCode) string {
 	switch original {
-	case interceptor.FAILURE_TEMPORARY_CHANNEL_FAILURE:
+	case shared.FAILURE_TEMPORARY_CHANNEL_FAILURE:
 		return "1007"
-	case interceptor.FAILURE_TEMPORARY_NODE_FAILURE:
+	case shared.FAILURE_TEMPORARY_NODE_FAILURE:
 		return "2002"
-	case interceptor.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
+	case shared.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
 		return "400F"
 	default:
 		log.Printf("Unknown failure code %v, default to temporary channel failure.", original)

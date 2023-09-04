@@ -10,6 +10,7 @@ import (
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lightning"
+	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/btcec/v2"
 	sphinx "github.com/lightningnetwork/lightning-onion"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -136,16 +137,24 @@ func (i *LndHtlcInterceptor) intercept() error {
 			i.doneWg.Add(1)
 			go func() {
 				scid := lightning.ShortChannelID(request.OutgoingRequestedChanId)
-				interceptResult := i.interceptor.Intercept(&scid, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry, request.IncomingExpiry)
+				interceptResult := i.interceptor.Intercept(shared.InterceptRequest{
+					Identifier:         request.IncomingCircuitKey.String(),
+					Scid:               scid,
+					PaymentHash:        request.PaymentHash,
+					IncomingAmountMsat: request.IncomingAmountMsat,
+					OutgoingAmountMsat: request.OutgoingAmountMsat,
+					IncomingExpiry:     request.IncomingExpiry,
+					OutgoingExpiry:     request.OutgoingExpiry,
+				})
 				switch interceptResult.Action {
-				case interceptor.INTERCEPT_RESUME_WITH_ONION:
+				case shared.INTERCEPT_RESUME_WITH_ONION:
 					onion, err := i.constructOnion(interceptResult, request.OutgoingExpiry, request.PaymentHash)
 					if err == nil {
 						interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
 							IncomingCircuitKey:      request.IncomingCircuitKey,
 							Action:                  routerrpc.ResolveHoldForwardAction_RESUME,
 							OutgoingAmountMsat:      interceptResult.AmountMsat,
-							OutgoingRequestedChanId: uint64(interceptResult.ChannelId),
+							OutgoingRequestedChanId: uint64(interceptResult.Scid),
 							OnionBlob:               onion,
 						})
 					} else {
@@ -156,13 +165,13 @@ func (i *LndHtlcInterceptor) intercept() error {
 						})
 					}
 
-				case interceptor.INTERCEPT_FAIL_HTLC_WITH_CODE:
+				case shared.INTERCEPT_FAIL_HTLC_WITH_CODE:
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
 						IncomingCircuitKey: request.IncomingCircuitKey,
 						Action:             routerrpc.ResolveHoldForwardAction_FAIL,
 						FailureCode:        i.mapFailureCode(interceptResult.FailureCode),
 					})
-				case interceptor.INTERCEPT_RESUME:
+				case shared.INTERCEPT_RESUME:
 					fallthrough
 				default:
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
@@ -182,13 +191,13 @@ func (i *LndHtlcInterceptor) intercept() error {
 	}
 }
 
-func (i *LndHtlcInterceptor) mapFailureCode(original interceptor.InterceptFailureCode) lnrpc.Failure_FailureCode {
+func (i *LndHtlcInterceptor) mapFailureCode(original shared.InterceptFailureCode) lnrpc.Failure_FailureCode {
 	switch original {
-	case interceptor.FAILURE_TEMPORARY_CHANNEL_FAILURE:
+	case shared.FAILURE_TEMPORARY_CHANNEL_FAILURE:
 		return lnrpc.Failure_TEMPORARY_CHANNEL_FAILURE
-	case interceptor.FAILURE_TEMPORARY_NODE_FAILURE:
+	case shared.FAILURE_TEMPORARY_NODE_FAILURE:
 		return lnrpc.Failure_TEMPORARY_NODE_FAILURE
-	case interceptor.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
+	case shared.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
 		return lnrpc.Failure_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
 	default:
 		log.Printf("Unknown failure code %v, default to temporary channel failure.", original)
@@ -197,7 +206,7 @@ func (i *LndHtlcInterceptor) mapFailureCode(original interceptor.InterceptFailur
 }
 
 func (i *LndHtlcInterceptor) constructOnion(
-	interceptResult interceptor.InterceptResult,
+	interceptResult shared.InterceptResult,
 	reqOutgoingExpiry uint32,
 	reqPaymentHash []byte,
 ) ([]byte, error) {
