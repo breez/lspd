@@ -3,7 +3,6 @@ package lightning
 import (
 	"time"
 
-	"github.com/breez/lspd/basetypes"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -13,8 +12,8 @@ type GetInfoResult struct {
 }
 
 type GetChannelResult struct {
-	InitialChannelID   basetypes.ShortChannelID
-	ConfirmedChannelID basetypes.ShortChannelID
+	InitialChannelID   ShortChannelID
+	ConfirmedChannelID ShortChannelID
 	HtlcMinimumMsat    uint64
 }
 
@@ -34,7 +33,7 @@ type Client interface {
 	IsConnected(destination []byte) (bool, error)
 	OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)
 	GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetChannelResult, error)
-	GetPeerId(scid *basetypes.ShortChannelID) ([]byte, error)
+	GetPeerId(scid *ShortChannelID) ([]byte, error)
 	GetNodeChannelCount(nodeID []byte) (int, error)
 	GetClosedChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error)
 	WaitOnline(peerID []byte, deadline time.Time) error

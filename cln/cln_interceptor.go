@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/cln_plugin/proto"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/interceptor"
+	"github.com/breez/lspd/lightning"
 	sphinx "github.com/lightningnetwork/lightning-onion"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/record"
@@ -140,7 +140,7 @@ func (i *ClnHtlcInterceptor) intercept() error {
 					return
 				}
 
-				scid, err := basetypes.NewShortChannelIDFromString(request.Onion.ShortChannelId)
+				scid, err := lightning.NewShortChannelIDFromString(request.Onion.ShortChannelId)
 				if err != nil {
 					interceptorClient.Send(i.defaultResolution(request))
 					i.doneWg.Done()

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/breez/lspd/basetypes"
+	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps2"
 	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/wire"
@@ -64,7 +64,7 @@ func (s *Lsps2Store) RegisterBuy(
 	return nil
 }
 
-func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid basetypes.ShortChannelID) (*lsps2.BuyRegistration, error) {
+func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.ShortChannelID) (*lsps2.BuyRegistration, error) {
 	row := s.pool.QueryRow(
 		ctx,
 		`SELECT r.id
@@ -133,7 +133,7 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid basetypes.Shor
 
 	var cp *wire.OutPoint
 	if db_funding_tx_id != nil {
-		cp, err = basetypes.NewOutPoint(db_funding_tx_id, db_funding_tx_outnum)
+		cp, err = lightning.NewOutPoint(db_funding_tx_id, db_funding_tx_outnum)
 		if err != nil {
 			return nil, fmt.Errorf("invalid funding tx id in db: %x", db_funding_tx_id)
 		}
@@ -143,7 +143,7 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid basetypes.Shor
 		Id:     db_id,
 		LspId:  db_lsp_id,
 		PeerId: db_peer_id,
-		Scid:   basetypes.ShortChannelID(uint64(db_scid)),
+		Scid:   lightning.ShortChannelID(uint64(db_scid)),
 		OpeningFeeParams: shared.OpeningFeeParams{
 			MinFeeMsat:           uint64(db_params_min_fee_msat),
 			Proportional:         db_params_proportional,

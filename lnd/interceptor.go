@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/interceptor"
+	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/btcec/v2"
 	sphinx "github.com/lightningnetwork/lightning-onion"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -135,7 +135,7 @@ func (i *LndHtlcInterceptor) intercept() error {
 
 			i.doneWg.Add(1)
 			go func() {
-				scid := basetypes.ShortChannelID(request.OutgoingRequestedChanId)
+				scid := lightning.ShortChannelID(request.OutgoingRequestedChanId)
 				interceptResult := i.interceptor.Intercept(&scid, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry, request.IncomingExpiry)
 				switch interceptResult.Action {
 				case interceptor.INTERCEPT_RESUME_WITH_ONION:

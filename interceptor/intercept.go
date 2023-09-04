@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/breez/lspd/basetypes"
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lightning"
@@ -80,7 +79,7 @@ func NewInterceptor(
 	}
 }
 
-func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) InterceptResult {
+func (i *Interceptor) Intercept(scid *lightning.ShortChannelID, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) InterceptResult {
 	reqPaymentHashStr := hex.EncodeToString(reqPaymentHash)
 	log.Printf("Intercept: scid: %s, paymentHash: %s, outgoindAmount: %v, outgoingExpiry: %v, incomingExpiry: %v", scid.ToString(), reqPaymentHashStr, reqOutgoingAmountMsat, reqOutgoingExpiry, reqIncomingExpiry)
 	resp, _, _ := i.payHashGroup.Do(reqPaymentHashStr, func() (interface{}, error) {
