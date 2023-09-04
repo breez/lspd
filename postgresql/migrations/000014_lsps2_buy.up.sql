@@ -1,8 +1,8 @@
 CREATE SCHEMA lsps2;
 CREATE TABLE lsps2.buy_registrations (
     id bigserial PRIMARY KEY, 
-    lsp_id bytea NOT NULL,
-    peer_id bytea NOT NULL,
+    lsp_id varchar NOT NULL,
+    peer_id varchar NOT NULL,
     scid bigint NOT NULL,
 	mode smallint NOT NULL,
 	payment_size_msat bigint NULL,
