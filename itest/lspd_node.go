@@ -113,6 +113,8 @@ func newLspd(h *lntest.TestHarness, mem *mempoolApi, name string, nodeConfig *co
 		ChannelMinimumFeeMsat:     2000000,
 		AdditionalChannelCapacity: 100000,
 		MaxInactiveDuration:       3888000,
+		MinPaymentSizeMsat:        600,
+		MaxPaymentSizeMsat:        4000000000,
 		Lnd:                       lnd,
 		Cln:                       cln,
 	}

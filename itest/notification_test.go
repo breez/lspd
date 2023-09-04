@@ -253,7 +253,7 @@ func testOfflineNotificationZeroConfChannel(p *testParams) {
 		} else {
 			id = chans[0].ShortChannelID
 		}
-		invoiceWithHint = AddHopHint(p.BreezClient(), bobInvoice.Bolt11, p.Lsp(), id, nil)
+		invoiceWithHint = AddHopHint(p.BreezClient(), bobInvoice.Bolt11, p.Lsp(), id, nil, lspCltvDelta)
 	}
 
 	log.Printf("Invoice with hint: %s", invoiceWithHint)
