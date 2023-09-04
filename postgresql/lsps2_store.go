@@ -54,7 +54,7 @@ func (s *Lsps2Store) RegisterBuy(
 		 ,  params_promise
 		 ,  token
 		 )
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 		req.LspId,
 		req.PeerId,
 		int64(uint64(req.Scid)),
@@ -116,15 +116,16 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 	var db_params_max_client_to_self_delay uint32
 	var db_params_promise string
 	var db_token string
-	var db_funding_tx_id []byte
-	var db_funding_tx_outnum uint32
-	var db_is_completed bool
+	var db_funding_tx_id *[]byte
+	var db_funding_tx_outnum *uint32
+	var db_is_completed *bool
 	err := row.Scan(
 		&db_id,
 		&db_lsp_id,
 		&db_peer_id,
 		&db_scid,
-		db_payment_size_msat,
+		&db_mode,
+		&db_payment_size_msat,
 		&db_params_min_fee_msat,
 		&db_params_proportional,
 		&db_params_valid_until,
@@ -150,11 +151,16 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 	}
 
 	var cp *wire.OutPoint
-	if db_funding_tx_id != nil {
-		cp, err = lightning.NewOutPoint(db_funding_tx_id, db_funding_tx_outnum)
+	if db_funding_tx_id != nil && db_funding_tx_outnum != nil {
+		cp, err = lightning.NewOutPoint(*db_funding_tx_id, *db_funding_tx_outnum)
 		if err != nil {
 			return nil, fmt.Errorf("invalid funding tx id in db: %x", db_funding_tx_id)
 		}
+	}
+
+	isCompleted := false
+	if db_is_completed != nil {
+		isCompleted = *db_is_completed
 	}
 
 	return &lsps2.BuyRegistration{
@@ -173,7 +179,7 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 		PaymentSizeMsat: paymentSizeMsat,
 		Mode:            lsps2.OpeningMode(db_mode),
 		ChannelPoint:    cp,
-		IsComplete:      db_is_completed,
+		IsComplete:      isCompleted,
 	}, nil
 }
 
