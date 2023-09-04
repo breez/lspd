@@ -157,11 +157,11 @@ func (s *channelOpenerServer) RegisterPayment(
 		log.Printf("checkPayment(%v, %v) error: %v", pi.IncomingAmountMsat, pi.OutgoingAmountMsat, err)
 		return nil, fmt.Errorf("checkPayment(%v, %v) error: %v", pi.IncomingAmountMsat, pi.OutgoingAmountMsat, err)
 	}
-	params := &interceptor.OpeningFeeParams{
-		MinMsat:              pi.OpeningFeeParams.MinMsat,
+	params := &shared.OpeningFeeParams{
+		MinFeeMsat:           pi.OpeningFeeParams.MinMsat,
 		Proportional:         pi.OpeningFeeParams.Proportional,
 		ValidUntil:           pi.OpeningFeeParams.ValidUntil,
-		MaxIdleTime:          pi.OpeningFeeParams.MaxIdleTime,
+		MinLifetime:          pi.OpeningFeeParams.MaxIdleTime,
 		MaxClientToSelfDelay: pi.OpeningFeeParams.MaxClientToSelfDelay,
 		Promise:              pi.OpeningFeeParams.Promise,
 	}
