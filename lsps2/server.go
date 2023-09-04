@@ -132,6 +132,15 @@ func (s *server) GetInfo(
 		return nil, status.New(codes.InternalError, "internal error").Err()
 	}
 
+	err = s.store.SavePromises(ctx, &SavePromises{
+		Menu:  m,
+		Token: *request.Token,
+	})
+	if err != nil {
+		log.Printf("Lsps2Server.GetInfo: store.SavePromises(%+v, %s) err: %v", m, *request.Token, err)
+		return nil, status.New(codes.InternalError, "internal error").Err()
+	}
+
 	menu := []*OpeningFeeParams{}
 	for _, p := range m {
 		menu = append(menu, &OpeningFeeParams{

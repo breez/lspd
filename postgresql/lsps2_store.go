@@ -216,3 +216,24 @@ func (s *Lsps2Store) SetCompleted(ctx context.Context, registrationId uint64) er
 
 	return nil
 }
+
+func (s *Lsps2Store) SavePromises(
+	ctx context.Context,
+	req *lsps2.SavePromises,
+) error {
+	if len(req.Menu) == 0 {
+		return nil
+	}
+
+	rows := [][]interface{}{}
+	for _, p := range req.Menu {
+		rows = append(rows, []interface{}{p.Promise, req.Token})
+	}
+	_, err := s.pool.CopyFrom(
+		ctx,
+		pgx.Identifier{"lsps2", "promises"},
+		[]string{"promise", "token"},
+		pgx.CopyFromRows(rows),
+	)
+	return err
+}
