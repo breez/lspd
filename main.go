@@ -102,6 +102,8 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	openingService := shared.NewOpeningService(openingStore, nodesService)
+	cleanupService := lsps2.NewCleanupService(lsps2Store)
+	go cleanupService.Start(ctx)
 	var interceptors []interceptor.HtlcInterceptor
 	for _, node := range nodes {
 		var htlcInterceptor interceptor.HtlcInterceptor

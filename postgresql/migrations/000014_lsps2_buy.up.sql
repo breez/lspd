@@ -34,5 +34,7 @@ CREATE INDEX idx_lsps2_bought_channels_registration_id ON lsps2.bought_channels 
 
 CREATE TABLE lsps2.promises (
 	promise varchar PRIMARY KEY,
-	token varchar NOT NULL
-)
+	token varchar NOT NULL,
+	valid_until varchar NOT NULL
+);
+CREATE INDEX idx_lsps2_promises_valid_until ON lsps2.promises (valid_until);

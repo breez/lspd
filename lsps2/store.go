@@ -69,4 +69,5 @@ type Lsps2Store interface {
 	GetBuyRegistration(ctx context.Context, scid lightning.ShortChannelID) (*BuyRegistration, error)
 	SetChannelOpened(ctx context.Context, channelOpened *ChannelOpened) error
 	SetCompleted(ctx context.Context, registrationId uint64) error
+	RemoveUnusedExpired(ctx context.Context, before time.Time) error
 }
