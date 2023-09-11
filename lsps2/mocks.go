@@ -91,6 +91,10 @@ func (s *mockLsps2Store) SavePromises(ctx context.Context, req *SavePromises) er
 	return nil
 }
 
+func (s *mockLsps2Store) RemoveUnusedExpired(ctx context.Context, before time.Time) error {
+	return nil
+}
+
 type mockLightningClient struct {
 	openResponses    []*wire.OutPoint
 	openRequests     []*lightning.OpenChannelRequest

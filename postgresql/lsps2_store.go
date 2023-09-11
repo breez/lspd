@@ -3,9 +3,12 @@ package postgresql
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
+	"time"
 
 	"github.com/breez/lspd/lightning"
+	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/lsps2"
 	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/wire"
@@ -233,13 +236,64 @@ func (s *Lsps2Store) SavePromises(
 
 	rows := [][]interface{}{}
 	for _, p := range req.Menu {
-		rows = append(rows, []interface{}{p.Promise, req.Token})
+		rows = append(rows, []interface{}{p.Promise, req.Token, p.ValidUntil})
 	}
 	_, err := s.pool.CopyFrom(
 		ctx,
 		pgx.Identifier{"lsps2", "promises"},
-		[]string{"promise", "token"},
+		[]string{"promise", "token", "valid_until"},
 		pgx.CopyFromRows(rows),
 	)
 	return err
+}
+
+func (s *Lsps2Store) RemoveUnusedExpired(
+	ctx context.Context,
+	before time.Time,
+) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	// Rollback will not do anything if Commit() has already been called.
+	defer tx.Rollback(ctx)
+
+	timestamp := before.Format(lsps0.TIME_FORMAT)
+
+	// Promises can be deleted without issue.
+	tag, err := tx.Exec(
+		ctx,
+		`DELETE FROM lsps2.buy_registrations r
+		 WHERE r.id IN (
+			SELECT sr.id
+			FROM lsps2.buy_registrations sr
+			LEFT JOIN lsps2.bought_channels sb ON sr.id = sb.registration_id
+			WHERE sb.registration_id IS NULL
+				AND sr.params_valid_until < $1
+		 )`,
+		timestamp,
+	)
+	if err != nil {
+		return err
+	}
+	rowsAffected := tag.RowsAffected()
+	if rowsAffected > 0 {
+		log.Printf("Deleted %d expired buy registrations before %s", rowsAffected, timestamp)
+	}
+
+	tag, err = tx.Exec(
+		ctx,
+		`DELETE FROM lsps2.promises
+		 WHERE valid_until < $1`,
+		timestamp,
+	)
+	if err != nil {
+		return err
+	}
+	rowsAffected = tag.RowsAffected()
+	if rowsAffected > 0 {
+		log.Printf("Deleted %d expired promises before %s", rowsAffected, timestamp)
+	}
+
+	return tx.Commit(ctx)
 }
