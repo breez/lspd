@@ -29,9 +29,10 @@ func (m *mockNodesService) GetNodes() []*shared.Node {
 }
 
 type mockOpeningService struct {
-	menu    []*shared.OpeningFeeParams
-	err     error
-	invalid bool
+	menu                     []*shared.OpeningFeeParams
+	err                      error
+	invalid                  bool
+	isCurrentChainFeeCheaper bool
 }
 
 func (m *mockOpeningService) GetFeeParamsMenu(
@@ -46,6 +47,13 @@ func (m *mockOpeningService) ValidateOpeningFeeParams(
 	publicKey *btcec.PublicKey,
 ) bool {
 	return !m.invalid
+}
+
+func (m *mockOpeningService) IsCurrentChainFeeCheaper(
+	token string,
+	params *shared.OpeningFeeParams,
+) bool {
+	return m.isCurrentChainFeeCheaper
 }
 
 type mockLsps2Store struct {
