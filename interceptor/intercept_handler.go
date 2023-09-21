@@ -23,7 +23,7 @@ type Interceptor struct {
 	client              lightning.Client
 	config              *config.NodeConfig
 	store               InterceptStore
-	openingStore        shared.OpeningStore
+	openingService      shared.OpeningService
 	feeEstimator        chain.FeeEstimator
 	feeStrategy         chain.FeeStrategy
 	payHashGroup        singleflight.Group
@@ -34,7 +34,7 @@ func NewInterceptHandler(
 	client lightning.Client,
 	config *config.NodeConfig,
 	store InterceptStore,
-	openingStore shared.OpeningStore,
+	openingService shared.OpeningService,
 	feeEstimator chain.FeeEstimator,
 	feeStrategy chain.FeeStrategy,
 	notificationService *notifications.NotificationService,
@@ -43,7 +43,7 @@ func NewInterceptHandler(
 		client:              client,
 		config:              config,
 		store:               store,
-		openingStore:        openingStore,
+		openingService:      openingService,
 		feeEstimator:        feeEstimator,
 		feeStrategy:         feeStrategy,
 		notificationService: notificationService,
@@ -182,7 +182,7 @@ func (i *Interceptor) Intercept(req shared.InterceptRequest) shared.InterceptRes
 			// Make sure the opening_fee_params are not expired.
 			// If they are expired, but the current chain fee is fine, open channel anyway.
 			if time.Now().UTC().After(validUntil) {
-				if !i.isCurrentChainFeeCheaper(token, params) {
+				if !i.openingService.IsCurrentChainFeeCheaper(token, params) {
 					log.Printf("Intercepted expired payment registration. Failing payment. payment hash: %x, valid until: %s", paymentHash, params.ValidUntil)
 					return shared.InterceptResult{
 						Action:      shared.INTERCEPT_FAIL_HTLC_WITH_CODE,
@@ -328,22 +328,6 @@ func (i *Interceptor) notify(reqPaymentHashStr string, nextHop []byte, isRegiste
 	}
 
 	return nil
-}
-
-func (i *Interceptor) isCurrentChainFeeCheaper(token string, params *shared.OpeningFeeParams) bool {
-	settings, err := i.openingStore.GetFeeParamsSettings(token)
-	if err != nil {
-		log.Printf("Failed to get fee params settings: %v", err)
-		return false
-	}
-
-	for _, setting := range settings {
-		if setting.Params.MinFeeMsat <= params.MinFeeMsat {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmountMsat int64, tag *string) (*wire.OutPoint, error) {
