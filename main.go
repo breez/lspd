@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/cln"
@@ -98,6 +100,7 @@ func main() {
 	lsps2Store := postgresql.NewLsps2Store(pool)
 	notificationService := notifications.NewNotificationService(notificationsStore)
 
+	ctx, cancel := context.WithCancel(context.Background())
 	openingService := shared.NewOpeningService(openingStore, nodesService)
 	var interceptors []interceptor.HtlcInterceptor
 	for _, node := range nodes {
@@ -123,7 +126,21 @@ func main() {
 				log.Fatalf("failed to initialize CLN client: %v", err)
 			}
 
-			interceptor := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, openingService, feeEstimator, feeStrategy, notificationService)
+			legacyHandler := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, openingService, feeEstimator, feeStrategy, notificationService)
+			lsps2Handler := lsps2.NewInterceptHandler(lsps2Store, openingService, client, feeEstimator, &lsps2.InterceptorConfig{
+				AdditionalChannelCapacitySat: uint64(node.NodeConfig.AdditionalChannelCapacity),
+				MinConfs:                     node.NodeConfig.MinConfs,
+				TargetConf:                   node.NodeConfig.TargetConf,
+				FeeStrategy:                  feeStrategy,
+				MinPaymentSizeMsat:           node.NodeConfig.MinPaymentSizeMsat,
+				MaxPaymentSizeMsat:           node.NodeConfig.MaxPaymentSizeMsat,
+				TimeLockDelta:                node.NodeConfig.TimeLockDelta,
+				HtlcMinimumMsat:              node.NodeConfig.MinHtlcMsat,
+				MppTimeout:                   time.Second * 90,
+			})
+			go lsps2Handler.Start(ctx)
+			combinedHandler := shared.NewCombinedHandler(lsps2Handler, legacyHandler)
+			htlcInterceptor, err = cln.NewClnHtlcInterceptor(node.NodeConfig, client, combinedHandler)
 			if err != nil {
 				log.Fatalf("failed to initialize CLN interceptor: %v", err)
 			}
@@ -163,6 +180,8 @@ func main() {
 		for _, interceptor := range interceptors {
 			interceptor.Stop()
 		}
+
+		cancel()
 	}
 
 	for _, interceptor := range interceptors {
