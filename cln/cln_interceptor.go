@@ -12,7 +12,6 @@ import (
 
 	"github.com/breez/lspd/cln_plugin/proto"
 	"github.com/breez/lspd/config"
-	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/shared"
 	sphinx "github.com/lightningnetwork/lightning-onion"
@@ -27,7 +26,7 @@ import (
 )
 
 type ClnHtlcInterceptor struct {
-	interceptor   *interceptor.Interceptor
+	interceptor   shared.InterceptHandler
 	config        *config.NodeConfig
 	pluginAddress string
 	client        *ClnClient
@@ -39,7 +38,7 @@ type ClnHtlcInterceptor struct {
 	cancel        context.CancelFunc
 }
 
-func NewClnHtlcInterceptor(conf *config.NodeConfig, client *ClnClient, interceptor *interceptor.Interceptor) (*ClnHtlcInterceptor, error) {
+func NewClnHtlcInterceptor(conf *config.NodeConfig, client *ClnClient, interceptor shared.InterceptHandler) (*ClnHtlcInterceptor, error) {
 	i := &ClnHtlcInterceptor{
 		config:        conf,
 		pluginAddress: conf.Cln.PluginAddress,
@@ -164,6 +163,8 @@ func (i *ClnHtlcInterceptor) intercept() error {
 					interceptorClient.Send(
 						i.failWithCode(request, interceptResult.FailureCode),
 					)
+				case shared.INTERCEPT_IGNORE:
+					// Do nothing
 				case shared.INTERCEPT_RESUME:
 					fallthrough
 				default:
@@ -203,7 +204,7 @@ func (i *ClnHtlcInterceptor) resumeWithOnion(request *proto.HtlcAccepted, interc
 		log.Printf("resumeWithOnion: hex.DecodeString(%v) error: %v", request.Onion.Payload, err)
 		return i.failWithCode(request, shared.FAILURE_TEMPORARY_CHANNEL_FAILURE)
 	}
-	newPayload, err := encodePayloadWithNextHop(payload, interceptResult.Scid, interceptResult.AmountMsat)
+	newPayload, err := encodePayloadWithNextHop(payload, interceptResult.Scid, interceptResult.AmountMsat, interceptResult.FeeMsat)
 	if err != nil {
 		log.Printf("encodePayloadWithNextHop error: %v", err)
 		return i.failWithCode(request, shared.FAILURE_TEMPORARY_CHANNEL_FAILURE)
@@ -246,7 +247,7 @@ func (i *ClnHtlcInterceptor) failWithCode(request *proto.HtlcAccepted, code shar
 	}
 }
 
-func encodePayloadWithNextHop(payload []byte, scid lightning.ShortChannelID, amountToForward uint64) ([]byte, error) {
+func encodePayloadWithNextHop(payload []byte, scid lightning.ShortChannelID, amountToForward uint64, feeMsat *uint64) ([]byte, error) {
 	bufReader := bytes.NewBuffer(payload)
 	var b [8]byte
 	varInt, err := sphinx.ReadVarInt(bufReader, &b)
@@ -308,8 +309,14 @@ func (i *ClnHtlcInterceptor) mapFailureCode(original shared.InterceptFailureCode
 	switch original {
 	case shared.FAILURE_TEMPORARY_CHANNEL_FAILURE:
 		return "1007"
+	case shared.FAILURE_AMOUNT_BELOW_MINIMUM:
+		return "100B"
+	case shared.FAILURE_INCORRECT_CLTV_EXPIRY:
+		return "100D"
 	case shared.FAILURE_TEMPORARY_NODE_FAILURE:
 		return "2002"
+	case shared.FAILURE_UNKNOWN_NEXT_PEER:
+		return "400A"
 	case shared.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
 		return "400F"
 	default:
