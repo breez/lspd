@@ -12,6 +12,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/elementsproject/glightning/glightning"
+	"github.com/elementsproject/glightning/jrpc2"
 	"golang.org/x/exp/slices"
 )
 
@@ -126,6 +127,10 @@ func (c *ClnClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoi
 
 	if err != nil {
 		log.Printf("CLN: client.FundChannelExt(%v, %v) error: %v", pubkey, req.CapacitySat, err)
+		rpcError, ok := err.(*jrpc2.RpcError)
+		if ok && rpcError.Code == 301 {
+			return nil, fmt.Errorf("not enough funds: %w", err)
+		}
 		return nil, err
 	}
 
