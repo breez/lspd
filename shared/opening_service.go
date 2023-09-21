@@ -17,6 +17,7 @@ import (
 type OpeningService interface {
 	GetFeeParamsMenu(token string, privateKey *btcec.PrivateKey) ([]*OpeningFeeParams, error)
 	ValidateOpeningFeeParams(params *OpeningFeeParams, publicKey *btcec.PublicKey) bool
+	IsCurrentChainFeeCheaper(token string, params *OpeningFeeParams) bool
 }
 
 type openingService struct {
@@ -94,6 +95,22 @@ func (s *openingService) ValidateOpeningFeeParams(params *OpeningFeeParams, publ
 	}
 
 	return true
+}
+
+func (s *openingService) IsCurrentChainFeeCheaper(token string, params *OpeningFeeParams) bool {
+	settings, err := s.store.GetFeeParamsSettings(token)
+	if err != nil {
+		log.Printf("Failed to get fee params settings: %v", err)
+		return false
+	}
+
+	for _, setting := range settings {
+		if setting.Params.MinFeeMsat <= params.MinFeeMsat {
+			return true
+		}
+	}
+
+	return false
 }
 
 func createPromise(lspPrivateKey *btcec.PrivateKey, params *OpeningFeeParams) (*string, error) {
