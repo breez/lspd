@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/aws/aws-sdk-go v1.34.0
-	github.com/breez/lntest v0.0.26
+	github.com/breez/lntest v0.0.1-temp-channel-ready-logging
 	github.com/btcsuite/btcd v0.23.5-0.20230228185050-38331963bddd
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.2
