@@ -108,8 +108,8 @@ jobs:
           # CLN
         ]
         client: [
-          LND,
-          # CLN
+          # LND,
+          CLN
         ]
     steps:
       - name: Checkout
