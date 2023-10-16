@@ -83,7 +83,7 @@ jobs:
       - setup-lnd-lsp
       - setup-cln
       - build-lspd
-    name: test ${{ matrix.implementation }} ${{ matrix.test }}
+    name: test ${{ matrix.lsp }}-lsp ${{ matrix.client }}-client ${{ matrix.test }}
     strategy:
       max-parallel: 6
       matrix:
@@ -103,10 +103,18 @@ jobs:
           testOfflineNotificationRegularForward,
           testOfflineNotificationZeroConfChannel,
         ]
-        implementation: [
+        lsp: [
           LND,
           CLN
         ]
+        client: [
+          LND,
+          CLN
+        ]
+        exclude:
+          - lsp: CLN
+            client: LND
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -114,8 +122,8 @@ jobs:
       - name: Run and Process Test State
         uses: ./.github/actions/test-lspd
         with:
-          TESTRE: "TestLspd/${{ matrix.implementation }}-lspd:_${{ matrix.test }}"
-          artifact-name: TestLspd-${{ matrix.implementation }}-lspd_${{ matrix.test }}
+          TESTRE: "TestLspd/${{ matrix.lsp }}-lsp-${{ matrix.client}}-client:_${{ matrix.test }}"
+          artifact-name: TestLspd-${{ matrix.lsp }}-lsp-${{ matrix.client}}-client_${{ matrix.test }}
           bitcoin-version: ${{ env.BITCOIN_VERSION }}
           LSP_REF: ${{ env.LSP_REF }}
           CLIENT_REF: ${{ env.CLIENT_REF }}

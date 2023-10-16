@@ -61,4 +61,10 @@ func testZeroReserve(p *testParams) {
 	assert.Equal(p.t, c.RemoteReserveMsat, c.CapacityMsat/100)
 	log.Printf("local reserve: %d, remote reserve: %d", c.LocalReserveMsat, c.RemoteReserveMsat)
 	assert.Zero(p.t, c.LocalReserveMsat)
+
+	lspInvoice := p.lsp.LightningNode().CreateBolt11Invoice(&lntest.CreateInvoiceOptions{
+		AmountMsat: innerAmountMsat - 1,
+	})
+	<-time.After(time.Second * 1)
+	p.BreezClient().Node().Pay(lspInvoice.Bolt11)
 }

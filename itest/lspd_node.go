@@ -22,6 +22,7 @@ import (
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
 	"github.com/jackc/pgx/v4/pgxpool"
+	"google.golang.org/grpc/metadata"
 )
 
 var (
@@ -120,6 +121,10 @@ func newLspd(h *lntest.TestHarness, mem *mempoolApi, name string, nodeConfig *co
 	if nodeConfig != nil {
 		if nodeConfig.MinConfs != nil {
 			conf.MinConfs = nodeConfig.MinConfs
+		}
+
+		if nodeConfig.LegacyOnionTokens != nil {
+			conf.LegacyOnionTokens = nodeConfig.LegacyOnionTokens
 		}
 	}
 
@@ -271,9 +276,10 @@ func RegisterPayment(l LspNode, paymentInfo *lspd.PaymentInformation, continueOn
 	encrypted, err := ecies.Encrypt(l.EciesPublicKey(), serialized)
 	lntest.CheckError(l.Harness().T, err)
 
+	ctx := metadata.AppendToOutgoingContext(l.Harness().Ctx, "authorization", "Bearer hello")
 	log.Printf("Registering payment")
 	_, err = l.Rpc().RegisterPayment(
-		l.Harness().Ctx,
+		ctx,
 		&lspd.RegisterPaymentRequest{
 			Blob: encrypted,
 		},

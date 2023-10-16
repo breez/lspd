@@ -45,8 +45,25 @@ func testRegularForward(p *testParams) {
 	})
 	log.Printf(bobInvoice.Bolt11)
 
+	invoiceWithHint := bobInvoice.Bolt11
+	if !ContainsHopHint(p.t, bobInvoice.Bolt11) {
+		chans := p.BreezClient().Node().GetChannels()
+		assert.Len(p.t, chans, 1)
+
+		var id lntest.ShortChannelID
+		if chans[0].RemoteAlias != nil {
+			id = *chans[0].RemoteAlias
+		} else if chans[0].LocalAlias != nil {
+			id = *chans[0].LocalAlias
+		} else {
+			id = chans[0].ShortChannelID
+		}
+		invoiceWithHint = AddHopHint(p.BreezClient(), bobInvoice.Bolt11, p.Lsp(), id, nil)
+	}
+	log.Printf("invoice with hint: %v", invoiceWithHint)
+
 	log.Printf("Alice paying")
-	payResp := alice.Pay(bobInvoice.Bolt11)
+	payResp := alice.Pay(invoiceWithHint)
 	invoiceResult := p.BreezClient().Node().GetInvoice(bobInvoice.PaymentHash)
 
 	assert.Equal(p.t, payResp.PaymentPreimage, invoiceResult.PaymentPreimage)

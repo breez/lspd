@@ -38,6 +38,9 @@ def on_openchannel(openchannel, plugin, **kwargs):
 	plugin.log(repr(openchannel))
 	mindepth = int(0)
 
+	if openchannel['funding_msat'] == 200000000:
+	    return {'result': 'continue'}
+
 	plugin.log(f"This peer is in the zeroconf allowlist, setting mindepth={mindepth}")
 	return {'result': 'continue', 'mindepth': mindepth}
 

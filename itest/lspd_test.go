@@ -14,8 +14,19 @@ var defaultTimeout time.Duration = time.Second * 120
 
 func TestLspd(t *testing.T) {
 	testCases := allTestCases
-	runTests(t, testCases, "LND-lspd", lndLspFunc, lndClientFunc)
-	runTests(t, testCases, "CLN-lspd", clnLspFunc, clnClientFunc)
+	runTests(t, testCases, "LND-lsp-CLN-client", lndLspFunc, clnClientFunc)
+	runTests(t, testCases, "LND-lsp-LND-client", legacyOnionLndLspFunc, lndClientFunc)
+	runTests(t, testCases, "CLN-lsp-CLN-client", clnLspFunc, clnClientFunc)
+}
+
+func legacyOnionLndLspFunc(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, c *config.NodeConfig) LspNode {
+	cfg := c
+	if cfg == nil {
+		cfg = &config.NodeConfig{}
+	}
+
+	cfg.LegacyOnionTokens = []string{"hello"}
+	return lndLspFunc(h, m, mem, cfg)
 }
 
 func lndLspFunc(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, c *config.NodeConfig) LspNode {
