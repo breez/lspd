@@ -5,7 +5,7 @@ inputs:
   lsp-ref:
     description: 'The Git reference for the LSP version of LND'
     required: true
-    default: 'breez-node-v0.16.2-beta'
+    default: 'log-reserve-and-dust-bounds'
 
   go-version:
     description: 'The Go version for building LND'
