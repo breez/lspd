@@ -117,7 +117,7 @@ func testOfflineNotificationRegularForward(p *testParams) {
 	log.Print("Opening channel between lsp and Breez client")
 	channelLB := p.lsp.LightningNode().OpenChannel(p.BreezClient().Node(), &lntest.OpenChannelOptions{
 		AmountSat: 200000,
-		IsPublic:  false,
+		IsPublic:  true,
 	})
 
 	log.Print("Waiting for channel between Alice and the lsp to be ready.")
