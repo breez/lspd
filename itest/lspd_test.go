@@ -14,8 +14,9 @@ var defaultTimeout time.Duration = time.Second * 120
 
 func TestLspd(t *testing.T) {
 	testCases := allTestCases
-	runTests(t, testCases, "LND-lspd", lndLspFunc, lndClientFunc)
-	runTests(t, testCases, "CLN-lspd", clnLspFunc, clnClientFunc)
+	runTests(t, testCases, "LND-lsp-CLN-client", lndLspFunc, clnClientFunc)
+	runTests(t, testCases, "LND-lsp-LND-client", lndLspFunc, lndClientFunc)
+	runTests(t, testCases, "CLN-lsp-CLN-client", clnLspFunc, clnClientFunc)
 }
 
 func lndLspFunc(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, c *config.NodeConfig) LspNode {
