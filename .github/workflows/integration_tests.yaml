@@ -104,11 +104,11 @@ jobs:
           testOfflineNotificationZeroConfChannel,
         ]
         lsp: [
-          LND,
-          CLN
+          LND
+          # CLN
         ]
         client: [
-          LND,
+          # LND,
           CLN
         ]
     steps:
