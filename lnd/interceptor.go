@@ -139,23 +139,7 @@ func (i *LndHtlcInterceptor) intercept() error {
 				interceptResult := i.interceptor.Intercept(&scid, request.PaymentHash, request.OutgoingAmountMsat, request.OutgoingExpiry, request.IncomingExpiry)
 				switch interceptResult.Action {
 				case interceptor.INTERCEPT_RESUME_WITH_ONION:
-					onion, err := i.constructOnion(interceptResult, request.OutgoingExpiry, request.PaymentHash)
-					if err == nil {
-						interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
-							IncomingCircuitKey:      request.IncomingCircuitKey,
-							Action:                  routerrpc.ResolveHoldForwardAction_RESUME,
-							OutgoingAmountMsat:      interceptResult.AmountMsat,
-							OutgoingRequestedChanId: uint64(interceptResult.ChannelId),
-							OnionBlob:               onion,
-						})
-					} else {
-						interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
-							IncomingCircuitKey: request.IncomingCircuitKey,
-							Action:             routerrpc.ResolveHoldForwardAction_FAIL,
-							FailureCode:        lnrpc.Failure_TEMPORARY_CHANNEL_FAILURE,
-						})
-					}
-
+					interceptorClient.Send(i.createOnionResponse(interceptResult, request))
 				case interceptor.INTERCEPT_FAIL_HTLC_WITH_CODE:
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
 						IncomingCircuitKey: request.IncomingCircuitKey,
@@ -256,4 +240,28 @@ func (i *LndHtlcInterceptor) constructOnion(
 	}
 
 	return onionBlob.Bytes(), nil
+}
+
+func (i *LndHtlcInterceptor) createOnionResponse(interceptResult interceptor.InterceptResult, request *routerrpc.ForwardHtlcInterceptRequest) *routerrpc.ForwardHtlcInterceptResponse {
+	onionBlob := request.OnionBlob
+
+	if interceptResult.UseLegacyOnionBlob {
+		var err error
+		onionBlob, err = i.constructOnion(interceptResult, request.OutgoingExpiry, request.PaymentHash)
+		if err != nil {
+			return &routerrpc.ForwardHtlcInterceptResponse{
+				IncomingCircuitKey: request.IncomingCircuitKey,
+				Action:             routerrpc.ResolveHoldForwardAction_FAIL,
+				FailureCode:        lnrpc.Failure_TEMPORARY_CHANNEL_FAILURE,
+			}
+		}
+	}
+
+	return &routerrpc.ForwardHtlcInterceptResponse{
+		IncomingCircuitKey:      request.IncomingCircuitKey,
+		Action:                  routerrpc.ResolveHoldForwardAction_RESUME,
+		OutgoingAmountMsat:      interceptResult.AmountMsat,
+		OutgoingRequestedChanId: uint64(interceptResult.ChannelId),
+		OnionBlob:               onionBlob,
+	}
 }

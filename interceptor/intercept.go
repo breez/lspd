@@ -15,6 +15,7 @@ import (
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/notifications"
 	"github.com/btcsuite/btcd/wire"
+	"golang.org/x/exp/slices"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -35,14 +36,15 @@ var (
 )
 
 type InterceptResult struct {
-	Action          InterceptAction
-	FailureCode     InterceptFailureCode
-	Destination     []byte
-	AmountMsat      uint64
-	TotalAmountMsat uint64
-	ChannelPoint    *wire.OutPoint
-	ChannelId       uint64
-	PaymentSecret   []byte
+	Action             InterceptAction
+	FailureCode        InterceptFailureCode
+	Destination        []byte
+	AmountMsat         uint64
+	TotalAmountMsat    uint64
+	ChannelPoint       *wire.OutPoint
+	ChannelId          uint64
+	PaymentSecret      []byte
+	UseLegacyOnionBlob bool
 }
 
 type Interceptor struct {
@@ -257,14 +259,16 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 					channelID = uint64(chanResult.InitialChannelID)
 				}
 
+				useLegacyOnionBlob := slices.Contains(i.config.LegacyOnionTokens, token)
 				return InterceptResult{
-					Action:          INTERCEPT_RESUME_WITH_ONION,
-					Destination:     destination,
-					ChannelPoint:    channelPoint,
-					ChannelId:       channelID,
-					PaymentSecret:   paymentSecret,
-					AmountMsat:      uint64(amt),
-					TotalAmountMsat: uint64(outgoingAmountMsat),
+					Action:             INTERCEPT_RESUME_WITH_ONION,
+					Destination:        destination,
+					ChannelPoint:       channelPoint,
+					ChannelId:          channelID,
+					PaymentSecret:      paymentSecret,
+					AmountMsat:         uint64(amt),
+					TotalAmountMsat:    uint64(outgoingAmountMsat),
+					UseLegacyOnionBlob: useLegacyOnionBlob,
 				}, nil
 			}
 
