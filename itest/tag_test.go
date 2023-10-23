@@ -5,7 +5,7 @@ import (
 
 	"github.com/breez/lntest"
 	lspd "github.com/breez/lspd/rpc"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,7 +25,7 @@ func registerPaymentWithTag(p *testParams) {
 		Tag:                expected,
 	}, false)
 
-	pgxPool, err := pgxpool.Connect(p.h.Ctx, p.lsp.PostgresBackend().ConnectionString())
+	pgxPool, err := pgxpool.New(p.h.Ctx, p.lsp.PostgresBackend().ConnectionString())
 	if err != nil {
 		p.h.T.Fatalf("Failed to connect to postgres backend: %v", err)
 	}

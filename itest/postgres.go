@@ -18,7 +18,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type PostgresContainer struct {
@@ -91,7 +91,7 @@ HealthCheck:
 			return fmt.Errorf("container '%s' unhealthy", c.id)
 		case "healthy":
 			for {
-				pgxPool, err := pgxpool.Connect(ctx, c.ConnectionString())
+				pgxPool, err := pgxpool.New(ctx, c.ConnectionString())
 				if err == nil {
 					pgxPool.Close()
 					break HealthCheck
@@ -246,7 +246,7 @@ func (c *PostgresContainer) RunMigrations(ctx context.Context, migrationDir stri
 
 	sort.Strings(filenames)
 
-	pgxPool, err := pgxpool.Connect(ctx, c.ConnectionString())
+	pgxPool, err := pgxpool.New(ctx, c.ConnectionString())
 	if err != nil {
 		return fmt.Errorf("failed to connect to postgres: %w", err)
 	}
