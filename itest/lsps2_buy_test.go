@@ -9,7 +9,6 @@ import (
 	"github.com/breez/lntest"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -89,16 +88,10 @@ func testLsps2Buy(p *testParams) {
 	err = json.Unmarshal(buyResp.Data, b)
 	lntest.CheckError(p.t, err)
 
-	pgxPool, err := pgxpool.New(p.h.Ctx, p.lsp.PostgresBackend().ConnectionString())
-	if err != nil {
-		p.h.T.Fatalf("Failed to connect to postgres backend: %v", err)
-	}
-	defer pgxPool.Close()
-
 	scid, err := lightning.NewShortChannelIDFromString(b.Result.Jit_channel_scid)
 	lntest.CheckError(p.t, err)
 
-	rows, err := pgxPool.Query(
+	rows, err := p.lsp.PostgresBackend().Pool().Query(
 		p.h.Ctx,
 		`SELECT token 
 		 FROM lsps2.buy_registrations
