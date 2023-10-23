@@ -21,7 +21,6 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -193,14 +192,7 @@ func (l *lspBase) Initialize() error {
 		return err
 	}
 
-	pgxPool, err := pgxpool.New(l.harness.Ctx, l.postgresBackend.ConnectionString())
-	if err != nil {
-		lntest.PerformCleanup(cleanups)
-		return fmt.Errorf("failed to connect to postgres: %w", err)
-	}
-	defer pgxPool.Close()
-
-	_, err = pgxPool.Exec(
+	_, err = l.postgresBackend.Pool().Exec(
 		l.harness.Ctx,
 		`DELETE FROM new_channel_params`,
 	)
@@ -209,7 +201,7 @@ func (l *lspBase) Initialize() error {
 		return fmt.Errorf("failed to delete new_channel_params: %w", err)
 	}
 
-	_, err = pgxPool.Exec(
+	_, err = l.postgresBackend.Pool().Exec(
 		l.harness.Ctx,
 		`INSERT INTO new_channel_params (validity, params, token)
 		 VALUES 
@@ -301,13 +293,7 @@ type FeeParamSetting struct {
 }
 
 func SetFeeParams(l LspNode, settings []*FeeParamSetting) error {
-	pgxPool, err := pgxpool.New(l.Harness().Ctx, l.PostgresBackend().ConnectionString())
-	if err != nil {
-		return fmt.Errorf("failed to connect to postgres: %w", err)
-	}
-	defer pgxPool.Close()
-
-	_, err = pgxPool.Exec(l.Harness().Ctx, "DELETE FROM new_channel_params")
+	_, err := l.PostgresBackend().Pool().Exec(l.Harness().Ctx, "DELETE FROM new_channel_params")
 	if err != nil {
 		return fmt.Errorf("failed to delete new_channel_params: %w", err)
 	}
@@ -333,7 +319,7 @@ func SetFeeParams(l LspNode, settings []*FeeParamSetting) error {
 		first = false
 	}
 	query += `;`
-	_, err = pgxPool.Exec(l.Harness().Ctx, query)
+	_, err = l.PostgresBackend().Pool().Exec(l.Harness().Ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to insert new_channel_params: %w", err)
 	}
