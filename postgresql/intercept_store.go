@@ -11,8 +11,8 @@ import (
 	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/jackc/pgtype"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type PostgresInterceptStore struct {

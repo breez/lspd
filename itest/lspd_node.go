@@ -21,7 +21,7 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -193,7 +193,7 @@ func (l *lspBase) Initialize() error {
 		return err
 	}
 
-	pgxPool, err := pgxpool.Connect(l.harness.Ctx, l.postgresBackend.ConnectionString())
+	pgxPool, err := pgxpool.New(l.harness.Ctx, l.postgresBackend.ConnectionString())
 	if err != nil {
 		lntest.PerformCleanup(cleanups)
 		return fmt.Errorf("failed to connect to postgres: %w", err)
@@ -301,7 +301,7 @@ type FeeParamSetting struct {
 }
 
 func SetFeeParams(l LspNode, settings []*FeeParamSetting) error {
-	pgxPool, err := pgxpool.Connect(l.Harness().Ctx, l.PostgresBackend().ConnectionString())
+	pgxPool, err := pgxpool.New(l.Harness().Ctx, l.PostgresBackend().ConnectionString())
 	if err != nil {
 		return fmt.Errorf("failed to connect to postgres: %w", err)
 	}

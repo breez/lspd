@@ -12,8 +12,8 @@ import (
 	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/lsps2"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Lsps2Store struct {
