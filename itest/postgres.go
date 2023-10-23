@@ -29,7 +29,12 @@ type PostgresContainer struct {
 	logfile       string
 	isInitialized bool
 	isStarted     bool
+	pool          *pgxpool.Pool
 	mtx           sync.Mutex
+}
+
+func (p *PostgresContainer) Pool() *pgxpool.Pool {
+	return p.pool
 }
 
 func NewPostgresContainer(logfile string) (*PostgresContainer, error) {
@@ -91,9 +96,16 @@ HealthCheck:
 			return fmt.Errorf("container '%s' unhealthy", c.id)
 		case "healthy":
 			for {
-				pgxPool, err := pgxpool.New(ctx, c.ConnectionString())
+				if c.pool == nil {
+					c.pool, err = pgxpool.New(ctx, c.ConnectionString())
+					if err != nil {
+						<-time.After(50 * time.Millisecond)
+						continue
+					}
+				}
+
+				_, err = c.pool.Exec(ctx, "SELECT 1;")
 				if err == nil {
-					pgxPool.Close()
 					break HealthCheck
 				}
 
@@ -175,6 +187,11 @@ func (c *PostgresContainer) Stop(ctx context.Context) error {
 		return nil
 	}
 
+	if c.pool != nil {
+		c.pool.Close()
+		c.pool = nil
+	}
+
 	defer c.cli.Close()
 	err := c.cli.ContainerStop(ctx, c.id, nil)
 	c.isStarted = false
@@ -246,19 +263,13 @@ func (c *PostgresContainer) RunMigrations(ctx context.Context, migrationDir stri
 
 	sort.Strings(filenames)
 
-	pgxPool, err := pgxpool.New(ctx, c.ConnectionString())
-	if err != nil {
-		return fmt.Errorf("failed to connect to postgres: %w", err)
-	}
-	defer pgxPool.Close()
-
 	for _, filename := range filenames {
 		data, err := os.ReadFile(filename)
 		if err != nil {
 			return fmt.Errorf("failed to read migration file '%s': %w", filename, err)
 		}
 
-		_, err = pgxPool.Exec(ctx, string(data))
+		_, err = c.pool.Exec(ctx, string(data))
 		if err != nil {
 			return fmt.Errorf("failed to execute migration file '%s': %w", filename, err)
 		}
