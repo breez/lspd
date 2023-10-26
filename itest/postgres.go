@@ -96,9 +96,16 @@ HealthCheck:
 			return fmt.Errorf("container '%s' unhealthy", c.id)
 		case "healthy":
 			for {
-				pgxPool, err := pgxpool.New(ctx, c.ConnectionString())
+				if c.pool == nil {
+					c.pool, err = pgxpool.New(ctx, c.ConnectionString())
+					if err != nil {
+						<-time.After(50 * time.Millisecond)
+						continue
+					}
+				}
+
+				_, err = c.pool.Exec(ctx, "SELECT 1;")
 				if err == nil {
-					c.pool = pgxPool
 					break HealthCheck
 				}
 
