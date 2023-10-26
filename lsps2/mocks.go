@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/breez/lspd/chain"
+	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/lightning"
-	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
 )
@@ -16,20 +16,20 @@ import (
 var ErrNotImplemented = errors.New("not implemented")
 
 type mockNodesService struct {
-	node *shared.Node
+	node *common.Node
 	err  error
 }
 
-func (m *mockNodesService) GetNode(token string) (*shared.Node, error) {
+func (m *mockNodesService) GetNode(token string) (*common.Node, error) {
 	return m.node, m.err
 }
 
-func (m *mockNodesService) GetNodes() []*shared.Node {
-	return []*shared.Node{m.node}
+func (m *mockNodesService) GetNodes() []*common.Node {
+	return []*common.Node{m.node}
 }
 
 type mockOpeningService struct {
-	menu                     []*shared.OpeningFeeParams
+	menu                     []*common.OpeningFeeParams
 	err                      error
 	invalid                  bool
 	isCurrentChainFeeCheaper bool
@@ -38,12 +38,12 @@ type mockOpeningService struct {
 func (m *mockOpeningService) GetFeeParamsMenu(
 	token string,
 	privateKey *btcec.PrivateKey,
-) ([]*shared.OpeningFeeParams, error) {
+) ([]*common.OpeningFeeParams, error) {
 	return m.menu, m.err
 }
 
 func (m *mockOpeningService) ValidateOpeningFeeParams(
-	params *shared.OpeningFeeParams,
+	params *common.OpeningFeeParams,
 	publicKey *btcec.PublicKey,
 ) bool {
 	return !m.invalid
@@ -51,7 +51,7 @@ func (m *mockOpeningService) ValidateOpeningFeeParams(
 
 func (m *mockOpeningService) IsCurrentChainFeeCheaper(
 	token string,
-	params *shared.OpeningFeeParams,
+	params *common.OpeningFeeParams,
 ) bool {
 	return m.isCurrentChainFeeCheaper
 }

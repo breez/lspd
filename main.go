@@ -15,6 +15,7 @@ import (
 
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/cln"
+	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lnd"
@@ -23,7 +24,6 @@ import (
 	"github.com/breez/lspd/mempool"
 	"github.com/breez/lspd/notifications"
 	"github.com/breez/lspd/postgresql"
-	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/btcec/v2"
 	ecies "github.com/ecies/go/v2"
 )
@@ -54,7 +54,7 @@ func main() {
 		log.Fatalf("failed to initialize nodes: %v", err)
 	}
 
-	nodesService, err := shared.NewNodesService(nodes)
+	nodesService, err := common.NewNodesService(nodes)
 	if err != nil {
 		log.Fatalf("failed to create nodes service: %v", err)
 	}
@@ -101,7 +101,7 @@ func main() {
 	notificationService := notifications.NewNotificationService(notificationsStore)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	openingService := shared.NewOpeningService(openingStore, nodesService)
+	openingService := common.NewOpeningService(openingStore, nodesService)
 	cleanupService := lsps2.NewCleanupService(lsps2Store)
 	go cleanupService.Start(ctx)
 	var interceptors []interceptor.HtlcInterceptor
@@ -141,7 +141,7 @@ func main() {
 				MppTimeout:                   time.Second * 90,
 			})
 			go lsps2Handler.Start(ctx)
-			combinedHandler := shared.NewCombinedHandler(lsps2Handler, legacyHandler)
+			combinedHandler := common.NewCombinedHandler(lsps2Handler, legacyHandler)
 			htlcInterceptor, err = cln.NewClnHtlcInterceptor(node.NodeConfig, client, combinedHandler)
 			if err != nil {
 				log.Fatalf("failed to initialize CLN interceptor: %v", err)
@@ -233,12 +233,12 @@ func main() {
 	log.Printf("lspd exited")
 }
 
-func initializeNodes(configs []*config.NodeConfig) ([]*shared.Node, error) {
+func initializeNodes(configs []*config.NodeConfig) ([]*common.Node, error) {
 	if len(configs) == 0 {
 		return nil, fmt.Errorf("no nodes supplied")
 	}
 
-	nodes := []*shared.Node{}
+	nodes := []*common.Node{}
 	for _, config := range configs {
 		pk, err := hex.DecodeString(config.LspdPrivateKey)
 		if err != nil {
@@ -248,7 +248,7 @@ func initializeNodes(configs []*config.NodeConfig) ([]*shared.Node, error) {
 		eciesPrivateKey := ecies.NewPrivateKeyFromBytes(pk)
 		eciesPublicKey := eciesPrivateKey.PublicKey
 		privateKey, publicKey := btcec.PrivKeyFromBytes(pk)
-		node := &shared.Node{
+		node := &common.Node{
 			NodeConfig:      config,
 			PrivateKey:      privateKey,
 			PublicKey:       publicKey,

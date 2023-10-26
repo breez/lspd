@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/breez/lspd/chain"
+	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/notifications"
-	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/wire"
 	"golang.org/x/sync/singleflight"
 )
@@ -23,7 +23,7 @@ type Interceptor struct {
 	client              lightning.Client
 	config              *config.NodeConfig
 	store               InterceptStore
-	openingService      shared.OpeningService
+	openingService      common.OpeningService
 	feeEstimator        chain.FeeEstimator
 	feeStrategy         chain.FeeStrategy
 	payHashGroup        singleflight.Group
@@ -34,7 +34,7 @@ func NewInterceptHandler(
 	client lightning.Client,
 	config *config.NodeConfig,
 	store InterceptStore,
-	openingService shared.OpeningService,
+	openingService common.OpeningService,
 	feeEstimator chain.FeeEstimator,
 	feeStrategy chain.FeeStrategy,
 	notificationService *notifications.NotificationService,
@@ -50,15 +50,15 @@ func NewInterceptHandler(
 	}
 }
 
-func (i *Interceptor) Intercept(req shared.InterceptRequest) shared.InterceptResult {
+func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptResult {
 	reqPaymentHashStr := hex.EncodeToString(req.PaymentHash)
 	resp, _, _ := i.payHashGroup.Do(reqPaymentHashStr, func() (interface{}, error) {
 		token, params, paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, channelPoint, tag, err := i.store.PaymentInfo(req.PaymentHash)
 		if err != nil {
 			log.Printf("paymentInfo(%x) error: %v", req.PaymentHash, err)
-			return shared.InterceptResult{
-				Action:      shared.INTERCEPT_FAIL_HTLC_WITH_CODE,
-				FailureCode: shared.FAILURE_TEMPORARY_NODE_FAILURE,
+			return common.InterceptResult{
+				Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+				FailureCode: common.FAILURE_TEMPORARY_NODE_FAILURE,
 			}, nil
 		}
 
@@ -72,16 +72,16 @@ func (i *Interceptor) Intercept(req shared.InterceptRequest) shared.InterceptRes
 		nextHop, _ := i.client.GetPeerId(&req.Scid)
 		if err != nil {
 			log.Printf("GetPeerId(%s) error: %v", req.Scid.ToString(), err)
-			return shared.InterceptResult{
-				Action: shared.INTERCEPT_RESUME,
+			return common.InterceptResult{
+				Action: common.INTERCEPT_RESUME,
 			}, nil
 		}
 
 		// If the payment was registered, but the next hop is not the destination
 		// that means we are not the last hop of the payment, so we'll just forward.
 		if isRegistered && nextHop != nil && !bytes.Equal(nextHop, destination) {
-			return shared.InterceptResult{
-				Action: shared.INTERCEPT_RESUME,
+			return common.InterceptResult{
+				Action: common.INTERCEPT_RESUME,
 			}, nil
 		}
 
@@ -93,8 +93,8 @@ func (i *Interceptor) Intercept(req shared.InterceptRequest) shared.InterceptRes
 			// If the next hop cannot be deduced from the scid, and the payment
 			// is not registered, there's nothing left to be done. Just continue.
 			if !isRegistered {
-				return shared.InterceptResult{
-					Action: shared.INTERCEPT_RESUME,
+				return common.InterceptResult{
+					Action: common.INTERCEPT_RESUME,
 				}, nil
 			}
 
@@ -106,17 +106,17 @@ func (i *Interceptor) Intercept(req shared.InterceptRequest) shared.InterceptRes
 		isConnected, err := i.client.IsConnected(nextHop)
 		if err != nil {
 			log.Printf("IsConnected(%x) error: %v", nextHop, err)
-			return &shared.InterceptResult{
-				Action:      shared.INTERCEPT_FAIL_HTLC_WITH_CODE,
-				FailureCode: shared.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+			return &common.InterceptResult{
+				Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+				FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
 			}, nil
 		}
 
 		if isProbe {
 			// If this is a known probe, we'll quit early for non-connected clients.
 			if !isConnected {
-				return shared.InterceptResult{
-					Action: shared.INTERCEPT_RESUME,
+				return common.InterceptResult{
+					Action: common.INTERCEPT_RESUME,
 				}, nil
 			}
 
@@ -126,9 +126,9 @@ func (i *Interceptor) Intercept(req shared.InterceptRequest) shared.InterceptRes
 			// node. But senders implementnig the probing-01: prefix should
 			// know that the actual payment would probably succeed.
 			if channelPoint == nil {
-				return shared.InterceptResult{
-					Action:      shared.INTERCEPT_FAIL_HTLC_WITH_CODE,
-					FailureCode: shared.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
+				return common.InterceptResult{
+					Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureCode: common.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
 				}, nil
 			}
 		}
@@ -143,8 +143,8 @@ func (i *Interceptor) Intercept(req shared.InterceptRequest) shared.InterceptRes
 
 		// The peer is online, we can resume the htlc if it's not a channel open.
 		if !isRegistered {
-			return shared.InterceptResult{
-				Action: shared.INTERCEPT_RESUME,
+			return common.InterceptResult{
+				Action: common.INTERCEPT_RESUME,
 			}, nil
 		}
 
@@ -153,7 +153,7 @@ func (i *Interceptor) Intercept(req shared.InterceptRequest) shared.InterceptRes
 			// TODO: When opening_fee_params is enforced, turn this check in a temporary channel failure.
 			if params == nil {
 				log.Printf("DEPRECATED: Intercepted htlc with deprecated fee mechanism. Using default fees. payment hash: %s", reqPaymentHashStr)
-				params = &shared.OpeningFeeParams{
+				params = &common.OpeningFeeParams{
 					MinFeeMsat:           uint64(i.config.ChannelMinimumFeeMsat),
 					Proportional:         uint32(i.config.ChannelFeePermyriad * 100),
 					ValidUntil:           time.Now().UTC().Add(time.Duration(time.Hour * 24)).Format(lsps0.TIME_FORMAT),
@@ -164,18 +164,18 @@ func (i *Interceptor) Intercept(req shared.InterceptRequest) shared.InterceptRes
 
 			// Make sure the cltv delta is enough.
 			if int64(req.IncomingExpiry)-int64(req.OutgoingExpiry) < int64(i.config.TimeLockDelta) {
-				return shared.InterceptResult{
-					Action:      shared.INTERCEPT_FAIL_HTLC_WITH_CODE,
-					FailureCode: shared.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+				return common.InterceptResult{
+					Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
 				}, nil
 			}
 
 			validUntil, err := time.Parse(lsps0.TIME_FORMAT, params.ValidUntil)
 			if err != nil {
 				log.Printf("time.Parse(%s, %s) failed. Failing channel open: %v", lsps0.TIME_FORMAT, params.ValidUntil, err)
-				return shared.InterceptResult{
-					Action:      shared.INTERCEPT_FAIL_HTLC_WITH_CODE,
-					FailureCode: shared.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+				return common.InterceptResult{
+					Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
 				}, nil
 			}
 
@@ -184,9 +184,9 @@ func (i *Interceptor) Intercept(req shared.InterceptRequest) shared.InterceptRes
 			if time.Now().UTC().After(validUntil) {
 				if !i.openingService.IsCurrentChainFeeCheaper(token, params) {
 					log.Printf("Intercepted expired payment registration. Failing payment. payment hash: %x, valid until: %s", paymentHash, params.ValidUntil)
-					return shared.InterceptResult{
-						Action:      shared.INTERCEPT_FAIL_HTLC_WITH_CODE,
-						FailureCode: shared.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					return common.InterceptResult{
+						Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+						FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
 					}, nil
 				}
 
@@ -196,9 +196,9 @@ func (i *Interceptor) Intercept(req shared.InterceptRequest) shared.InterceptRes
 			channelPoint, err = i.openChannel(req.PaymentHash, destination, incomingAmountMsat, tag)
 			if err != nil {
 				log.Printf("openChannel(%x, %v) err: %v", destination, incomingAmountMsat, err)
-				return shared.InterceptResult{
-					Action:      shared.INTERCEPT_FAIL_HTLC_WITH_CODE,
-					FailureCode: shared.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+				return common.InterceptResult{
+					Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
 				}, nil
 			}
 		}
@@ -223,9 +223,9 @@ func (i *Interceptor) Intercept(req shared.InterceptRequest) shared.InterceptRes
 
 				if err != nil {
 					log.Printf("insertChannel error: %v", err)
-					return shared.InterceptResult{
-						Action:      shared.INTERCEPT_FAIL_HTLC_WITH_CODE,
-						FailureCode: shared.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					return common.InterceptResult{
+						Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+						FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
 					}, nil
 				}
 
@@ -234,8 +234,8 @@ func (i *Interceptor) Intercept(req shared.InterceptRequest) shared.InterceptRes
 					channelID = chanResult.InitialChannelID
 				}
 
-				return shared.InterceptResult{
-					Action:          shared.INTERCEPT_RESUME_WITH_ONION,
+				return common.InterceptResult{
+					Action:          common.INTERCEPT_RESUME_WITH_ONION,
 					Destination:     destination,
 					ChannelPoint:    channelPoint,
 					Scid:            channelID,
@@ -254,16 +254,16 @@ func (i *Interceptor) Intercept(req shared.InterceptRequest) shared.InterceptRes
 		}
 
 		log.Printf("Error: Channel failed to open... timed out. ")
-		return shared.InterceptResult{
-			Action:      shared.INTERCEPT_FAIL_HTLC_WITH_CODE,
-			FailureCode: shared.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+		return common.InterceptResult{
+			Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+			FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
 		}, nil
 	})
 
-	return resp.(shared.InterceptResult)
+	return resp.(common.InterceptResult)
 }
 
-func (i *Interceptor) notify(reqPaymentHashStr string, nextHop []byte, isRegistered bool) *shared.InterceptResult {
+func (i *Interceptor) notify(reqPaymentHashStr string, nextHop []byte, isRegistered bool) *common.InterceptResult {
 	// If not connected, send a notification to the registered
 	// notification service for this client if available.
 	notified, err := i.notificationService.Notify(
@@ -275,8 +275,8 @@ func (i *Interceptor) notify(reqPaymentHashStr string, nextHop []byte, isRegiste
 	// is offline or unknown. We'll resume the HTLC (which will
 	// result in UNKOWN_NEXT_PEER)
 	if err != nil || !notified {
-		return &shared.InterceptResult{
-			Action: shared.INTERCEPT_RESUME,
+		return &common.InterceptResult{
+			Action: common.INTERCEPT_RESUME,
 		}
 	}
 
@@ -299,8 +299,8 @@ func (i *Interceptor) notify(reqPaymentHashStr string, nextHop []byte, isRegiste
 			nextHop,
 			err,
 		)
-		return &shared.InterceptResult{
-			Action: shared.INTERCEPT_RESUME,
+		return &common.InterceptResult{
+			Action: common.INTERCEPT_RESUME,
 		}
 	}
 
@@ -321,8 +321,8 @@ func (i *Interceptor) notify(reqPaymentHashStr string, nextHop []byte, isRegiste
 				nextHop,
 				err,
 			)
-			return &shared.InterceptResult{
-				Action: shared.INTERCEPT_RESUME,
+			return &common.InterceptResult{
+				Action: common.INTERCEPT_RESUME,
 			}
 		}
 	}

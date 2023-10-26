@@ -8,9 +8,9 @@ import (
 	"net"
 	"strings"
 
+	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/notifications"
 	lspdrpc "github.com/breez/lspd/rpc"
-	"github.com/breez/lspd/shared"
 	"github.com/caddyserver/certmagic"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"google.golang.org/grpc"
@@ -20,7 +20,7 @@ import (
 )
 
 type grpcServer struct {
-	nodesService    shared.NodesService
+	nodesService    common.NodesService
 	address         string
 	certmagicDomain string
 	lis             net.Listener
@@ -31,11 +31,11 @@ type grpcServer struct {
 
 type nodeContext struct {
 	token string
-	node  *shared.Node
+	node  *common.Node
 }
 
 func NewGrpcServer(
-	nodesService shared.NodesService,
+	nodesService common.NodesService,
 	address string,
 	certmagicDomain string,
 	c lspdrpc.ChannelOpenerServer,

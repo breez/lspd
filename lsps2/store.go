@@ -6,14 +6,14 @@ import (
 	"log"
 	"time"
 
+	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
-	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/wire"
 )
 
 type SavePromises struct {
-	Menu  []*shared.OpeningFeeParams
+	Menu  []*common.OpeningFeeParams
 	Token string
 }
 
@@ -21,7 +21,7 @@ type RegisterBuy struct {
 	LspId            string
 	PeerId           string
 	Scid             lightning.ShortChannelID
-	OpeningFeeParams shared.OpeningFeeParams
+	OpeningFeeParams common.OpeningFeeParams
 	PaymentSizeMsat  *uint64
 	Mode             OpeningMode
 }
@@ -32,7 +32,7 @@ type BuyRegistration struct {
 	PeerId           string // TODO: Make peerId in the registration a byte array.
 	Token            string
 	Scid             lightning.ShortChannelID
-	OpeningFeeParams shared.OpeningFeeParams
+	OpeningFeeParams common.OpeningFeeParams
 	PaymentSizeMsat  *uint64
 	Mode             OpeningMode
 	ChannelPoint     *wire.OutPoint

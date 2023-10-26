@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/lsps2"
-	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -171,7 +171,7 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 		LspId:  db_lsp_id,
 		PeerId: db_peer_id,
 		Scid:   lightning.ShortChannelID(uint64(db_scid)),
-		OpeningFeeParams: shared.OpeningFeeParams{
+		OpeningFeeParams: common.OpeningFeeParams{
 			MinFeeMsat:           uint64(db_params_min_fee_msat),
 			Proportional:         db_params_proportional,
 			ValidUntil:           db_params_valid_until,

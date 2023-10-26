@@ -1,4 +1,4 @@
-package shared
+package common
 
 import "github.com/lightningnetwork/lnd/tlv"
 

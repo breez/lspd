@@ -7,8 +7,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/lightning"
-	"github.com/breez/lspd/shared"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
@@ -23,7 +23,7 @@ func NewPostgresInterceptStore(pool *pgxpool.Pool) *PostgresInterceptStore {
 	return &PostgresInterceptStore{pool: pool}
 }
 
-func (s *PostgresInterceptStore) PaymentInfo(htlcPaymentHash []byte) (string, *shared.OpeningFeeParams, []byte, []byte, []byte, int64, int64, *wire.OutPoint, *string, error) {
+func (s *PostgresInterceptStore) PaymentInfo(htlcPaymentHash []byte) (string, *common.OpeningFeeParams, []byte, []byte, []byte, int64, int64, *wire.OutPoint, *string, error) {
 	var (
 		p, tag                                  *string
 		paymentHash, paymentSecret, destination []byte
@@ -72,7 +72,7 @@ func (s *PostgresInterceptStore) SetFundingTx(paymentHash []byte, channelPoint *
 	return err
 }
 
-func (s *PostgresInterceptStore) RegisterPayment(token string, params *shared.OpeningFeeParams, destination, paymentHash, paymentSecret []byte, incomingAmountMsat, outgoingAmountMsat int64, tag string) error {
+func (s *PostgresInterceptStore) RegisterPayment(token string, params *common.OpeningFeeParams, destination, paymentHash, paymentSecret []byte, incomingAmountMsat, outgoingAmountMsat int64, tag string) error {
 	var t *string
 	if tag != "" {
 		t = &tag

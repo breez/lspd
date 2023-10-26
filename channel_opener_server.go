@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/breez/lspd/btceclegacy"
+	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
 	lspdrpc "github.com/breez/lspd/rpc"
-	"github.com/breez/lspd/shared"
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/codes"
@@ -28,12 +28,12 @@ import (
 type channelOpenerServer struct {
 	lspdrpc.ChannelOpenerServer
 	store          interceptor.InterceptStore
-	openingService shared.OpeningService
+	openingService common.OpeningService
 }
 
 func NewChannelOpenerServer(
 	store interceptor.InterceptStore,
-	openingService shared.OpeningService,
+	openingService common.OpeningService,
 ) *channelOpenerServer {
 	return &channelOpenerServer{
 		store:          store,
@@ -128,7 +128,7 @@ func (s *channelOpenerServer) RegisterPayment(
 	// clients to use opening_fee_params.
 	if pi.OpeningFeeParams != nil {
 		valid := s.openingService.ValidateOpeningFeeParams(
-			&shared.OpeningFeeParams{
+			&common.OpeningFeeParams{
 				MinFeeMsat:           pi.OpeningFeeParams.MinMsat,
 				Proportional:         pi.OpeningFeeParams.Proportional,
 				ValidUntil:           pi.OpeningFeeParams.ValidUntil,
@@ -157,7 +157,7 @@ func (s *channelOpenerServer) RegisterPayment(
 		log.Printf("checkPayment(%v, %v) error: %v", pi.IncomingAmountMsat, pi.OutgoingAmountMsat, err)
 		return nil, fmt.Errorf("checkPayment(%v, %v) error: %v", pi.IncomingAmountMsat, pi.OutgoingAmountMsat, err)
 	}
-	params := &shared.OpeningFeeParams{
+	params := &common.OpeningFeeParams{
 		MinFeeMsat:           pi.OpeningFeeParams.MinMsat,
 		Proportional:         pi.OpeningFeeParams.Proportional,
 		ValidUntil:           pi.OpeningFeeParams.ValidUntil,
@@ -217,7 +217,7 @@ func (s *channelOpenerServer) OpenChannel(ctx context.Context, in *lspdrpc.OpenC
 	return r.(*lspdrpc.OpenChannelReply), err
 }
 
-func getSignedEncryptedData(n *shared.Node, in *lspdrpc.Encrypted) (string, []byte, bool, error) {
+func getSignedEncryptedData(n *common.Node, in *lspdrpc.Encrypted) (string, []byte, bool, error) {
 	usedEcies := true
 	signedBlob, err := ecies.Decrypt(n.EciesPrivateKey, in.Data)
 	if err != nil {
@@ -312,7 +312,7 @@ func (s *channelOpenerServer) CheckChannels(ctx context.Context, in *lspdrpc.Enc
 	return &lspdrpc.Encrypted{Data: encrypted}, nil
 }
 
-func (s *channelOpenerServer) getNode(ctx context.Context) (*shared.Node, string, error) {
+func (s *channelOpenerServer) getNode(ctx context.Context) (*common.Node, string, error) {
 	nd := ctx.Value(contextKey("node"))
 	if nd == nil {
 		return nil, "", status.Errorf(codes.PermissionDenied, "Not authorized")

@@ -4,10 +4,10 @@ import (
 	"context"
 	"log"
 
+	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/lsps0/codes"
 	"github.com/breez/lspd/lsps0/status"
-	"github.com/breez/lspd/shared"
 )
 
 var SupportedVersion uint32 = 1
@@ -57,9 +57,9 @@ type Lsps2Server interface {
 	Buy(ctx context.Context, request *BuyRequest) (*BuyResponse, error)
 }
 type server struct {
-	openingService shared.OpeningService
-	nodesService   shared.NodesService
-	node           *shared.Node
+	openingService common.OpeningService
+	nodesService   common.NodesService
+	node           *common.Node
 	store          Lsps2Store
 }
 
@@ -71,9 +71,9 @@ const (
 )
 
 func NewLsps2Server(
-	openingService shared.OpeningService,
-	nodesService shared.NodesService,
-	node *shared.Node,
+	openingService common.OpeningService,
+	nodesService common.NodesService,
+	node *common.Node,
 	store Lsps2Store,
 ) Lsps2Server {
 	return &server{
@@ -106,7 +106,7 @@ func (s *server) GetInfo(
 	}
 
 	node, err := s.nodesService.GetNode(*request.Token)
-	if err == shared.ErrNodeNotFound {
+	if err == common.ErrNodeNotFound {
 		return nil, status.New(codes.Code(2), "unrecognized_or_stale_token").Err()
 	}
 	if err != nil {
@@ -124,7 +124,7 @@ func (s *server) GetInfo(
 	}
 
 	m, err := s.openingService.GetFeeParamsMenu(*request.Token, node.PrivateKey)
-	if err == shared.ErrNodeNotFound {
+	if err == common.ErrNodeNotFound {
 		return nil, status.New(codes.Code(2), "unrecognized_or_stale_token").Err()
 	}
 	if err != nil {
@@ -167,7 +167,7 @@ func (s *server) Buy(
 		return nil, status.New(codes.Code(1), "unsupported_version").Err()
 	}
 
-	params := &shared.OpeningFeeParams{
+	params := &common.OpeningFeeParams{
 		MinFeeMsat:           request.OpeningFeeParams.MinFeeMsat,
 		Proportional:         request.OpeningFeeParams.Proportional,
 		ValidUntil:           request.OpeningFeeParams.ValidUntil,
