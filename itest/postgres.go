@@ -180,6 +180,11 @@ func (c *PostgresContainer) Stop(ctx context.Context) error {
 		return nil
 	}
 
+	if c.pool != nil {
+		c.pool.Close()
+		c.pool = nil
+	}
+
 	defer c.cli.Close()
 	err := c.cli.ContainerStop(ctx, c.id, nil)
 	c.isStarted = false
