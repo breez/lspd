@@ -6,13 +6,13 @@ import (
 	"log"
 	"time"
 
-	"github.com/breez/lspd/shared"
+	"github.com/breez/lspd/common"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 type extendedParams struct {
 	Token  string                  `json:"token"`
-	Params shared.OpeningFeeParams `json:"fees_params"`
+	Params common.OpeningFeeParams `json:"fees_params"`
 }
 
 type PostgresOpeningStore struct {
@@ -23,14 +23,14 @@ func NewPostgresOpeningStore(pool *pgxpool.Pool) *PostgresOpeningStore {
 	return &PostgresOpeningStore{pool: pool}
 }
 
-func (s *PostgresOpeningStore) GetFeeParamsSettings(token string) ([]*shared.OpeningFeeParamsSetting, error) {
+func (s *PostgresOpeningStore) GetFeeParamsSettings(token string) ([]*common.OpeningFeeParamsSetting, error) {
 	rows, err := s.pool.Query(context.Background(), `SELECT validity, params FROM new_channel_params WHERE token=$1`, token)
 	if err != nil {
 		log.Printf("GetFeeParamsSettings(%v) error: %v", token, err)
 		return nil, err
 	}
 
-	var settings []*shared.OpeningFeeParamsSetting
+	var settings []*common.OpeningFeeParamsSetting
 	for rows.Next() {
 		var validity int64
 		var param string
@@ -39,7 +39,7 @@ func (s *PostgresOpeningStore) GetFeeParamsSettings(token string) ([]*shared.Ope
 			return nil, err
 		}
 
-		var params *shared.OpeningFeeParams
+		var params *common.OpeningFeeParams
 		err := json.Unmarshal([]byte(param), &params)
 		if err != nil {
 			log.Printf("Failed to unmarshal fee param '%v': %v", param, err)
@@ -47,7 +47,7 @@ func (s *PostgresOpeningStore) GetFeeParamsSettings(token string) ([]*shared.Ope
 		}
 
 		duration := time.Second * time.Duration(validity)
-		settings = append(settings, &shared.OpeningFeeParamsSetting{
+		settings = append(settings, &common.OpeningFeeParamsSetting{
 			Validity: duration,
 			Params:   params,
 		})

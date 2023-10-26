@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/breez/lspd/cln_plugin/proto"
+	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lightning"
-	"github.com/breez/lspd/shared"
 	sphinx "github.com/lightningnetwork/lightning-onion"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/record"
@@ -26,7 +26,7 @@ import (
 )
 
 type ClnHtlcInterceptor struct {
-	interceptor   shared.InterceptHandler
+	interceptor   common.InterceptHandler
 	config        *config.NodeConfig
 	pluginAddress string
 	client        *ClnClient
@@ -38,7 +38,7 @@ type ClnHtlcInterceptor struct {
 	cancel        context.CancelFunc
 }
 
-func NewClnHtlcInterceptor(conf *config.NodeConfig, client *ClnClient, interceptor shared.InterceptHandler) (*ClnHtlcInterceptor, error) {
+func NewClnHtlcInterceptor(conf *config.NodeConfig, client *ClnClient, interceptor common.InterceptHandler) (*ClnHtlcInterceptor, error) {
 	i := &ClnHtlcInterceptor{
 		config:        conf,
 		pluginAddress: conf.Cln.PluginAddress,
@@ -147,7 +147,7 @@ func (i *ClnHtlcInterceptor) intercept() error {
 					return
 				}
 
-				interceptResult := i.interceptor.Intercept(shared.InterceptRequest{
+				interceptResult := i.interceptor.Intercept(common.InterceptRequest{
 					Identifier:         request.Onion.SharedSecret,
 					Scid:               *scid,
 					PaymentHash:        paymentHash,
@@ -157,15 +157,15 @@ func (i *ClnHtlcInterceptor) intercept() error {
 					OutgoingExpiry:     request.Onion.OutgoingCltvValue,
 				})
 				switch interceptResult.Action {
-				case shared.INTERCEPT_RESUME_WITH_ONION:
+				case common.INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(i.resumeWithOnion(request, interceptResult))
-				case shared.INTERCEPT_FAIL_HTLC_WITH_CODE:
+				case common.INTERCEPT_FAIL_HTLC_WITH_CODE:
 					interceptorClient.Send(
 						i.failWithCode(request, interceptResult.FailureCode),
 					)
-				case shared.INTERCEPT_IGNORE:
+				case common.INTERCEPT_IGNORE:
 					// Do nothing
-				case shared.INTERCEPT_RESUME:
+				case common.INTERCEPT_RESUME:
 					fallthrough
 				default:
 					interceptorClient.Send(
@@ -197,17 +197,17 @@ func (i *ClnHtlcInterceptor) WaitStarted() {
 	i.initWg.Wait()
 }
 
-func (i *ClnHtlcInterceptor) resumeWithOnion(request *proto.HtlcAccepted, interceptResult shared.InterceptResult) *proto.HtlcResolution {
+func (i *ClnHtlcInterceptor) resumeWithOnion(request *proto.HtlcAccepted, interceptResult common.InterceptResult) *proto.HtlcResolution {
 	//decoding and encoding onion with alias in type 6 record.
 	payload, err := hex.DecodeString(request.Onion.Payload)
 	if err != nil {
 		log.Printf("resumeWithOnion: hex.DecodeString(%v) error: %v", request.Onion.Payload, err)
-		return i.failWithCode(request, shared.FAILURE_TEMPORARY_CHANNEL_FAILURE)
+		return i.failWithCode(request, common.FAILURE_TEMPORARY_CHANNEL_FAILURE)
 	}
 	newPayload, err := encodePayloadWithNextHop(payload, interceptResult.Scid, interceptResult.AmountMsat, interceptResult.FeeMsat)
 	if err != nil {
 		log.Printf("encodePayloadWithNextHop error: %v", err)
-		return i.failWithCode(request, shared.FAILURE_TEMPORARY_CHANNEL_FAILURE)
+		return i.failWithCode(request, common.FAILURE_TEMPORARY_CHANNEL_FAILURE)
 	}
 
 	newPayloadStr := hex.EncodeToString(newPayload)
@@ -234,7 +234,7 @@ func (i *ClnHtlcInterceptor) defaultResolution(request *proto.HtlcAccepted) *pro
 	}
 }
 
-func (i *ClnHtlcInterceptor) failWithCode(request *proto.HtlcAccepted, code shared.InterceptFailureCode) *proto.HtlcResolution {
+func (i *ClnHtlcInterceptor) failWithCode(request *proto.HtlcAccepted, code common.InterceptFailureCode) *proto.HtlcResolution {
 	return &proto.HtlcResolution{
 		Correlationid: request.Correlationid,
 		Outcome: &proto.HtlcResolution_Fail{
@@ -305,19 +305,19 @@ func encodePayloadWithNextHop(payload []byte, scid lightning.ShortChannelID, amo
 	return newPayloadBuf.Bytes(), nil
 }
 
-func (i *ClnHtlcInterceptor) mapFailureCode(original shared.InterceptFailureCode) string {
+func (i *ClnHtlcInterceptor) mapFailureCode(original common.InterceptFailureCode) string {
 	switch original {
-	case shared.FAILURE_TEMPORARY_CHANNEL_FAILURE:
+	case common.FAILURE_TEMPORARY_CHANNEL_FAILURE:
 		return "1007"
-	case shared.FAILURE_AMOUNT_BELOW_MINIMUM:
+	case common.FAILURE_AMOUNT_BELOW_MINIMUM:
 		return "100B"
-	case shared.FAILURE_INCORRECT_CLTV_EXPIRY:
+	case common.FAILURE_INCORRECT_CLTV_EXPIRY:
 		return "100D"
-	case shared.FAILURE_TEMPORARY_NODE_FAILURE:
+	case common.FAILURE_TEMPORARY_NODE_FAILURE:
 		return "2002"
-	case shared.FAILURE_UNKNOWN_NEXT_PEER:
+	case common.FAILURE_UNKNOWN_NEXT_PEER:
 		return "400A"
-	case shared.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
+	case common.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
 		return "400F"
 	default:
 		log.Printf("Unknown failure code %v, default to temporary channel failure.", original)

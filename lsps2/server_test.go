@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/lsps0/status"
-	"github.com/breez/lspd/shared"
 	"github.com/stretchr/testify/assert"
 )
 
 var token = "blah"
-var node = func() *shared.Node {
-	return &shared.Node{
+var node = func() *common.Node {
+	return &common.Node{
 		NodeConfig: &config.NodeConfig{
 			MinPaymentSizeMsat: 1000,
 			MaxPaymentSizeMsat: 10000,
@@ -40,7 +40,7 @@ func Test_GetInfo_UnsupportedVersion(t *testing.T) {
 
 func Test_GetInfo_InvalidToken(t *testing.T) {
 	n := &mockNodesService{
-		err: shared.ErrNodeNotFound,
+		err: common.ErrNodeNotFound,
 	}
 	o := &mockOpeningService{}
 	st := &mockLsps2Store{}
@@ -58,7 +58,7 @@ func Test_GetInfo_InvalidToken(t *testing.T) {
 func Test_GetInfo_EmptyMenu(t *testing.T) {
 	node := node()
 	n := &mockNodesService{node: node}
-	o := &mockOpeningService{menu: []*shared.OpeningFeeParams{}}
+	o := &mockOpeningService{menu: []*common.OpeningFeeParams{}}
 	st := &mockLsps2Store{}
 	s := NewLsps2Server(o, n, node, st)
 	resp, err := s.GetInfo(context.Background(), &GetInfoRequest{
@@ -75,7 +75,7 @@ func Test_GetInfo_EmptyMenu(t *testing.T) {
 func Test_GetInfo_PopulatedMenu_Ordered(t *testing.T) {
 	node := node()
 	n := &mockNodesService{node: node}
-	o := &mockOpeningService{menu: []*shared.OpeningFeeParams{
+	o := &mockOpeningService{menu: []*common.OpeningFeeParams{
 		{
 			MinFeeMsat:           1,
 			Proportional:         2,
