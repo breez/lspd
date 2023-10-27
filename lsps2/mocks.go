@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/GoWebProd/uuid7"
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/lightning"
@@ -83,7 +84,7 @@ func (s *mockLsps2Store) SetChannelOpened(ctx context.Context, channelOpened *Ch
 	return s.err
 }
 
-func (s *mockLsps2Store) SetCompleted(ctx context.Context, registrationId uint64) error {
+func (s *mockLsps2Store) SetCompleted(ctx context.Context, registrationId uuid7.UUID) error {
 	return nil
 }
 

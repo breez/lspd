@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/GoWebProd/uuid7"
 	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
@@ -27,7 +28,7 @@ type RegisterBuy struct {
 }
 
 type BuyRegistration struct {
-	Id               uint64
+	Id               uuid7.UUID
 	LspId            string
 	PeerId           string // TODO: Make peerId in the registration a byte array.
 	Token            string
@@ -54,7 +55,7 @@ func (b *BuyRegistration) IsExpired() bool {
 }
 
 type ChannelOpened struct {
-	RegistrationId  uint64
+	RegistrationId  uuid7.UUID
 	Outpoint        *wire.OutPoint
 	FeeMsat         uint64
 	PaymentSizeMsat uint64
@@ -68,6 +69,6 @@ type Lsps2Store interface {
 	RegisterBuy(ctx context.Context, req *RegisterBuy) error
 	GetBuyRegistration(ctx context.Context, scid lightning.ShortChannelID) (*BuyRegistration, error)
 	SetChannelOpened(ctx context.Context, channelOpened *ChannelOpened) error
-	SetCompleted(ctx context.Context, registrationId uint64) error
+	SetCompleted(ctx context.Context, registrationId uuid7.UUID) error
 	RemoveUnusedExpired(ctx context.Context, before time.Time) error
 }
