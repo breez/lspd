@@ -58,7 +58,7 @@ func testRegularForward(p *testParams) {
 		} else {
 			id = chans[0].ShortChannelID
 		}
-		invoiceWithHint = AddHopHint(p.BreezClient(), bobInvoice.Bolt11, p.Lsp(), id, nil)
+		invoiceWithHint = AddHopHint(p.BreezClient(), bobInvoice.Bolt11, p.Lsp(), id, nil, 144)
 	}
 	log.Printf("invoice with hint: %v", invoiceWithHint)
 
