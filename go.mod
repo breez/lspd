@@ -3,6 +3,7 @@ module github.com/breez/lspd
 go 1.19
 
 require (
+	github.com/GoWebProd/uuid7 v0.0.0-20230623091058-5f5954faed6a
 	github.com/aws/aws-sdk-go v1.34.0
 	github.com/breez/lntest v0.0.27
 	github.com/btcsuite/btcd v0.23.5-0.20230228185050-38331963bddd
@@ -28,6 +29,7 @@ require (
 )
 
 require (
+	github.com/GoWebProd/gip v0.0.0-20230623090727-b60d41d5d320 // indirect
 	github.com/Microsoft/go-winio v0.5.2 // indirect
 	github.com/Yawning/aez v0.0.0-20211027044916-e49e68abd344 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect

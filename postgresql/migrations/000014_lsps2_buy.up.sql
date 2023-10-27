@@ -1,6 +1,6 @@
 CREATE SCHEMA lsps2;
 CREATE TABLE lsps2.buy_registrations (
-    id bigserial PRIMARY KEY, 
+    id uuid PRIMARY KEY, 
     lsp_id varchar NOT NULL,
     peer_id varchar NOT NULL,
     scid bigint NOT NULL,
@@ -18,8 +18,8 @@ CREATE UNIQUE INDEX idx_lsps2_buy_registrations_scid ON lsps2.buy_registrations 
 CREATE INDEX idx_lsps2_buy_registrations_valid_until ON lsps2.buy_registrations (params_valid_until);
 
 CREATE TABLE lsps2.bought_channels (
-	id bigserial PRIMARY KEY,
-	registration_id bigint NOT NULL,
+	id uuid PRIMARY KEY,
+	registration_id uuid NOT NULL,
 	funding_tx_id bytea NOT NULL,
 	funding_tx_outnum bigint NOT NULL,
 	fee_msat bigint NOT NULL,

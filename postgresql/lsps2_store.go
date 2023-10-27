@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoWebProd/uuid7"
 	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
@@ -17,11 +18,13 @@ import (
 )
 
 type Lsps2Store struct {
-	pool *pgxpool.Pool
+	pool      *pgxpool.Pool
+	generator *uuid7.Generator
 }
 
 func NewLsps2Store(pool *pgxpool.Pool) *Lsps2Store {
-	return &Lsps2Store{pool: pool}
+	generator := uuid7.New()
+	return &Lsps2Store{pool: pool, generator: generator}
 }
 
 func (s *Lsps2Store) RegisterBuy(
@@ -41,10 +44,12 @@ func (s *Lsps2Store) RegisterBuy(
 		return fmt.Errorf("promise does not have matching token")
 	}
 
+	var uuid [16]byte = s.generator.Next()
 	_, err = s.pool.Exec(
 		ctx,
 		`INSERT INTO lsps2.buy_registrations (
-			lsp_id
+			id
+		 ,	lsp_id
 		 ,  peer_id
 		 ,  scid
 		 ,  mode
@@ -57,7 +62,8 @@ func (s *Lsps2Store) RegisterBuy(
 		 ,  params_promise
 		 ,  token
 		 )
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+		uuid,
 		req.LspId,
 		req.PeerId,
 		int64(uint64(req.Scid)),
@@ -106,7 +112,7 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 		 WHERE r.scid = $1`,
 		int64(uint64(scid)),
 	)
-	var db_id uint64
+	var db_id [16]byte
 	var db_lsp_id string
 	var db_peer_id string
 	var db_scid int64
@@ -187,17 +193,21 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 }
 
 func (s *Lsps2Store) SetChannelOpened(ctx context.Context, channelOpened *lsps2.ChannelOpened) error {
+	var uuid [16]byte = s.generator.Next()
+	var registrationId [16]byte = channelOpened.RegistrationId
 	_, err := s.pool.Exec(
 		ctx,
 		`INSERT INTO lsps2.bought_channels (
+			id,
 			registration_id,
 			funding_tx_id,
 			funding_tx_outnum,
 			fee_msat,
 			payment_size_msat,
 			is_completed
-		) VALUES ($1, $2, $3, $4, $5, false)`,
-		channelOpened.RegistrationId,
+		) VALUES ($1, $2, $3, $4, $5, $6, false)`,
+		uuid,
+		registrationId,
 		channelOpened.Outpoint.Hash[:],
 		channelOpened.Outpoint.Index,
 		int64(channelOpened.FeeMsat),
@@ -207,7 +217,7 @@ func (s *Lsps2Store) SetChannelOpened(ctx context.Context, channelOpened *lsps2.
 	return err
 }
 
-func (s *Lsps2Store) SetCompleted(ctx context.Context, registrationId uint64) error {
+func (s *Lsps2Store) SetCompleted(ctx context.Context, registrationId uuid7.UUID) error {
 	rows, err := s.pool.Exec(
 		ctx,
 		`UPDATE lsps2.bought_channels
