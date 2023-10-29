@@ -84,6 +84,10 @@ func (s *channelOpenerServer) createOpeningParamsMenu(
 		return nil, fmt.Errorf("failed to get opening_fee_params")
 	}
 
+	if len(settings) == 0 {
+		log.Printf("No fee params setings found in the db [token=%v]", token)
+	}
+
 	for _, setting := range settings {
 		validUntil := time.Now().UTC().Add(setting.Validity)
 		params := &lspdrpc.OpeningFeeParams{
