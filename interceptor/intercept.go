@@ -77,6 +77,7 @@ func NewInterceptor(
 
 func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash []byte, reqOutgoingAmountMsat uint64, reqOutgoingExpiry uint32, reqIncomingExpiry uint32) InterceptResult {
 	reqPaymentHashStr := hex.EncodeToString(reqPaymentHash)
+	log.Printf("Intercept: scid: %s, paymentHash: %s, outgoindAmount: %v, outgoingExpiry: %v, incomingExpiry: %v", scid.ToString(), reqPaymentHashStr, reqOutgoingAmountMsat, reqOutgoingExpiry, reqIncomingExpiry)
 	resp, _, _ := i.payHashGroup.Do(reqPaymentHashStr, func() (interface{}, error) {
 		token, params, paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, channelPoint, tag, err := i.store.PaymentInfo(reqPaymentHash)
 		if err != nil {
@@ -105,6 +106,7 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 		// If the payment was registered, but the next hop is not the destination
 		// that means we are not the last hop of the payment, so we'll just forward.
 		if isRegistered && nextHop != nil && !bytes.Equal(nextHop, destination) {
+			log.Printf("paymentHash: %s, nextHop (%s) != destination (%s)", reqPaymentHashStr, hex.EncodeToString(nextHop), hex.EncodeToString(destination))
 			return InterceptResult{
 				Action: INTERCEPT_RESUME,
 			}, nil
@@ -118,6 +120,7 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 			// If the next hop cannot be deduced from the scid, and the payment
 			// is not registered, there's nothing left to be done. Just continue.
 			if !isRegistered {
+				log.Printf("paymentHash: %s, nextHop == nil and not registered", reqPaymentHashStr)
 				return InterceptResult{
 					Action: INTERCEPT_RESUME,
 				}, nil
@@ -140,6 +143,7 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 		if isProbe {
 			// If this is a known probe, we'll quit early for non-connected clients.
 			if !isConnected {
+				log.Printf("paymentHash: %s, probe and not connected", reqPaymentHashStr)
 				return InterceptResult{
 					Action: INTERCEPT_RESUME,
 				}, nil
@@ -151,6 +155,7 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 			// node. But senders implementnig the probing-01: prefix should
 			// know that the actual payment would probably succeed.
 			if channelPoint == nil {
+				log.Printf("paymentHash: %s, probe and channelPoint == nil", reqPaymentHashStr)
 				return InterceptResult{
 					Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
 					FailureCode: FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
@@ -162,6 +167,7 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 			// Make sure the client is connected by potentially notifying them to come online.
 			notifyResult := i.notify(reqPaymentHashStr, nextHop, isRegistered)
 			if notifyResult != nil {
+				log.Printf("paymentHash: %s, !isConnected and notifyResult != nil", reqPaymentHashStr)
 				return *notifyResult, nil
 			}
 		}
@@ -189,6 +195,7 @@ func (i *Interceptor) Intercept(scid *basetypes.ShortChannelID, reqPaymentHash [
 
 			// Make sure the cltv delta is enough.
 			if int64(reqIncomingExpiry)-int64(reqOutgoingExpiry) < int64(i.config.TimeLockDelta) {
+				log.Printf("paymentHash: %s, outgoingExpiry: %v, incomingExpiry: %v, i.config.TimeLockDelta: %v", reqPaymentHashStr, reqOutgoingExpiry, reqIncomingExpiry, i.config.TimeLockDelta)
 				return InterceptResult{
 					Action:      INTERCEPT_FAIL_HTLC_WITH_CODE,
 					FailureCode: FAILURE_TEMPORARY_CHANNEL_FAILURE,
