@@ -3,6 +3,7 @@ package itest
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -18,9 +19,11 @@ import (
 	"github.com/breez/lspd/notifications"
 	lspd "github.com/breez/lspd/rpc"
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -275,6 +278,38 @@ func RegisterPayment(l LspNode, paymentInfo *lspd.PaymentInformation, continueOn
 	_, err = l.Rpc().RegisterPayment(
 		ctx,
 		&lspd.RegisterPaymentRequest{
+			Blob: encrypted,
+		},
+	)
+
+	if !continueOnError {
+		lntest.CheckError(l.Harness().T, err)
+	}
+
+	return err
+}
+
+func SubscribeNotifications(l LspNode, b BreezClient, url string, continueOnError bool) error {
+	first := sha256.Sum256([]byte(url))
+	second := sha256.Sum256(first[:])
+	sig, err := ecdsa.SignCompact(b.Node().PrivateKey(), second[:], true)
+	assert.NoError(b.Harness().T, err)
+
+	request := notifications.SubscribeNotificationsRequest{
+		Url:       url,
+		Signature: sig,
+	}
+	serialized, err := proto.Marshal(&request)
+	lntest.CheckError(l.Harness().T, err)
+
+	encrypted, err := ecies.Encrypt(l.EciesPublicKey(), serialized)
+	lntest.CheckError(l.Harness().T, err)
+
+	ctx := metadata.AppendToOutgoingContext(l.Harness().Ctx, "authorization", "Bearer hello")
+	log.Printf("Subscribing to notifications")
+	_, err = l.NotificationsRpc().SubscribeNotifications(
+		ctx,
+		&notifications.EncryptedNotificationRequest{
 			Blob: encrypted,
 		},
 	)

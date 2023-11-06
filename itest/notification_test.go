@@ -1,7 +1,6 @@
 package itest
 
 import (
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -10,9 +9,7 @@ import (
 	"time"
 
 	"github.com/breez/lntest"
-	"github.com/breez/lspd/notifications"
 	lspd "github.com/breez/lspd/rpc"
-	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -86,15 +83,7 @@ func testOfflineNotificationPaymentRegistered(p *testParams) {
 	<-time.After(htlcInterceptorDelay)
 
 	url := "http://" + addr + "/api/v1/notify"
-	first := sha256.Sum256([]byte(url))
-	second := sha256.Sum256(first[:])
-	sig, err := ecdsa.SignCompact(p.BreezClient().Node().PrivateKey(), second[:], true)
-	assert.NoError(p.t, err)
-
-	p.lsp.NotificationsRpc().SubscribeNotifications(p.h.Ctx, &notifications.SubscribeNotificationsRequest{
-		Url:       url,
-		Signature: sig,
-	})
+	SubscribeNotifications(p.lsp, p.BreezClient(), url, false)
 	log.Printf("Alice paying")
 	route := constructRoute(p.lsp.LightningNode(), p.BreezClient().Node(), channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
 	_, err = alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
@@ -149,15 +138,7 @@ func testOfflineNotificationRegularForward(p *testParams) {
 	}()
 
 	url := "http://" + addr + "/api/v1/notify"
-	first := sha256.Sum256([]byte(url))
-	second := sha256.Sum256(first[:])
-	sig, err := ecdsa.SignCompact(p.BreezClient().Node().PrivateKey(), second[:], true)
-	assert.NoError(p.t, err)
-
-	p.lsp.NotificationsRpc().SubscribeNotifications(p.h.Ctx, &notifications.SubscribeNotificationsRequest{
-		Url:       url,
-		Signature: sig,
-	})
+	SubscribeNotifications(p.lsp, p.BreezClient(), url, false)
 
 	<-time.After(time.Second * 2)
 	log.Printf("Adding bob's invoice")
@@ -303,15 +284,7 @@ func testOfflineNotificationZeroConfChannel(p *testParams) {
 	}()
 
 	url := "http://" + addr + "/api/v1/notify"
-	first := sha256.Sum256([]byte(url))
-	second := sha256.Sum256(first[:])
-	sig, err := ecdsa.SignCompact(p.BreezClient().Node().PrivateKey(), second[:], true)
-	assert.NoError(p.t, err)
-
-	p.lsp.NotificationsRpc().SubscribeNotifications(p.h.Ctx, &notifications.SubscribeNotificationsRequest{
-		Url:       url,
-		Signature: sig,
-	})
+	SubscribeNotifications(p.lsp, p.BreezClient(), url, false)
 
 	log.Printf("Alice paying zero conf invoice")
 	payResp := alice.Pay(invoiceWithHint)

@@ -5,9 +5,13 @@ option go_package = "github.com/breez/lspd/notifications";
 package notifications;
 
 service Notifications {
-    rpc SubscribeNotifications(SubscribeNotificationsRequest)
+    rpc SubscribeNotifications(EncryptedNotificationRequest)
         returns (SubscribeNotificationsReply) {}
 }  
+
+message EncryptedNotificationRequest {
+    bytes blob = 1;
+}
 
 message SubscribeNotificationsRequest {
     string url = 1;
