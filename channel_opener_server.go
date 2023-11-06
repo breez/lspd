@@ -16,8 +16,6 @@ import (
 	lspdrpc "github.com/breez/lspd/rpc"
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -41,10 +39,8 @@ func NewChannelOpenerServer(
 	}
 }
 
-type contextKey string
-
 func (s *channelOpenerServer) ChannelInformation(ctx context.Context, in *lspdrpc.ChannelInformationRequest) (*lspdrpc.ChannelInformationReply, error) {
-	node, token, err := s.getNode(ctx)
+	node, token, err := lspdrpc.GetNode(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +84,7 @@ func (s *channelOpenerServer) RegisterPayment(
 	ctx context.Context,
 	in *lspdrpc.RegisterPaymentRequest,
 ) (*lspdrpc.RegisterPaymentReply, error) {
-	node, token, err := s.getNode(ctx)
+	node, token, err := lspdrpc.GetNode(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +170,7 @@ func (s *channelOpenerServer) RegisterPayment(
 }
 
 func (s *channelOpenerServer) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest) (*lspdrpc.OpenChannelReply, error) {
-	node, _, err := s.getNode(ctx)
+	node, _, err := lspdrpc.GetNode(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +254,7 @@ func getSignedEncryptedData(n *common.Node, in *lspdrpc.Encrypted) (string, []by
 }
 
 func (s *channelOpenerServer) CheckChannels(ctx context.Context, in *lspdrpc.Encrypted) (*lspdrpc.Encrypted, error) {
-	node, _, err := s.getNode(ctx)
+	node, _, err := lspdrpc.GetNode(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -310,20 +306,6 @@ func (s *channelOpenerServer) CheckChannels(ctx context.Context, in *lspdrpc.Enc
 	}
 
 	return &lspdrpc.Encrypted{Data: encrypted}, nil
-}
-
-func (s *channelOpenerServer) getNode(ctx context.Context) (*common.Node, string, error) {
-	nd := ctx.Value(contextKey("node"))
-	if nd == nil {
-		return nil, "", status.Errorf(codes.PermissionDenied, "Not authorized")
-	}
-
-	nodeContext, ok := nd.(*nodeContext)
-	if !ok {
-		return nil, "", status.Errorf(codes.PermissionDenied, "Not authorized")
-	}
-
-	return nodeContext.node, nodeContext.token, nil
 }
 
 func checkPayment(params *lspdrpc.OpeningFeeParams, incomingAmountMsat, outgoingAmountMsat int64) error {

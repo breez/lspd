@@ -29,11 +29,6 @@ type grpcServer struct {
 	n               notifications.NotificationsServer
 }
 
-type nodeContext struct {
-	token string
-	node  *common.Node
-}
-
 func NewGrpcServer(
 	nodesService common.NodesService,
 	address string,
@@ -84,10 +79,7 @@ func (s *grpcServer) Start() error {
 						continue
 					}
 
-					return handler(context.WithValue(ctx, contextKey("node"), &nodeContext{
-						token: token,
-						node:  node,
-					}), req)
+					return handler(lspdrpc.WithNode(ctx, node, token), req)
 				}
 			}
 			return nil, status.Errorf(codes.PermissionDenied, "Not authorized")
