@@ -85,7 +85,7 @@ jobs:
       - build-lspd
     name: test ${{ matrix.lsp }}-lsp ${{ matrix.client }}-client ${{ matrix.test }}
     strategy:
-      max-parallel: 6
+      max-parallel: 4
       matrix:
         test: [
           testOpenZeroConfChannelOnReceive,
@@ -139,7 +139,7 @@ jobs:
       - build-lspd
     name: test ${{ matrix.implementation }} ${{ matrix.test }}
     strategy:
-      max-parallel: 6
+      max-parallel: 4
       matrix:
         test: [
           testLsps0GetProtocolVersions,
