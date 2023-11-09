@@ -16,6 +16,7 @@ import (
 
 	"github.com/breez/lntest"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/notifications"
 	lspd "github.com/breez/lspd/rpc"
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -24,6 +25,7 @@ import (
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
+	"github.com/tv42/zbase32"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -290,14 +292,14 @@ func RegisterPayment(l LspNode, paymentInfo *lspd.PaymentInformation, continueOn
 }
 
 func SubscribeNotifications(l LspNode, b BreezClient, url string, continueOnError bool) error {
-	first := sha256.Sum256([]byte(url))
+	msg := append(lightning.SignedMsgPrefix, []byte(url)...)
+	first := sha256.Sum256([]byte(msg))
 	second := sha256.Sum256(first[:])
 	sig, err := ecdsa.SignCompact(b.Node().PrivateKey(), second[:], true)
 	assert.NoError(b.Harness().T, err)
-
 	request := notifications.SubscribeNotificationsRequest{
 		Url:       url,
-		Signature: sig,
+		Signature: zbase32.EncodeToString(sig),
 	}
 	serialized, err := proto.Marshal(&request)
 	lntest.CheckError(l.Harness().T, err)

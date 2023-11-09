@@ -2,18 +2,16 @@ package notifications
 
 import (
 	context "context"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"log"
 
+	"github.com/breez/lspd/lightning"
 	lspdrpc "github.com/breez/lspd/rpc"
-	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	ecies "github.com/ecies/go/v2"
 	"github.com/golang/protobuf/proto"
 )
 
-var ErrInvalidSignature = fmt.Errorf("invalid signature")
 var ErrInternal = fmt.Errorf("internal error")
 
 type server struct {
@@ -48,18 +46,9 @@ func (s *server) SubscribeNotifications(
 		return nil, fmt.Errorf("proto.Unmarshal(%x) error: %w", data, err)
 	}
 
-	first := sha256.Sum256([]byte(request.Url))
-	second := sha256.Sum256(first[:])
-	pubkey, wasCompressed, err := ecdsa.RecoverCompact(
-		request.Signature,
-		second[:],
-	)
+	pubkey, err := lightning.VerifyMessage([]byte(request.Url), request.Signature)
 	if err != nil {
-		return nil, ErrInvalidSignature
-	}
-
-	if !wasCompressed {
-		return nil, ErrInvalidSignature
+		return nil, err
 	}
 
 	err = s.store.Register(ctx, hex.EncodeToString(pubkey.SerializeCompressed()), request.Url)
