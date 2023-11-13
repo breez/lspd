@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -123,7 +124,10 @@ func (s *NotificationService) notifyOnce(ctx context.Context, req *PaymentReceiv
 	}
 
 	if resp.StatusCode != 200 {
-		log.Printf("Got non 200 status code (%s) for payment notification for %s to %s: %v", resp.Status, pubkey, url, err)
+		buf := make([]byte, 1000)
+		bytesRead, _ := io.ReadFull(resp.Body, buf)
+		respBody := buf[:bytesRead]
+		log.Printf("Got non 200 status code (%s) for payment notification for %s to %s: %s", resp.Status, pubkey, url, respBody)
 		// TODO: Remove subscription?
 		return false
 	}
