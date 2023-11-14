@@ -44,15 +44,15 @@ func (s *NotificationService) Notify(
 		},
 	}
 
-	var buf bytes.Buffer
-	err = json.NewEncoder(&buf).Encode(req)
-	if err != nil {
-		log.Printf("Failed to encode payment notification for %s: %v", pubkey, err)
-		return false, err
-	}
-
 	notified := false
 	for _, r := range registrations {
+		var buf bytes.Buffer
+		err = json.NewEncoder(&buf).Encode(req)
+		if err != nil {
+			log.Printf("Failed to encode payment notification for %s: %v", pubkey, err)
+			return false, err
+		}
+
 		resp, err := http.DefaultClient.Post(r, "application/json", &buf)
 		if err != nil {
 			log.Printf("Failed to send payment notification for %s to %s: %v", pubkey, r, err)
