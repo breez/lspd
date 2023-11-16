@@ -103,8 +103,11 @@ func main() {
 	notificationService := notifications.NewNotificationService(notificationsStore)
 	go notificationService.Start(ctx)
 	openingService := common.NewOpeningService(openingStore, nodesService)
-	cleanupService := lsps2.NewCleanupService(lsps2Store)
-	go cleanupService.Start(ctx)
+	lsps2CleanupService := lsps2.NewCleanupService(lsps2Store)
+	go lsps2CleanupService.Start(ctx)
+	notificationCleanupService := notifications.NewCleanupService(notificationsStore)
+	go notificationCleanupService.Start(ctx)
+
 	var interceptors []interceptor.HtlcInterceptor
 	for _, node := range nodes {
 		var htlcInterceptor interceptor.HtlcInterceptor

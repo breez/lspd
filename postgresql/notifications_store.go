@@ -74,3 +74,16 @@ func (s *NotificationsStore) GetRegistrations(
 
 	return result, nil
 }
+
+func (s *NotificationsStore) RemoveExpired(
+	ctx context.Context,
+	before time.Time,
+) error {
+	_, err := s.pool.Exec(
+		ctx,
+		`DELETE FROM public.notification_subscriptions
+		 WHERE refreshed_at < $1`,
+		before.UnixMicro())
+
+	return err
+}
