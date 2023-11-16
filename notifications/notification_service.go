@@ -78,38 +78,57 @@ func (s *NotificationService) Notify(
 		},
 	}
 
+	var mtx sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(len(registrations))
 	notified := false
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*7)
+
 	for _, r := range registrations {
-		var buf bytes.Buffer
-		err = json.NewEncoder(&buf).Encode(req)
-		if err != nil {
-			log.Printf("Failed to encode payment notification for %s: %v", pubkey, err)
-			return false, err
-		}
-
-		resp, err := http.DefaultClient.Post(r, "application/json", &buf)
-		if err != nil {
-			log.Printf("Failed to send payment notification for %s to %s: %v", pubkey, r, err)
-			// TODO: Remove subscription?
-			continue
-		}
-
-		if resp.StatusCode != 200 {
-			log.Printf("Got non 200 status code (%s) for payment notification for %s to %s: %v", resp.Status, pubkey, r, err)
-			// TODO: Remove subscription?
-			continue
-		}
-
-		notified = true
+		go func(r string) {
+			currentNotified := s.notifyOnce(ctx, req, pubkey, r)
+			if currentNotified {
+				mtx.Lock()
+				notified = true
+				mtx.Unlock()
+			}
+			wg.Done()
+		}(r)
 	}
+
+	wg.Wait()
+	cancel()
 
 	if notified {
 		s.mtx.Lock()
 		s.recentNotifications[paymentIdentifier(pubkey, paymenthash)] = time.Now()
 		s.mtx.Unlock()
 	}
-
 	return notified, nil
+}
+
+func (s *NotificationService) notifyOnce(ctx context.Context, req *PaymentReceivedPayload, pubkey string, url string) bool {
+	var buf bytes.Buffer
+	err := json.NewEncoder(&buf).Encode(req)
+	if err != nil {
+		log.Printf("Failed to encode payment notification for %s: %v", pubkey, err)
+		return false
+	}
+
+	resp, err := http.DefaultClient.Post(url, "application/json", &buf)
+	if err != nil {
+		log.Printf("Failed to send payment notification for %s to %s: %v", pubkey, url, err)
+		// TODO: Remove subscription?
+		return false
+	}
+
+	if resp.StatusCode != 200 {
+		log.Printf("Got non 200 status code (%s) for payment notification for %s to %s: %v", resp.Status, pubkey, url, err)
+		// TODO: Remove subscription?
+		return false
+	}
+
+	return true
 }
 
 func paymentIdentifier(pubkey string, paymentHash string) string {
