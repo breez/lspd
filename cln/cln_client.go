@@ -151,14 +151,14 @@ func (c *ClnClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoi
 
 func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*lightning.GetChannelResult, error) {
 	pubkey := hex.EncodeToString(peerID)
-	peer, err := c.client.GetPeer(pubkey)
+	channels, err := c.client.GetPeerChannels(pubkey)
 	if err != nil {
 		log.Printf("CLN: client.GetPeer(%s) error: %v", pubkey, err)
 		return nil, err
 	}
 
 	fundingTxID := channelPoint.Hash.String()
-	for _, c := range peer.Channels {
+	for _, c := range channels {
 		log.Printf("getChannel destination: %s, Short channel id: %v, local alias: %v , FundingTxID:%v, State:%v ", pubkey, c.ShortChannelId, c.Alias.Local, c.FundingTxId, c.State)
 		if slices.Contains(OPEN_STATUSES, c.State) && c.FundingTxId == fundingTxID {
 			confirmedChanID, err := lightning.NewShortChannelIDFromString(c.ShortChannelId)
@@ -174,7 +174,7 @@ func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 			return &lightning.GetChannelResult{
 				InitialChannelID:   *initialChanID,
 				ConfirmedChannelID: *confirmedChanID,
-				HtlcMinimumMsat:    c.HtlcMinMilliSatoshi,
+				HtlcMinimumMsat:    c.MinimumHtlcOutMsat.MSat(),
 			}, nil
 		}
 	}
@@ -185,7 +185,7 @@ func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 
 func (c *ClnClient) GetNodeChannelCount(nodeID []byte) (int, error) {
 	pubkey := hex.EncodeToString(nodeID)
-	peer, err := c.client.GetPeer(pubkey)
+	channels, err := c.client.GetPeerChannels(pubkey)
 	if err != nil {
 		log.Printf("CLN: client.GetPeer(%s) error: %v", pubkey, err)
 		return 0, err
@@ -193,7 +193,7 @@ func (c *ClnClient) GetNodeChannelCount(nodeID []byte) (int, error) {
 
 	count := 0
 	openPendingStatuses := append(OPEN_STATUSES, PENDING_STATUSES...)
-	for _, c := range peer.Channels {
+	for _, c := range channels {
 		if slices.Contains(openPendingStatuses, c.State) {
 			count++
 		}
@@ -208,14 +208,14 @@ func (c *ClnClient) GetClosedChannels(nodeID string, channelPoints map[string]ui
 		return r, nil
 	}
 
-	peer, err := c.client.GetPeer(nodeID)
+	channels, err := c.client.GetPeerChannels(nodeID)
 	if err != nil {
 		log.Printf("CLN: client.GetPeer(%s) error: %v", nodeID, err)
 		return nil, err
 	}
 
 	lookup := make(map[string]uint64)
-	for _, c := range peer.Channels {
+	for _, c := range channels {
 		if slices.Contains(CLOSING_STATUSES, c.State) {
 			cid, err := lightning.NewShortChannelIDFromString(c.ShortChannelId)
 			if err != nil {
@@ -240,20 +240,18 @@ func (c *ClnClient) GetClosedChannels(nodeID string, channelPoints map[string]ui
 
 func (c *ClnClient) GetPeerId(scid *lightning.ShortChannelID) ([]byte, error) {
 	scidStr := scid.ToString()
-	peers, err := c.client.ListPeers()
+	channels, err := c.client.ListPeerChannels()
 	if err != nil {
 		return nil, err
 	}
 
 	var dest *string
-	for _, p := range peers {
-		for _, ch := range p.Channels {
-			if ch.Alias.Local == scidStr ||
-				ch.Alias.Remote == scidStr ||
-				ch.ShortChannelId == scidStr {
-				dest = &p.Id
-				break
-			}
+	for _, ch := range channels {
+		if ch.Alias.Local == scidStr ||
+			ch.Alias.Remote == scidStr ||
+			ch.ShortChannelId == scidStr {
+			dest = &ch.PeerId
+			break
 		}
 	}
 
