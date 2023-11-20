@@ -139,9 +139,15 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 			}
 		}
 
-		if !isConnected {
+		if isConnected {
+			// If the peer is connected, notify anyway, but don't wait for the result.
+			go i.notificationService.Notify(
+				hex.EncodeToString(nextHop),
+				reqPaymentHashStr,
+			)
+		} else {
 			// Make sure the client is connected by potentially notifying them to come online.
-			notifyResult := i.notify(reqPaymentHashStr, nextHop, isRegistered)
+			notifyResult := i.notifyAndWait(reqPaymentHashStr, nextHop, isRegistered)
 			if notifyResult != nil {
 				log.Printf("paymentHash: %s, !isConnected and notifyResult != nil", reqPaymentHashStr)
 				return *notifyResult, nil
@@ -273,7 +279,7 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 	return resp.(common.InterceptResult)
 }
 
-func (i *Interceptor) notify(reqPaymentHashStr string, nextHop []byte, isRegistered bool) *common.InterceptResult {
+func (i *Interceptor) notifyAndWait(reqPaymentHashStr string, nextHop []byte, isRegistered bool) *common.InterceptResult {
 	// If not connected, send a notification to the registered
 	// notification service for this client if available.
 	notified, err := i.notificationService.Notify(
