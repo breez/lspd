@@ -98,9 +98,10 @@ func main() {
 	forwardingStore := postgresql.NewForwardingEventStore(pool)
 	notificationsStore := postgresql.NewNotificationsStore(pool)
 	lsps2Store := postgresql.NewLsps2Store(pool)
-	notificationService := notifications.NewNotificationService(notificationsStore)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	notificationService := notifications.NewNotificationService(notificationsStore)
+	go notificationService.Start(ctx)
 	openingService := common.NewOpeningService(openingStore, nodesService)
 	cleanupService := lsps2.NewCleanupService(lsps2Store)
 	go cleanupService.Start(ctx)

@@ -6,15 +6,41 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sync"
+	"time"
 )
 
+var minNotificationInterval time.Duration = time.Second * 30
+var cleanInterval time.Duration = time.Minute * 2
+
 type NotificationService struct {
-	store Store
+	mtx                 sync.Mutex
+	recentNotifications map[string]time.Time
+	store               Store
 }
 
 func NewNotificationService(store Store) *NotificationService {
 	return &NotificationService{
-		store: store,
+		store:               store,
+		recentNotifications: make(map[string]time.Time),
+	}
+}
+
+func (s *NotificationService) Start(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(cleanInterval):
+		}
+
+		s.mtx.Lock()
+		for id, lastTime := range s.recentNotifications {
+			if lastTime.Add(minNotificationInterval).Before(time.Now()) {
+				delete(s.recentNotifications, id)
+			}
+		}
+		s.mtx.Unlock()
 	}
 }
 
@@ -29,6 +55,14 @@ func (s *NotificationService) Notify(
 	pubkey string,
 	paymenthash string,
 ) (bool, error) {
+	s.mtx.Lock()
+	lastTime, ok := s.recentNotifications[paymentIdentifier(pubkey, paymenthash)]
+	s.mtx.Unlock()
+	if ok && lastTime.Add(minNotificationInterval).After(time.Now()) {
+		// Treat as if we notified if the notification was recent.
+		return true, nil
+	}
+
 	registrations, err := s.store.GetRegistrations(context.Background(), pubkey)
 	if err != nil {
 		log.Printf("Failed to get notification registrations for %s: %v", pubkey, err)
@@ -69,5 +103,15 @@ func (s *NotificationService) Notify(
 		notified = true
 	}
 
+	if notified {
+		s.mtx.Lock()
+		s.recentNotifications[paymentIdentifier(pubkey, paymenthash)] = time.Now()
+		s.mtx.Unlock()
+	}
+
 	return notified, nil
+}
+
+func paymentIdentifier(pubkey string, paymentHash string) string {
+	return pubkey + "|" + paymentHash
 }
