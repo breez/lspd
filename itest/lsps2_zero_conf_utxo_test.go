@@ -37,6 +37,9 @@ func testLsps2ZeroConfUtxo(p *testParams) {
 	log.Print("Connecting bob to lspd")
 	p.BreezClient().Node().ConnectPeer(lsp.LightningNode())
 
+	// Make sure everything is activated.
+	<-time.After(htlcInterceptorDelay)
+
 	log.Printf("Calling lsps2.get_info")
 	info := Lsps2GetInfo(p.BreezClient(), lsp, lsps2.GetInfoRequest{
 		Token: &WorkingToken,

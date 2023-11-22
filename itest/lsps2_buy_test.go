@@ -22,6 +22,9 @@ func testLsps2Buy(p *testParams) {
 	})
 	p.BreezClient().Node().ConnectPeer(p.Lsp().LightningNode())
 
+	// Make sure everything is activated.
+	<-time.After(htlcInterceptorDelay)
+
 	p.BreezClient().Node().SendCustomMessage(&lntest.CustomMsgRequest{
 		PeerId: hex.EncodeToString(p.Lsp().NodeId()),
 		Type:   lsps0.Lsps0MessageType,

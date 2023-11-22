@@ -26,6 +26,9 @@ func testLsps2GetInfo(p *testParams) {
 	})
 	p.BreezClient().Node().ConnectPeer(p.Lsp().LightningNode())
 
+	// Make sure everything is activated.
+	<-time.After(htlcInterceptorDelay)
+
 	rawMsg := `{
 		"method": "lsps2.get_info",
 		"jsonrpc": "2.0",

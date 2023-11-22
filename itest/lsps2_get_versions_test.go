@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log"
+	"time"
 
 	"github.com/breez/lntest"
 	"github.com/breez/lspd/lsps0"
@@ -12,6 +13,9 @@ import (
 
 func testLsps2GetVersions(p *testParams) {
 	p.BreezClient().Node().ConnectPeer(p.Lsp().LightningNode())
+
+	// Make sure everything is activated.
+	<-time.After(htlcInterceptorDelay)
 
 	rawMsg := `{
 		"method": "lsps2.get_versions",

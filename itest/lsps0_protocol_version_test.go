@@ -3,6 +3,7 @@ package itest
 import (
 	"encoding/hex"
 	"encoding/json"
+	"time"
 
 	"github.com/breez/lntest"
 	"github.com/breez/lspd/lsps0"
@@ -11,6 +12,9 @@ import (
 
 func testLsps0GetProtocolVersions(p *testParams) {
 	p.BreezClient().Node().ConnectPeer(p.Lsp().LightningNode())
+
+	// Make sure everything is activated.
+	<-time.After(htlcInterceptorDelay)
 
 	rawMsg := `{
 		"method": "lsps0.list_protocols",
