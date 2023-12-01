@@ -623,11 +623,11 @@ func (i *Interceptor) handlePaymentChanOpened(event *paymentChanOpenedEvent) {
 
 func (i *Interceptor) handlePaymentFailure(
 	paymentId string,
-	code common.InterceptFailureCode,
+	message []byte,
 ) {
 	i.finalizeAllParts(paymentId, &common.InterceptResult{
-		Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-		FailureCode: code,
+		Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+		FailureMessage: message,
 	})
 }
 
@@ -663,11 +663,11 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 func (i *Interceptor) failPart(
 	payment *paymentState,
 	part *partState,
-	code common.InterceptFailureCode,
+	message []byte,
 ) {
 	part.resolution <- &common.InterceptResult{
-		Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-		FailureCode: code,
+		Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+		FailureMessage: message,
 	}
 	delete(payment.parts, part.req.HtlcId())
 	if len(payment.parts) == 0 {

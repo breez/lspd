@@ -58,8 +58,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 		if err != nil {
 			log.Printf("paymentInfo(%x) error: %v", req.PaymentHash, err)
 			return common.InterceptResult{
-				Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-				FailureCode: common.FAILURE_TEMPORARY_NODE_FAILURE,
+				Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+				FailureMessage: common.FAILURE_TEMPORARY_NODE_FAILURE,
 			}, nil
 		}
 
@@ -110,8 +110,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 		if err != nil {
 			log.Printf("IsConnected(%x) error: %v", nextHop, err)
 			return &common.InterceptResult{
-				Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-				FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+				Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+				FailureMessage: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
 			}, nil
 		}
 
@@ -132,8 +132,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 			if channelPoint == nil {
 				log.Printf("paymentHash: %s, probe and channelPoint == nil", reqPaymentHashStr)
 				return common.InterceptResult{
-					Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-					FailureCode: common.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
+					Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureMessage: common.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
 				}, nil
 			}
 		}
@@ -178,8 +178,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 			if int64(req.IncomingExpiry)-int64(req.OutgoingExpiry) < int64(i.node.NodeConfig.TimeLockDelta) {
 				log.Printf("paymentHash: %s, outgoingExpiry: %v, incomingExpiry: %v, i.node.NodeConfig.TimeLockDelta: %v", reqPaymentHashStr, req.OutgoingExpiry, req.IncomingExpiry, i.node.NodeConfig.TimeLockDelta)
 				return common.InterceptResult{
-					Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-					FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureMessage: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
 				}, nil
 			}
 
@@ -187,8 +187,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 			if err != nil {
 				log.Printf("paymentHash: %s, time.Parse(%s, %s) failed. Failing channel open: %v", reqPaymentHashStr, lsps0.TIME_FORMAT, params.ValidUntil, err)
 				return common.InterceptResult{
-					Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-					FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureMessage: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
 				}, nil
 			}
 
@@ -198,8 +198,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 				if !i.openingService.IsCurrentChainFeeCheaper(token, params) {
 					log.Printf("Intercepted expired payment registration. Failing payment. payment hash: %s, valid until: %s", reqPaymentHashStr, params.ValidUntil)
 					return common.InterceptResult{
-						Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-						FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+						Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+						FailureMessage: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
 					}, nil
 				}
 
@@ -210,8 +210,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 			if err != nil {
 				log.Printf("paymentHash: %s, openChannel(%x, %v) err: %v", reqPaymentHashStr, destination, incomingAmountMsat, err)
 				return common.InterceptResult{
-					Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-					FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureMessage: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
 				}, nil
 			}
 		}
@@ -237,8 +237,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 				if err != nil {
 					log.Printf("paymentHash: %s, insertChannel error: %v", reqPaymentHashStr, err)
 					return common.InterceptResult{
-						Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-						FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+						Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+						FailureMessage: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
 					}, nil
 				}
 
@@ -270,8 +270,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 
 		log.Printf("paymentHash: %s, Error: Channel failed to open... timed out. ", reqPaymentHashStr)
 		return common.InterceptResult{
-			Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-			FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+			Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+			FailureMessage: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
 		}, nil
 	})
 
