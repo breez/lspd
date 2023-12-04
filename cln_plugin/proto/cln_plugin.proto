@@ -27,7 +27,7 @@ message Htlc {
     uint64 id = 2;
     uint64 amount_msat = 3;
     uint32 cltv_expiry = 4;
-    uint32 cltv_expiry_relative = 5;
+    int32 cltv_expiry_relative = 5;
     string payment_hash = 6;
 }
 

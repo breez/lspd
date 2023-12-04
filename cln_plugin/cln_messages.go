@@ -107,7 +107,7 @@ type Htlc struct {
 	Id                 uint64 `json:"id"`
 	AmountMsat         uint64 `json:"amount_msat"`
 	CltvExpiry         uint32 `json:"cltv_expiry"`
-	CltvExpiryRelative uint32 `json:"cltv_expiry_relative"`
+	CltvExpiryRelative int32  `json:"cltv_expiry_relative"`
 	PaymentHash        string `json:"payment_hash"`
 }
 
