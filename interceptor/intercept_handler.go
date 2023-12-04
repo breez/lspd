@@ -53,7 +53,7 @@ func NewInterceptHandler(
 
 func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptResult {
 	reqPaymentHashStr := hex.EncodeToString(req.PaymentHash)
-	log.Printf("Intercept: scid: %s, paymentHash: %x, outgoindAmount: %v, outgoingExpiry: %v, incomingExpiry: %v", req.Scid.ToString(), reqPaymentHashStr, req.OutgoingAmountMsat, req.OutgoingExpiry, req.IncomingExpiry)
+	log.Printf("Intercept: scid: %s, paymentHash: %s, outgoindAmount: %v, outgoingExpiry: %v, incomingExpiry: %v", req.Scid.ToString(), reqPaymentHashStr, req.OutgoingAmountMsat, req.OutgoingExpiry, req.IncomingExpiry)
 	resp, _, _ := i.payHashGroup.Do(reqPaymentHashStr, func() (interface{}, error) {
 		token, params, paymentHash, paymentSecret, destination, incomingAmountMsat, outgoingAmountMsat, channelPoint, tag, err := i.store.PaymentInfo(req.PaymentHash)
 		if err != nil {
@@ -150,7 +150,7 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 			notifyResult := i.notifyAndWait(reqPaymentHashStr, nextHop, isRegistered)
 			if notifyResult != nil {
 				log.Printf("paymentHash: %s, !isConnected and notifyResult != nil", reqPaymentHashStr)
-				return *notifyResult, nil
+				// return *notifyResult, nil
 			}
 		}
 

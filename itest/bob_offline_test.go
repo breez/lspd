@@ -57,7 +57,7 @@ func testFailureBobOffline(p *testParams) {
 	log.Printf("Alice paying")
 	route := constructRoute(p.lsp.LightningNode(), p.BreezClient().Node(), channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
 	_, err := alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
-	assert.Contains(p.t, err.Error(), "WIRE_UNKNOWN_NEXT_PEER")
+	assert.Contains(p.t, err.Error(), "WIRE_TEMPORARY_CHANNEL_FAILURE")
 
 	log.Printf("Starting breez client again")
 	p.BreezClient().Start()
