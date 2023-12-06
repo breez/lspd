@@ -93,6 +93,7 @@ func newClnBreezClient(h *lntest.TestHarness, m *lntest.Miner, name string) Bree
 		// https://github.com/ElementsProject/lightning/blob/774d16a72e125e4ae4e312b9e3307261983bec0e/openingd/openingd.c#L481-L520
 		"--max-concurrent-htlcs=30",
 		"--experimental-anchors",
+		"--developer",
 	)
 
 	return &clnBreezClient{

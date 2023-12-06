@@ -63,6 +63,7 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, nam
 		"--dev-allowdustreserve=true",
 		"--allow-deprecated-apis=true",
 		"--experimental-anchors",
+		"--developer",
 	}
 	lightningNode := lntest.NewClnNode(h, m, name, args...)
 	cln := &config.ClnConfig{
