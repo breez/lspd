@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/GoWebProd/uuid7 v0.0.0-20230623091058-5f5954faed6a
 	github.com/aws/aws-sdk-go v1.34.0
-	github.com/breez/lntest v0.0.28
+	github.com/breez/lntest v0.0.29-0.20231206103840-666bd5078c5e
 	github.com/btcsuite/btcd v0.23.5-0.20230228185050-38331963bddd
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.2
@@ -196,4 +196,4 @@ require (
 
 replace github.com/lightningnetwork/lnd v0.16.2-beta => github.com/breez/lnd v0.15.0-beta.rc6.0.20230501134702-cebcdf1b17fd
 
-replace github.com/elementsproject/glightning => github.com/breez/glightning v0.0.1-breez
+replace github.com/elementsproject/glightning => github.com/breez/glightning v0.0.1-breez.0.20231123140102-d50d43e22138
