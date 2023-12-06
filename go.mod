@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/GoWebProd/uuid7 v0.0.0-20230623091058-5f5954faed6a
 	github.com/aws/aws-sdk-go v1.34.0
-	github.com/breez/lntest v0.0.28
+	github.com/breez/lntest v0.0.29-0.20231206103840-666bd5078c5e
 	github.com/btcsuite/btcd v0.23.5-0.20230228185050-38331963bddd
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.2
