@@ -1,7 +1,9 @@
-# lspd simple server
-lspd is a simple deamon that provides [LSP](https://medium.com/breez-technology/introducing-lightning-service-providers-fe9fb1665d5f) services to [Breez clients](https://github.com/breez/breezmobile).   
+# lspd
+lspd is a simple deamon that provides [LSP](https://medium.com/breez-technology/introducing-lightning-service-providers-fe9fb1665d5f) services to Breez clients. 
 
 This is a simple example of an lspd that works with an [lnd](https://github.com/lightningnetwork/lnd) node or a [cln](https://github.com/ElementsProject/lightning) node.
+
+[Breez SDK](https://github.com/breez/breez-sdk) uses cln lsdp and [Breez mobile](https://github.com/breez/breezmobile) uses lnd lspd.
 
 ## Deployment
 Installation and configuration instructions for both implementations can be found here:
