@@ -58,7 +58,7 @@ NODES='[ { "name": "${LSPName}", "nodePubkey": "$PUBKEY", "lspdPrivateKey": "$LS
 ```
 
 ### Running lspd on CLN
-In order to run lspd on top of CLN, you need to run the lspd process and run cln with the provided cln plugin. You also need lightningd compiled with developer mode on (`./configure --enable-developer`)
+In order to run lspd on top of CLN, you need to run the lspd process and run cln with the provided cln plugin. You also need lightningd compiled with developer mode on (`./configure --enable-debugbuild`)
 
 1. Run cln with the following options set:
     - `--plugin=/path/to/lspd_plugin`: to use lspd as plugin
