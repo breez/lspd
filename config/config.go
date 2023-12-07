@@ -1,14 +1,18 @@
 package config
 
 type NodeConfig struct {
-	// Name of the LSP. If empty, the node's alias will be taken instead.
+	// Name of the LSP. If empty, the node's alias will be taken instead. The
+	// name is returned in the ChannelInformation api endpoint as a friendly
+	// name.
 	Name string `json:name,omitempty`
 
-	// The public key of the lightning node.
+	// The public key of the lightning node. If empty, the node's pubkey will be
+	// taken instead. The pubkey is returned in the ChannelInformation api
+	// endpoint, s
 	NodePubkey string `json:nodePubkey,omitempty`
 
 	// Hex encoded private key of the LSP. This is used to decrypt traffic from
-	// clients.
+	// clients. Note this is not the private key of the node.
 	LspdPrivateKey string `json:"lspdPrivateKey"`
 
 	// Tokens used to authenticate to lspd. These tokens must be unique for each
@@ -21,18 +25,27 @@ type NodeConfig struct {
 	LegacyOnionTokens []string `json:"legacyOnionTokens"`
 
 	// The network location of the lightning node, e.g. `12.34.56.78:9012` or
-	// `localhost:10011`
+	// `localhost:10011`. The host is returned in the ChannelInformation api
+	// endpoint so clients can connect to the node.
 	Host string `json:"host"`
 
 	// Public channel amount is a reserved amount for public channels. If a
-	// zero conf channel is opened, it will never have this exact amount.
-	PublicChannelAmount int64 `json:"publicChannelAmount,string"`
+	// zero conf channel is opened, it will never have this exact amount. This
+	// configuration option is Breez specific and can be ignored by others
+	// running lspd.
+	PublicChannelAmount int64 `json:"publicChannelAmount,string,omitempty"`
 
 	// The capacity of opened channels through the OpenChannel rpc.
-	ChannelAmount uint64 `json:"channelAmount,string"`
+	//
+	// Deprecated: This config option is part of the OpenChannel rpc, which is
+	// deprecated.
+	ChannelAmount uint64 `json:"channelAmount,string,omitempty"`
 
 	// Value indicating whether channels opened through the OpenChannel rpc
 	// should be private.
+	//
+	// Deprecated: This config option is part of the OpenChannel rpc, which is
+	// deprecated.
 	ChannelPrivate bool `json:"channelPrivate"`
 
 	// Number of blocks after which an opened channel is considered confirmed.
@@ -44,6 +57,9 @@ type NodeConfig struct {
 
 	// Smallest htlc amount routed over channels opened with the OpenChannel
 	// rpc call.
+	//
+	// Deprecated: This config option is part of the OpenChannel rpc, which is
+	// deprecated.
 	MinHtlcMsat uint64 `json:"minHtlcMsat,string"`
 
 	// The base fee for routing payments over the channel. It is configured on
@@ -61,21 +77,29 @@ type NodeConfig struct {
 	// on the incoming payment amount.
 	ChannelFeePermyriad int64 `json:"channelFeePermyriad,string"`
 
-	// Minimum fee for opening a zero conf channel in millisatoshi.
+	// Minimum fee for opening a zero conf channel in millisatoshi. If the fee
+	// using ChannelFeePermyriad is less than this amount, this amount is the
+	// actual fee to be paid.
 	ChannelMinimumFeeMsat int64 `json:"channelMinimumFeeMsat,string"`
 
 	// Channel capacity that is added on top of the incoming payment amount
 	// when a new zero conf channel is opened. In satoshi.
 	AdditionalChannelCapacity int64 `json:"additionalChannelCapacity,string"`
 
-	// The channel can be closed if not used this duration in seconds.
+	// The channel can be closed if not used this duration in seconds. This is
+	// not enforced by lspd, but gives an indication to clients.
 	MaxInactiveDuration uint64 `json:"maxInactiveDuration,string"`
 
 	// The maximum time to hold a htlc after sending a notification when the
-	// peer is offline.
+	// peer is offline. Defaults to 1m.
 	NotificationTimeout string `json:"notificationTimeout,string"`
 
+	// The minimum payment size accepted in LSPS2 forwards that need a channel
+	// open.
 	MinPaymentSizeMsat uint64 `json:"minPaymentSizeMsat,string"`
+
+	// The maximum payment size accepted in LSPS2 forwards that need a channel
+	// open.
 	MaxPaymentSizeMsat uint64 `json:"maxPaymentSizeMsat,string"`
 
 	// Set this field to connect to an LND node.
