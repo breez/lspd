@@ -247,8 +247,8 @@ func (c *ClnClient) GetPeerId(scid *lightning.ShortChannelID) ([]byte, error) {
 
 	var dest *string
 	for _, ch := range channels {
-		if ch.Alias.Local == scidStr ||
-			ch.Alias.Remote == scidStr ||
+		if (ch.Alias != nil && (ch.Alias.Local == scidStr ||
+			ch.Alias.Remote == scidStr)) ||
 			ch.ShortChannelId == scidStr {
 			dest = &ch.PeerId
 			break
