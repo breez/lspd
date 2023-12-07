@@ -150,6 +150,7 @@ func (i *LndHtlcInterceptor) intercept() error {
 				case common.INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(i.createOnionResponse(interceptResult, request))
 				case common.INTERCEPT_FAIL_HTLC_WITH_CODE:
+					log.Printf("paymenthash %x, failing htlc with code '%x'", request.PaymentHash, interceptResult.FailureCode)
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
 						IncomingCircuitKey: request.IncomingCircuitKey,
 						Action:             routerrpc.ResolveHoldForwardAction_FAIL,

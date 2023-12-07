@@ -201,19 +201,19 @@ func (i *ClnHtlcInterceptor) resumeWithOnion(request *proto.HtlcAccepted, interc
 	//decoding and encoding onion with alias in type 6 record.
 	payload, err := hex.DecodeString(request.Onion.Payload)
 	if err != nil {
-		log.Printf("resumeWithOnion: hex.DecodeString(%v) error: %v", request.Onion.Payload, err)
+		log.Printf("paymenthash: %s, resumeWithOnion: hex.DecodeString(%v) error: %v", request.Htlc.PaymentHash, request.Onion.Payload, err)
 		return i.failWithCode(request, common.FAILURE_TEMPORARY_CHANNEL_FAILURE)
 	}
 	newPayload, err := encodePayloadWithNextHop(payload, interceptResult.Scid, interceptResult.AmountMsat, interceptResult.FeeMsat)
 	if err != nil {
-		log.Printf("encodePayloadWithNextHop error: %v", err)
+		log.Printf("paymenthash: %s, encodePayloadWithNextHop error: %v", request.Htlc.PaymentHash, err)
 		return i.failWithCode(request, common.FAILURE_TEMPORARY_CHANNEL_FAILURE)
 	}
 
 	newPayloadStr := hex.EncodeToString(newPayload)
 
 	chanId := lnwire.NewChanIDFromOutPoint(interceptResult.ChannelPoint).String()
-	log.Printf("forwarding htlc to the destination node and a new private channel was opened")
+	log.Printf("paymenthash: %s, forwarding htlc to the destination node and a new private channel was opened", request.Htlc.PaymentHash)
 	return &proto.HtlcResolution{
 		Correlationid: request.Correlationid,
 		Outcome: &proto.HtlcResolution_Continue{
@@ -235,6 +235,7 @@ func (i *ClnHtlcInterceptor) defaultResolution(request *proto.HtlcAccepted) *pro
 }
 
 func (i *ClnHtlcInterceptor) failWithCode(request *proto.HtlcAccepted, code common.InterceptFailureCode) *proto.HtlcResolution {
+	log.Printf("paymenthash: %s, failing htlc with code: '%x'", request.Htlc.PaymentHash, code)
 	return &proto.HtlcResolution{
 		Correlationid: request.Correlationid,
 		Outcome: &proto.HtlcResolution_Fail{
