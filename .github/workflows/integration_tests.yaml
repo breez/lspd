@@ -9,6 +9,10 @@ env:
   CLIENT_REF: 'v0.16.4-breez-3'
   GO_VERSION: '^1.19'
   CLN_VERSION: 'v23.11'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
 
   setup-bitcoin-core:
