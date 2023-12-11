@@ -226,4 +226,8 @@ var allTestCases = []*testCase{
 		isLsps2:       true,
 		skipCreateLsp: true,
 	},
+	{
+		name: "testRestartLspNode",
+		test: testRestartLspNode,
+	},
 }

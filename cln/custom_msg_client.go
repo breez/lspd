@@ -161,7 +161,11 @@ func (c *CustomMsgClient) Send(msg *lightning.CustomMessage) error {
 	binary.BigEndian.PutUint16(t[:], uint16(msg.Type))
 
 	m := hex.EncodeToString(t[:]) + hex.EncodeToString(msg.Data)
-	_, err := c.client.client.SendCustomMessage(msg.PeerId, m)
+	client, err := c.client.getClient()
+	if err != nil {
+		return err
+	}
+	_, err = client.SendCustomMessage(msg.PeerId, m)
 	return err
 }
 
