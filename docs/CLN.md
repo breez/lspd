@@ -38,7 +38,7 @@ ALTER DATABASE <dbname> OWNER TO <username>;
 
 ### Configuration
 1. Create a random token (for instance using the command `openssl rand -base64 48`, or `./lspd genkey`)
-1. Define the environment variables as described in [sample.env](./sample.env). If `CERTMAGIC_DOMAIN` is defined, certificate for this domain is automatically obtained and renewed from Let's Encrypt. In this case, the port needs to be 443. If `CERTMAGIC_DOMAIN` is not defined, lspd needs to run behind a reverse proxy like treafik or nginx.
+1. Define the environment variables as described in [sample.env](../sample.env). If `CERTMAGIC_DOMAIN` is defined, certificate for this domain is automatically obtained and renewed from Let's Encrypt. In this case, the port needs to be 443. If `CERTMAGIC_DOMAIN` is not defined, lspd needs to run behind a reverse proxy like treafik or nginx.
 
 ENV variables:
 - `LISTEN_ADDRESS` defines the host:port for the lspd grpc server
