@@ -30,6 +30,7 @@ func (s *PostgresOpeningStore) GetFeeParamsSettings(token string) ([]*common.Ope
 		log.Printf("GetFeeParamsSettings(%v) error: %v", token, err)
 		return nil, err
 	}
+	defer rows.Close()
 
 	var settings []*common.OpeningFeeParamsSetting
 	for rows.Next() {

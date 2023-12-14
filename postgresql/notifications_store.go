@@ -60,6 +60,7 @@ func (s *NotificationsStore) GetRegistrations(
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
 	var result []string
 	for rows.Next() {
