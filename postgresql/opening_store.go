@@ -24,7 +24,8 @@ func NewPostgresOpeningStore(pool *pgxpool.Pool) *PostgresOpeningStore {
 }
 
 func (s *PostgresOpeningStore) GetFeeParamsSettings(token string) ([]*common.OpeningFeeParamsSetting, error) {
-	rows, err := s.pool.Query(context.Background(), `SELECT validity, params FROM new_channel_params WHERE token=$1`, token)
+	rows, err := s.pool.Query(context.Background(),
+		`SELECT validity, params FROM new_channel_params WHERE token=$1 AND validity>0`, token)
 	if err != nil {
 		log.Printf("GetFeeParamsSettings(%v) error: %v", token, err)
 		return nil, err
