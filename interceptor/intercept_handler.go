@@ -227,22 +227,6 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 			if chanResult != nil {
 				log.Printf("paymentHash: %s, channel opened successfully alias: %v, confirmed: %v", reqPaymentHashStr, chanResult.InitialChannelID.ToString(), chanResult.ConfirmedChannelID.ToString())
 
-				err := i.store.InsertChannel(
-					uint64(chanResult.InitialChannelID),
-					uint64(chanResult.ConfirmedChannelID),
-					channelPoint.String(),
-					destination,
-					time.Now(),
-				)
-
-				if err != nil {
-					log.Printf("paymentHash: %s, insertChannel error: %v", reqPaymentHashStr, err)
-					return common.InterceptResult{
-						Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-						FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
-					}, nil
-				}
-
 				channelID := chanResult.ConfirmedChannelID
 				if uint64(channelID) == 0 {
 					channelID = chanResult.InitialChannelID
