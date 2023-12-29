@@ -46,4 +46,9 @@ type Store interface {
 	MatchForwardsAndChannels(ctx context.Context) error
 	ExportTokenForwardsForExternalNode(ctx context.Context, start time.Time, end time.Time, node []byte, externalNode []byte) ([]*ExternalTokenForward, error)
 	ImportTokenForwards(ctx context.Context, forwards []*ExternalTokenForward) error
+	MatchInternalForwards(ctx context.Context, start time.Time, end time.Time) error
+	MatchExternalForwards(ctx context.Context, start time.Time, end time.Time) error
+	GetFirstAndLastMatchedForwardTimes(ctx context.Context, internal bool) (*time.Time, *time.Time, error)
+	GetFirstForwardTime(ctx context.Context) (*time.Time, error)
+	GetForwardsWithoutChannelCount(ctx context.Context) (int64, error)
 }

@@ -112,6 +112,8 @@ func main() {
 	go channelSync.ChannelsSynchronize(ctx)
 	forwardSync := history.NewForwardChannelSync(historyStore)
 	go forwardSync.ForwardsSynchronize(ctx)
+	forwardMatch := history.NewForwardMatcher(historyStore)
+	go forwardMatch.MatchForwards(ctx)
 
 	var interceptors []interceptor.HtlcInterceptor
 	for _, node := range nodes {

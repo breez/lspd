@@ -126,6 +126,21 @@ func (s *mockHistoryStore) ExportTokenForwardsForExternalNode(ctx context.Contex
 func (s *mockHistoryStore) ImportTokenForwards(ctx context.Context, forwards []*history.ExternalTokenForward) error {
 	return nil
 }
+func (s *mockHistoryStore) MatchInternalForwards(ctx context.Context, start time.Time, end time.Time) error {
+	return nil
+}
+func (s *mockHistoryStore) MatchExternalForwards(ctx context.Context, start time.Time, end time.Time) error {
+	return nil
+}
+func (s *mockHistoryStore) GetFirstAndLastMatchedForwardTimes(ctx context.Context, internal bool) (*time.Time, *time.Time, error) {
+	return nil, nil, ErrNotImplemented
+}
+func (s *mockHistoryStore) GetFirstForwardTime(ctx context.Context) (*time.Time, error) {
+	return nil, ErrNotImplemented
+}
+func (s *mockHistoryStore) GetForwardsWithoutChannelCount(ctx context.Context) (int64, error) {
+	return 0, ErrNotImplemented
+}
 
 type mockLightningClient struct {
 	openResponses    []*wire.OutPoint
