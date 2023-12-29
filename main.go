@@ -130,6 +130,9 @@ func main() {
 			}
 
 			client.StartListeners()
+
+			forwardSync := lnd.NewForwardSync(node.NodeId, client, historyStore)
+			go forwardSync.ForwardsSynchronize(ctx)
 			interceptor := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, feeStrategy, notificationService)
 			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node.NodeConfig, client, interceptor)
 			if err != nil {
@@ -143,6 +146,8 @@ func main() {
 				log.Fatalf("failed to initialize CLN client: %v", err)
 			}
 
+			forwardSync := cln.NewForwardSync(node.NodeId, client, historyStore)
+			go forwardSync.ForwardsSynchronize(ctx)
 			legacyHandler := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, feeStrategy, notificationService)
 			lsps2Handler := lsps2.NewInterceptHandler(lsps2Store, historyStore, openingService, client, feeEstimator, &lsps2.InterceptorConfig{
 				NodeId:                       node.NodeId,
