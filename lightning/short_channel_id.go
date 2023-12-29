@@ -43,6 +43,9 @@ func NewShortChannelIDFromString(channelID string) (*ShortChannelID, error) {
 }
 
 func (c *ShortChannelID) ToString() string {
+	if c == nil {
+		return ""
+	}
 	u := uint64(*c)
 	blockHeight := (u >> 40) & 0xFFFFFF
 	txIndex := (u >> 16) & 0xFFFFFF
