@@ -349,6 +349,44 @@ func (c *ClnClient) WaitChannelActive(peerID []byte, deadline time.Time) error {
 	return nil
 }
 
+func (c *ClnClient) ListChannels() ([]*lightning.Channel, error) {
+	channels, err := c.client.ListPeerChannels()
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*lightning.Channel, len(channels))
+	for i, channel := range channels {
+		peerId, err := hex.DecodeString(channel.PeerId)
+		if err != nil {
+			log.Printf("cln.ListChannels returned channel without peer id: %+v", channel)
+			continue
+		}
+		aliasScid, confirmedScid, err := mapScidsFromChannel(channel)
+		if err != nil {
+			return nil, err
+		}
+
+		var outpoint *wire.OutPoint
+		fundingTxId, err := hex.DecodeString(channel.FundingTxId)
+		if err == nil && fundingTxId != nil && len(fundingTxId) > 0 {
+			outpoint, _ = lightning.NewOutPoint(fundingTxId, channel.FundingOutnum)
+		}
+		if outpoint == nil {
+			log.Printf("cln.ListChannels returned channel without outpoint: %+v", channel)
+			continue
+		}
+		result[i] = &lightning.Channel{
+			AliasScid:     aliasScid,
+			ConfirmedScid: confirmedScid,
+			ChannelPoint:  outpoint,
+			PeerId:        peerId,
+		}
+	}
+
+	return result, nil
+}
+
 func mapScidsFromChannel(c *glightning.PeerChannel) (*lightning.ShortChannelID, *lightning.ShortChannelID, error) {
 	var confirmedScid *lightning.ShortChannelID
 	var aliasScid *lightning.ShortChannelID
