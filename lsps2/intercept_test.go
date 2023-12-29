@@ -31,9 +31,9 @@ var defaultChainHash = chainhash.Hash([32]byte{})
 var defaultOutPoint = wire.NewOutPoint(&defaultChainHash, 0)
 var defaultChannelScid uint64 = 456
 var defaultChanResult = &lightning.GetChannelResult{
-	HtlcMinimumMsat:    defaultConfig().HtlcMinimumMsat,
-	InitialChannelID:   lightning.ShortChannelID(defaultChannelScid),
-	ConfirmedChannelID: lightning.ShortChannelID(defaultChannelScid),
+	HtlcMinimumMsat: defaultConfig().HtlcMinimumMsat,
+	AliasScid:       (*lightning.ShortChannelID)(&defaultChannelScid),
+	ConfirmedScid:   (*lightning.ShortChannelID)(&defaultChannelScid),
 }
 
 func defaultOpeningFeeParams() common.OpeningFeeParams {

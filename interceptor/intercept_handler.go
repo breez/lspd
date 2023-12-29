@@ -225,11 +225,18 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 		for {
 			chanResult, _ := i.client.GetChannel(destination, *channelPoint)
 			if chanResult != nil {
-				log.Printf("paymentHash: %s, channel opened successfully alias: %v, confirmed: %v", reqPaymentHashStr, chanResult.InitialChannelID.ToString(), chanResult.ConfirmedChannelID.ToString())
+				log.Printf("paymentHash: %s, channel opened successfully alias: '%v', confirmed: '%v'", reqPaymentHashStr, chanResult.AliasScid.ToString(), chanResult.ConfirmedScid.ToString())
 
-				channelID := chanResult.ConfirmedChannelID
-				if uint64(channelID) == 0 {
-					channelID = chanResult.InitialChannelID
+				var scid *lightning.ShortChannelID
+				if chanResult.ConfirmedScid == nil {
+					if chanResult.AliasScid == nil {
+						log.Printf("Error: GetChannel: Both confirmed scid and alias scid are nil: %+v", chanResult)
+						<-time.After(1 * time.Second)
+						continue
+					}
+					scid = chanResult.AliasScid
+				} else {
+					scid = chanResult.ConfirmedScid
 				}
 
 				useLegacyOnionBlob := slices.Contains(i.config.LegacyOnionTokens, token)
@@ -237,7 +244,7 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 					Action:             common.INTERCEPT_RESUME_WITH_ONION,
 					Destination:        destination,
 					ChannelPoint:       channelPoint,
-					Scid:               channelID,
+					Scid:               *scid,
 					PaymentSecret:      paymentSecret,
 					AmountMsat:         uint64(amt),
 					TotalAmountMsat:    uint64(outgoingAmountMsat),
@@ -245,7 +252,7 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 				}, nil
 			}
 
-			log.Printf("paymentHash: %s, waiting for channel to get opened.... %v", reqPaymentHashStr, destination)
+			log.Printf("paymentHash: %s, waiting for channel to get opened... %x", reqPaymentHashStr, destination)
 			if time.Now().After(deadline) {
 				log.Printf("paymentHash: %s, Stop retrying getChannel(%v, %v)", reqPaymentHashStr, destination, channelPoint.String())
 				break
