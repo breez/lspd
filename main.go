@@ -97,7 +97,6 @@ func main() {
 
 	interceptStore := postgresql.NewPostgresInterceptStore(pool)
 	openingStore := postgresql.NewPostgresOpeningStore(pool)
-	forwardingStore := postgresql.NewForwardingEventStore(pool)
 	notificationsStore := postgresql.NewNotificationsStore(pool)
 	lsps2Store := postgresql.NewLsps2Store(pool)
 
@@ -127,9 +126,8 @@ func main() {
 			}
 
 			client.StartListeners()
-			fwsync := lnd.NewForwardingHistorySync(client, interceptStore, forwardingStore)
 			interceptor := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, openingService, feeEstimator, feeStrategy, notificationService)
-			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node.NodeConfig, client, fwsync, interceptor)
+			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node.NodeConfig, client, interceptor)
 			if err != nil {
 				log.Fatalf("failed to initialize LND interceptor: %v", err)
 			}
