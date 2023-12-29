@@ -12,6 +12,7 @@ import (
 )
 
 type Node struct {
+	NodeId              []byte
 	Client              lightning.Client
 	NodeConfig          *config.NodeConfig
 	PrivateKey          *btcec.PrivateKey

@@ -304,6 +304,12 @@ func initializeNodes(configs []*config.NodeConfig) ([]*common.Node, error) {
 			node.NodeConfig.NodePubkey = info.Pubkey
 		}
 
+		nodeId, err := hex.DecodeString(info.Pubkey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse node id %s", info.Pubkey)
+		}
+
+		node.NodeId = nodeId
 		node.Tokens = config.Tokens
 		nodes = append(nodes, node)
 	}
