@@ -12,6 +12,7 @@ import (
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/history"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/notifications"
@@ -21,9 +22,11 @@ import (
 )
 
 type Interceptor struct {
+	nodeid              []byte
 	client              lightning.Client
 	config              *config.NodeConfig
 	store               InterceptStore
+	historyStore        history.Store
 	openingService      common.OpeningService
 	feeEstimator        chain.FeeEstimator
 	feeStrategy         chain.FeeStrategy
@@ -35,15 +38,19 @@ func NewInterceptHandler(
 	client lightning.Client,
 	config *config.NodeConfig,
 	store InterceptStore,
+	historyStore history.Store,
 	openingService common.OpeningService,
 	feeEstimator chain.FeeEstimator,
 	feeStrategy chain.FeeStrategy,
 	notificationService *notifications.NotificationService,
 ) *Interceptor {
+	nodeid, _ := hex.DecodeString(config.NodePubkey)
 	return &Interceptor{
+		nodeid:              nodeid,
 		client:              client,
 		config:              config,
 		store:               store,
+		historyStore:        historyStore,
 		openingService:      openingService,
 		feeEstimator:        feeEstimator,
 		feeStrategy:         feeStrategy,
@@ -237,6 +244,19 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 					scid = chanResult.AliasScid
 				} else {
 					scid = chanResult.ConfirmedScid
+				}
+
+				err = i.historyStore.UpdateChannels(context.TODO(), []*history.ChannelUpdate{{
+					NodeID:        i.nodeid,
+					PeerId:        destination,
+					AliasScid:     chanResult.AliasScid,
+					ConfirmedScid: chanResult.ConfirmedScid,
+					ChannelPoint:  channelPoint,
+					LastUpdate:    time.Now(),
+				}})
+				if err != nil {
+					// Don't break here, this is not critical.
+					log.Printf("paymentHash: %s, failed to insert newly opened channel in history store. %v", reqPaymentHashStr, channelPoint.String())
 				}
 
 				useLegacyOnionBlob := slices.Contains(i.config.LegacyOnionTokens, token)

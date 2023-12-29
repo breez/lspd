@@ -9,6 +9,7 @@ import (
 	"github.com/GoWebProd/uuid7"
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/common"
+	"github.com/breez/lspd/history"
 	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
@@ -93,6 +94,12 @@ func (s *mockLsps2Store) SavePromises(ctx context.Context, req *SavePromises) er
 }
 
 func (s *mockLsps2Store) RemoveUnusedExpired(ctx context.Context, before time.Time) error {
+	return nil
+}
+
+type mockHistoryStore struct{}
+
+func (s *mockHistoryStore) UpdateChannels(ctx context.Context, updates []*history.ChannelUpdate) error {
 	return nil
 }
 

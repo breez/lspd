@@ -11,12 +11,14 @@ import (
 
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/common"
+	"github.com/breez/lspd/history"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
 	"github.com/btcsuite/btcd/wire"
 )
 
 type InterceptorConfig struct {
+	NodeId                       []byte
 	AdditionalChannelCapacitySat uint64
 	MinConfs                     *uint32
 	TargetConf                   uint32
@@ -30,6 +32,7 @@ type InterceptorConfig struct {
 
 type Interceptor struct {
 	store               Lsps2Store
+	historyStore        history.Store
 	openingService      common.OpeningService
 	client              lightning.Client
 	feeEstimator        chain.FeeEstimator
@@ -44,6 +47,7 @@ type Interceptor struct {
 
 func NewInterceptHandler(
 	store Lsps2Store,
+	historyStore history.Store,
 	openingService common.OpeningService,
 	client lightning.Client,
 	feeEstimator chain.FeeEstimator,
@@ -55,6 +59,7 @@ func NewInterceptHandler(
 
 	return &Interceptor{
 		store:          store,
+		historyStore:   historyStore,
 		openingService: openingService,
 		client:         client,
 		feeEstimator:   feeEstimator,
@@ -543,6 +548,19 @@ func (i *Interceptor) ensureChannelOpen(payment *paymentState) {
 			scid = chanResult.AliasScid
 		} else {
 			scid = chanResult.ConfirmedScid
+		}
+
+		err := i.historyStore.UpdateChannels(context.TODO(), []*history.ChannelUpdate{{
+			NodeID:        i.config.NodeId,
+			PeerId:        destination,
+			AliasScid:     chanResult.AliasScid,
+			ConfirmedScid: chanResult.ConfirmedScid,
+			ChannelPoint:  payment.registration.ChannelPoint,
+			LastUpdate:    time.Now(),
+		}})
+		if err != nil {
+			// Don't break here, this is not critical.
+			log.Printf("failed to insert newly opened channel in history store. %v", payment.registration.ChannelPoint.String())
 		}
 
 		i.paymentChanOpened <- &paymentChanOpenedEvent{

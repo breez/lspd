@@ -150,7 +150,7 @@ func setupInterceptor(
 		openingService = defaultopeningService()
 	}
 
-	i := NewInterceptHandler(store, openingService, client, f, config)
+	i := NewInterceptHandler(store, &mockHistoryStore{}, openingService, client, f, config)
 	go i.Start(ctx)
 	return i
 }
