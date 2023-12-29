@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/lightning"
@@ -100,25 +99,5 @@ func (s *PostgresInterceptStore) RegisterPayment(token string, params *common.Op
 		return fmt.Errorf("registerPayment(%x, %x, %x, %v, %v, %v, %s) error: %w",
 			destination, paymentHash, paymentSecret, incomingAmountMsat, outgoingAmountMsat, tag, p, err)
 	}
-	return nil
-}
-
-func (s *PostgresInterceptStore) InsertChannel(initialChanID, confirmedChanId uint64, channelPoint string, nodeID []byte, lastUpdate time.Time) error {
-
-	query := `INSERT INTO
-	channels (initial_chanid, confirmed_chanid, channel_point, nodeid, last_update)
-	VALUES ($1, NULLIF($2, 0::int8), $3, $4, $5)
-	ON CONFLICT (channel_point) DO UPDATE SET confirmed_chanid=NULLIF($2, 0::int8), last_update=$5`
-
-	c, err := s.pool.Exec(context.Background(),
-		query, int64(initialChanID), int64(confirmedChanId), channelPoint, nodeID, lastUpdate)
-	if err != nil {
-		log.Printf("insertChannel(%v, %v, %s, %x) error: %v",
-			initialChanID, confirmedChanId, channelPoint, nodeID, err)
-		return fmt.Errorf("insertChannel(%v, %v, %s, %x) error: %w",
-			initialChanID, confirmedChanId, channelPoint, nodeID, err)
-	}
-	log.Printf("insertChannel(%v, %v, %x) result: %v",
-		initialChanID, confirmedChanId, nodeID, c.String())
 	return nil
 }
