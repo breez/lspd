@@ -25,6 +25,13 @@ type OpenChannelRequest struct {
 	TargetConf     *uint32
 }
 
+type Channel struct {
+	AliasScid     *ShortChannelID
+	ConfirmedScid *ShortChannelID
+	ChannelPoint  *wire.OutPoint
+	PeerId        []byte
+}
+
 type Client interface {
 	GetInfo() (*GetInfoResult, error)
 	IsConnected(destination []byte) (bool, error)
@@ -34,4 +41,5 @@ type Client interface {
 	GetClosedChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error)
 	WaitOnline(peerID []byte, deadline time.Time) error
 	WaitChannelActive(peerID []byte, deadline time.Time) error
+	ListChannels() ([]*Channel, error)
 }

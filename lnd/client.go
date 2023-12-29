@@ -492,6 +492,65 @@ func (c *LndClient) WaitChannelActive(peerID []byte, deadline time.Time) error {
 	}
 }
 
+func (c *LndClient) ListChannels() ([]*lightning.Channel, error) {
+	channels, err := c.client.ListChannels(
+		context.TODO(),
+		&lnrpc.ListChannelsRequest{},
+	)
+	if err != nil {
+		return nil, err
+	}
+	pendingChannels, err := c.client.PendingChannels(
+		context.TODO(),
+		&lnrpc.PendingChannelsRequest{},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*lightning.Channel, len(channels.Channels))
+	for i, c := range channels.Channels {
+		peerId, err := hex.DecodeString(c.RemotePubkey)
+		if err != nil {
+			log.Printf("hex.DecodeString in LndClient.ListChannels error: %v", err)
+			continue
+		}
+		alias, confirmedScid := mapScidsFromChannel(c)
+		outpoint, err := lightning.NewOutPointFromString(c.ChannelPoint)
+		if err != nil {
+			log.Printf("lightning.NewOutPointFromString(%s) in LndClient.ListChannels error: %v", c.ChannelPoint, err)
+		}
+
+		result[i] = &lightning.Channel{
+			AliasScid:     alias,
+			ConfirmedScid: confirmedScid,
+			ChannelPoint:  outpoint,
+			PeerId:        peerId,
+		}
+	}
+
+	for _, c := range pendingChannels.PendingOpenChannels {
+		peerId, err := hex.DecodeString(c.Channel.RemoteNodePub)
+		if err != nil {
+			log.Printf("hex.DecodeString in LndClient.ListChannels error: %v", err)
+			continue
+		}
+
+		outpoint, err := lightning.NewOutPointFromString(c.Channel.ChannelPoint)
+		if err != nil {
+			log.Printf("lightning.NewOutPointFromString(%s) in LndClient.ListChannels error: %v", c.Channel.ChannelPoint, err)
+		}
+		result = append(result, &lightning.Channel{
+			AliasScid:     nil,
+			ConfirmedScid: nil,
+			ChannelPoint:  outpoint,
+			PeerId:        peerId,
+		})
+	}
+
+	return result, nil
+}
+
 func mapScidsFromChannel(c *lnrpc.Channel) (*lightning.ShortChannelID, *lightning.ShortChannelID) {
 	var alias *lightning.ShortChannelID
 	var confirmedScid *lightning.ShortChannelID

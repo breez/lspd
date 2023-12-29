@@ -147,6 +147,9 @@ func (c *mockLightningClient) WaitOnline(peerID []byte, deadline time.Time) erro
 func (c *mockLightningClient) WaitChannelActive(peerID []byte, deadline time.Time) error {
 	return ErrNotImplemented
 }
+func (c *mockLightningClient) ListChannels() ([]*lightning.Channel, error) {
+	return nil, ErrNotImplemented
+}
 
 type mockFeeEstimator struct {
 }
