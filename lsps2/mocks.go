@@ -120,6 +120,12 @@ func (s *mockHistoryStore) FetchLndForwardOffset(ctx context.Context, nodeId []b
 func (s *mockHistoryStore) MatchForwardsAndChannels(ctx context.Context) error {
 	return nil
 }
+func (s *mockHistoryStore) ExportTokenForwardsForExternalNode(ctx context.Context, start time.Time, end time.Time, node []byte, externalNode []byte) ([]*history.ExternalTokenForward, error) {
+	return nil, ErrNotImplemented
+}
+func (s *mockHistoryStore) ImportTokenForwards(ctx context.Context, forwards []*history.ExternalTokenForward) error {
+	return nil
+}
 
 type mockLightningClient struct {
 	openResponses    []*wire.OutPoint

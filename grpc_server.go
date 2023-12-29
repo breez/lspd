@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/breez/lspd/common"
+	"github.com/breez/lspd/history"
 	"github.com/breez/lspd/notifications"
 	lspdrpc "github.com/breez/lspd/rpc"
 	"github.com/caddyserver/certmagic"
@@ -27,6 +28,7 @@ type grpcServer struct {
 	s               *grpc.Server
 	c               lspdrpc.ChannelOpenerServer
 	n               notifications.NotificationsServer
+	h               history.HistoryServer
 }
 
 func NewGrpcServer(
@@ -35,6 +37,7 @@ func NewGrpcServer(
 	certmagicDomain string,
 	c lspdrpc.ChannelOpenerServer,
 	n notifications.NotificationsServer,
+	h history.HistoryServer,
 ) (*grpcServer, error) {
 
 	return &grpcServer{
@@ -43,6 +46,7 @@ func NewGrpcServer(
 		certmagicDomain: certmagicDomain,
 		c:               c,
 		n:               n,
+		h:               h,
 	}, nil
 }
 
@@ -87,6 +91,7 @@ func (s *grpcServer) Start() error {
 	)
 	lspdrpc.RegisterChannelOpenerServer(srv, s.c)
 	notifications.RegisterNotificationsServer(srv, s.n)
+	history.RegisterHistoryServer(srv, s.h)
 
 	s.s = srv
 	s.lis = lis

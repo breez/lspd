@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+option go_package = "github.com/breez/lspd/history";
+
+package history;
+
+service History {
+    rpc ExportForwards(ExportForwardsRequest)
+        returns (ExportForwardsResponse) {}
+    rpc ImportExternalForwards(ImportExternalForwardsRequest)
+        returns (ImportExternalForwardsResponse) {}
+}  
+
+message ExportForwardsRequest {
+    // Start unix timestamp (seconds)
+    int64 start = 1;
+    // End unix timestamp (seconds)
+    int64 end = 2;
+    // Node id of the node that forwarded the payments. 
+    bytes nodeid = 3;
+    // Node id of the peer lsp to export this data for.
+    bytes external_nodeid = 4;
+}
+message ExportForwardsResponse {
+    repeated ExportedForward forwards = 1;
+}
+message ImportExternalForwardsRequest {
+    repeated ExportedForward forwards = 1;
+}
+message ImportExternalForwardsResponse {}
+message ExportedForward {
+    string token = 1;
+    bytes nodeid = 2;
+    bytes external_nodeid = 3;
+    // Nanoseconds since epoch
+    int64 resolved_time = 4;
+    string direction = 5;
+    uint64 amount_msat = 6;
+}

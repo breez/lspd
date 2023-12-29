@@ -184,7 +184,8 @@ func main() {
 	certMagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
 	cs := NewChannelOpenerServer(interceptStore, openingService)
 	ns := notifications.NewNotificationsServer(notificationsStore)
-	s, err := NewGrpcServer(nodesService, address, certMagicDomain, cs, ns)
+	hs := history.NewServer(historyStore, nodes)
+	s, err := NewGrpcServer(nodesService, address, certMagicDomain, cs, ns, hs)
 	if err != nil {
 		log.Fatalf("failed to initialize grpc server: %v", err)
 	}

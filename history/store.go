@@ -17,6 +17,16 @@ type ChannelUpdate struct {
 	LastUpdate    time.Time
 }
 
+type ExternalTokenForward struct {
+	Token          string
+	NodeId         []byte
+	ExternalNodeId []byte
+	ResolvedTime   time.Time
+	Direction      string
+	// The amount forwarded to/from the lsp
+	AmountMsat uint64
+}
+
 type Forward struct {
 	Identifier   string
 	InChannel    lightning.ShortChannelID
@@ -34,4 +44,6 @@ type Store interface {
 	SetClnForwardOffsets(ctx context.Context, nodeId []byte, created uint64, updated uint64) error
 	FetchLndForwardOffset(ctx context.Context, nodeId []byte) (*time.Time, error)
 	MatchForwardsAndChannels(ctx context.Context) error
+	ExportTokenForwardsForExternalNode(ctx context.Context, start time.Time, end time.Time, node []byte, externalNode []byte) ([]*ExternalTokenForward, error)
+	ImportTokenForwards(ctx context.Context, forwards []*ExternalTokenForward) error
 }

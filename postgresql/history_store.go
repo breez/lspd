@@ -12,6 +12,38 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// NOTE: This query doesn't match on node id, because it is not available.
+// This does not produce duplicates, because token channels are always with a
+// remote node. If lspd were hosting both nodes, this would produce duplicates
+// on funding tx.
+const tokenChannelsCte = `
+WITH token_channels AS (
+	SELECT p.tag::json->>'apiKeyHash' AS token
+	,      c.nodeid
+	,      c.peerid
+	,      c.funding_tx_id
+	,      c.funding_tx_outnum
+	,      p.incoming_amount_msat - p.outgoing_amount_msat AS channel_fee_msat
+	FROM public.payments p
+	INNER JOIN public.channels c 
+		ON p.funding_tx_id = c.funding_tx_id 
+		AND p.funding_tx_outnum = c.funding_tx_outnum
+	WHERE p.tag IS NOT NULL
+	UNION ALL
+	SELECT r.token
+	,      c.nodeid
+	,      c.peerid
+	,      c.funding_tx_id
+	,      c.funding_tx_outnum
+	,      b.fee_msat AS channel_fee_msat
+	FROM lsps2.bought_channels b
+	INNER JOIN lsps2.buy_registrations r
+		ON b.registration_id = r.id
+	INNER JOIN public.channels c 
+		ON b.funding_tx_id = c.funding_tx_id 
+		AND b.funding_tx_outnum = c.funding_tx_outnum
+)`
+
 type copyFromChanUpdates struct {
 	channels []*history.ChannelUpdate
 	idx      int
@@ -95,6 +127,37 @@ func (cfe *copyFromForwards) Values() ([]interface{}, error) {
 }
 
 func (cfe *copyFromForwards) Err() error {
+	return cfe.err
+}
+
+type copyFromTokenForwards struct {
+	generator *uuid7.Generator
+	forwards  []*history.ExternalTokenForward
+	idx       int
+	err       error
+}
+
+func (cfe *copyFromTokenForwards) Next() bool {
+	cfe.idx++
+	return cfe.idx < len(cfe.forwards)
+}
+
+func (cfe *copyFromTokenForwards) Values() ([]interface{}, error) {
+	forward := cfe.forwards[cfe.idx]
+	var id [16]byte = cfe.generator.Next()
+	values := []interface{}{
+		id,
+		forward.NodeId,
+		forward.ExternalNodeId,
+		forward.Token,
+		forward.ResolvedTime.UnixNano(),
+		forward.Direction,
+		int64(forward.AmountMsat),
+	}
+	return values, nil
+}
+
+func (cfe *copyFromTokenForwards) Err() error {
 	return cfe.err
 }
 
@@ -375,4 +438,121 @@ func (s *HistoryStore) MatchForwardsAndChannels(ctx context.Context) error {
 	}
 	log.Printf("Matched %v outgoing forwards with their corresponding peers", upd.RowsAffected())
 	return nil
+}
+
+func (s *HistoryStore) ExportTokenForwardsForExternalNode(
+	ctx context.Context,
+	start time.Time,
+	end time.Time,
+	node []byte,
+	externalNode []byte,
+) ([]*history.ExternalTokenForward, error) {
+	startNs := start.UnixNano()
+	endNs := end.UnixNano()
+	rows, err := s.pool.Query(
+		ctx, tokenChannelsCte+`
+		SELECT * FROM (
+			SELECT 'send' AS direction
+			,      c_in.token
+			,      h.resolved_time
+			,      h.amt_msat_out AS amt_msat
+			FROM public.forwarding_history h
+			INNER JOIN public.channels c_out
+				ON h.nodeid = c_out.nodeid AND h.funding_tx_id_out = c_out.funding_tx_id AND h.funding_tx_outnum_out = c_out.funding_tx_outnum
+			INNER JOIN token_channels c_in
+				ON h.nodeid = c_in.nodeid AND h.funding_tx_id_in = c_in.funding_tx_id AND h.funding_tx_outnum_in = c_in.funding_tx_outnum
+			WHERE h.nodeid = $1 AND c_out.peerid = $2 AND h.resolved_time >= $3 AND h.resolved_time < $4
+			UNION ALL
+			SELECT 'receive' AS direction
+			,      c_out.token
+			,      h.resolved_time
+			,      h.amt_msat_in AS amt_msat
+			FROM public.forwarding_history h
+			INNER JOIN token_channels c_out
+			    ON h.nodeid = c_out.nodeid AND h.funding_tx_id_out = c_out.funding_tx_id AND h.funding_tx_outnum_out = c_out.funding_tx_outnum
+			INNER JOIN public.channels c_in
+			    ON h.nodeid = c_in.nodeid AND h.funding_tx_id_in = c_in.funding_tx_id AND h.funding_tx_outnum_in = c_in.funding_tx_outnum
+			WHERE h.nodeid = $1 AND c_in.peerid = $2 AND h.resolved_time >= $3 AND h.resolved_time < $4
+		)
+		ORDER BY resolved_time DESC
+		`,
+		node,
+		externalNode,
+		startNs,
+		endNs,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*history.ExternalTokenForward, rows.CommandTag().RowsAffected())
+	for rows.Next() {
+		var direction string
+		var token string
+		var resolved_time int64
+		var amt_msat int64
+		err = rows.Scan(&direction, &token, &resolved_time, &amt_msat)
+		if err != nil {
+			return nil, fmt.Errorf("rows.Scan err: %w", err)
+		}
+
+		result = append(result, &history.ExternalTokenForward{
+			Token:          token,
+			NodeId:         node,
+			ExternalNodeId: externalNode,
+			ResolvedTime:   time.Unix(0, resolved_time),
+			Direction:      direction,
+			AmountMsat:     uint64(amt_msat),
+		})
+	}
+
+	return result, nil
+}
+
+func (s *HistoryStore) ImportTokenForwards(ctx context.Context, forwards []*history.ExternalTokenForward) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("pgxPool.Begin() error: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	rowSrc := copyFromTokenForwards{
+		forwards: forwards,
+		idx:      -1,
+	}
+
+	_, err = tx.Exec(ctx, `
+	CREATE TEMP TABLE tmp_table ON COMMIT DROP AS
+		SELECT *
+		FROM external_token_forwards
+		WITH NO DATA;
+	`)
+	if err != nil {
+		return fmt.Errorf("CREATE TEMP TABLE error: %w", err)
+	}
+
+	count, err := tx.CopyFrom(
+		ctx,
+		pgx.Identifier{"tmp_table"},
+		[]string{"id", "nodeid", "external_nodeid", "token", "resolved_time", "direction", "amount_msat"},
+		&rowSrc,
+	)
+	if err != nil {
+		return fmt.Errorf("CopyFrom() error: %w", err)
+	}
+	log.Printf("ImportTokenForwards count1: %v", count)
+
+	cmdTag, err := tx.Exec(ctx, `
+	INSERT INTO external_token_forwards
+		SELECT *
+		FROM tmp_table
+	ON CONFLICT DO NOTHING
+	`)
+	if err != nil {
+		return fmt.Errorf("INSERT INTO external_token_forwards error: %w", err)
+	}
+	log.Printf("ImportTokenForwards count2: %v", cmdTag.RowsAffected())
+
+	return tx.Commit(ctx)
 }
