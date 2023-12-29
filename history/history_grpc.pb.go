@@ -24,6 +24,7 @@ const _ = grpc.SupportPackageIsVersion7
 type HistoryClient interface {
 	ExportForwards(ctx context.Context, in *ExportForwardsRequest, opts ...grpc.CallOption) (*ExportForwardsResponse, error)
 	ImportExternalForwards(ctx context.Context, in *ImportExternalForwardsRequest, opts ...grpc.CallOption) (*ImportExternalForwardsResponse, error)
+	GetRevenue(ctx context.Context, in *GetRevenueRequest, opts ...grpc.CallOption) (*GetRevenueResponse, error)
 }
 
 type historyClient struct {
@@ -52,12 +53,22 @@ func (c *historyClient) ImportExternalForwards(ctx context.Context, in *ImportEx
 	return out, nil
 }
 
+func (c *historyClient) GetRevenue(ctx context.Context, in *GetRevenueRequest, opts ...grpc.CallOption) (*GetRevenueResponse, error) {
+	out := new(GetRevenueResponse)
+	err := c.cc.Invoke(ctx, "/history.History/GetRevenue", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HistoryServer is the server API for History service.
 // All implementations must embed UnimplementedHistoryServer
 // for forward compatibility
 type HistoryServer interface {
 	ExportForwards(context.Context, *ExportForwardsRequest) (*ExportForwardsResponse, error)
 	ImportExternalForwards(context.Context, *ImportExternalForwardsRequest) (*ImportExternalForwardsResponse, error)
+	GetRevenue(context.Context, *GetRevenueRequest) (*GetRevenueResponse, error)
 	mustEmbedUnimplementedHistoryServer()
 }
 
@@ -70,6 +81,9 @@ func (UnimplementedHistoryServer) ExportForwards(context.Context, *ExportForward
 }
 func (UnimplementedHistoryServer) ImportExternalForwards(context.Context, *ImportExternalForwardsRequest) (*ImportExternalForwardsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ImportExternalForwards not implemented")
+}
+func (UnimplementedHistoryServer) GetRevenue(context.Context, *GetRevenueRequest) (*GetRevenueResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRevenue not implemented")
 }
 func (UnimplementedHistoryServer) mustEmbedUnimplementedHistoryServer() {}
 
@@ -120,6 +134,24 @@ func _History_ImportExternalForwards_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _History_GetRevenue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRevenueRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HistoryServer).GetRevenue(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/history.History/GetRevenue",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HistoryServer).GetRevenue(ctx, req.(*GetRevenueRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // History_ServiceDesc is the grpc.ServiceDesc for History service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -134,6 +166,10 @@ var History_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ImportExternalForwards",
 			Handler:    _History_ImportExternalForwards_Handler,
+		},
+		{
+			MethodName: "GetRevenue",
+			Handler:    _History_GetRevenue_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

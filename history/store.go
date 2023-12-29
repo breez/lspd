@@ -51,4 +51,5 @@ type Store interface {
 	GetFirstAndLastMatchedForwardTimes(ctx context.Context, internal bool) (*time.Time, *time.Time, error)
 	GetFirstForwardTime(ctx context.Context) (*time.Time, error)
 	GetForwardsWithoutChannelCount(ctx context.Context) (int64, error)
+	FetchRevenue(ctx context.Context, start time.Time, end time.Time) (*GetRevenueResponse, error)
 }

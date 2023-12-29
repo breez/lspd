@@ -85,3 +85,14 @@ func (s *Server) ImportExternalForwards(
 	}
 	return &ImportExternalForwardsResponse{}, nil
 }
+
+func (s *Server) GetRevenue(
+	ctx context.Context,
+	in *GetRevenueRequest,
+) (*GetRevenueResponse, error) {
+	start := time.Unix(in.Start, 0)
+	end := time.Unix(in.End, 0)
+
+	// TODO: Make sure all forwards within the timeperiod have been matched.
+	return s.store.FetchRevenue(ctx, start, end)
+}

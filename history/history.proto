@@ -9,6 +9,7 @@ service History {
         returns (ExportForwardsResponse) {}
     rpc ImportExternalForwards(ImportExternalForwardsRequest)
         returns (ImportExternalForwardsResponse) {}
+    rpc GetRevenue(GetRevenueRequest) returns (GetRevenueResponse) {}
 }  
 
 message ExportForwardsRequest {
@@ -36,4 +37,119 @@ message ExportedForward {
     int64 resolved_time = 4;
     string direction = 5;
     uint64 amount_msat = 6;
+}
+message GetRevenueRequest {
+    // Start unix timestamp (seconds)
+    int64 start = 1;
+    // End unix timestamp (seconds)
+    int64 end = 2;
+}
+message GetRevenueResponse {
+    // Total fees associated to tokens where the client was the recipient.
+    uint64 total_receive_fees_msat = 1;
+
+    // Total amount of forwards associated to tokens where the client was the recipient.
+    uint64 total_receive_forward_count = 2;
+
+    // Total forwarded amount (msat) associated to tokens where the client was the recipient.
+    uint64 total_receive_forwarded_amount = 3;
+
+    // Total fees associated to tokens where the client was the sender.
+    uint64 total_send_fees_msat = 4;
+
+    // Total amount of forwards associated to tokens where the client was the sender.
+    uint64 total_send_forward_count = 5;
+
+    // Total forwarded amount (msat) associated to tokens where the client was the sender.
+    uint64 total_send_forwarded_amount = 6;
+
+    // Revenue per token
+    map<string, TokenRevenue> token_revenues = 7;
+}
+message TokenRevenue {
+    // Total fees associated to this token where the client was the recipient.
+    uint64 total_receive_fees_msat = 1;
+
+    // Total amount of forwards associated to this token where the client was the recipient.
+    uint64 total_receive_forward_count = 2;
+
+    // Total forwarded amount (msat) associated to this token where the client was the recipient.
+    uint64 total_receive_forwarded_amount = 3;
+
+    // Total fees associated to this token where the client was the recipient, but where a token was also associated on the sender side.
+    uint64 total_receive_fees_also_send_msat = 4;
+
+    // Total fees associated to this token that were part of channel open fees.
+    uint64 total_channel_open_fees = 5;
+
+    // total_receive_fees_msat - (total_receive_fees_also_send_msat / 2) - total_channel_open_fees
+    uint64 adjusted_total_receive_fees_msat = 6;
+
+    // Total fees associated to this token where the client was the sender.
+    uint64 total_send_fees_msat = 7;
+
+    // Total amount of forwards associated to this token where the client was the sender.
+    uint64 total_send_forward_count = 8;
+
+    // Total forwarded amount (msat) associated to this token where the client was the sender.
+    uint64 total_send_forwarded_amount = 9;
+
+    // Total fees associated to this token where the client was the sender, but where a token was also associated on the recipient side.
+    uint64 total_send_fees_also_receive_msat = 10;
+
+    // total_send_fees_msat - (total_send_fees_also_receive_msat / 2)
+    uint64 adjusted_total_send_fees_msat = 11;
+
+    // The used token (=hash of api key)
+    string token = 12;
+
+    // Revenue per node for this token
+    map<string, NodeRevenue> node_revenues = 13;
+}
+message NodeRevenue {
+    // Total fees on this node associated to this token where the client was the recipient.
+    uint64 total_receive_fees_msat = 1;
+
+    // Total amount of forwards on this node associated to this token where the client was the recipient.
+    uint64 total_receive_forward_count = 2;
+
+    // Total forwarded amount (msat) on this node associated to this token where the client was the recipient.
+    uint64 total_receive_forwarded_amount = 3;
+
+    // Total fees on this node associated to this token where the client was the sender.
+    uint64 total_send_fees_msat = 4;
+
+    // Total amount of forwards on this node associated to this token where the client was the sender.
+    uint64 total_send_forward_count = 5;
+
+    // Total forwarded amount (msat) on this node associated to this token where the client was the sender.
+    uint64 total_send_forwarded_amount = 6;
+
+    // Node id of the lsp that routed the payments.
+    string node_id = 7;
+
+    // Revenue from routing to/from connected lsps that used the same token.
+    map<string, ExternalRevenue> external_revenues = 8;
+}
+message ExternalRevenue {
+    // Total fees on this node associated to this token where the client was the recipient and was connected to this external node.
+    uint64 total_receive_fees_msat = 1;
+
+    // Total amount of forwards on this node associated to this token where the client was the recipient and was connected to this external node.
+    uint64 total_receive_forward_count = 2;
+
+    // Total forwarded amount (msat) on this node associated to this token where the client was the recipient and was connected to this external node.
+    uint64 total_receive_forwarded_amount = 3;
+
+    // Total fees on this node associated to this token where the client was the sender and was connected to this external node.
+    uint64 total_send_fees_msat = 4;
+
+    // Total amount of forwards on this node associated to this token where the client was the sender and was connected to this external node.
+    uint64 total_send_forward_count = 5;
+
+    // Total forwarded amount (msat) on this node associated to this token where the client was the sender and was connected to this external node.
+    uint64 total_send_forwarded_amount = 6;
+
+    // Node id of the external lsp.
+    string external_node_id = 7;
 }

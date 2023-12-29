@@ -141,6 +141,9 @@ func (s *mockHistoryStore) GetFirstForwardTime(ctx context.Context) (*time.Time,
 func (s *mockHistoryStore) GetForwardsWithoutChannelCount(ctx context.Context) (int64, error) {
 	return 0, ErrNotImplemented
 }
+func (s *mockHistoryStore) FetchRevenue(ctx context.Context, start time.Time, end time.Time) (*history.GetRevenueResponse, error) {
+	return nil, ErrNotImplemented
+}
 
 type mockLightningClient struct {
 	openResponses    []*wire.OutPoint

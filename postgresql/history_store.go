@@ -3,6 +3,7 @@ package postgresql
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"math"
@@ -659,6 +660,357 @@ func (s *HistoryStore) GetForwardsWithoutChannelCount(ctx context.Context) (int6
 	}
 
 	return count, nil
+}
+
+func (s *HistoryStore) FetchRevenue(ctx context.Context, start time.Time, end time.Time) (*history.GetRevenueResponse, error) {
+	unixStart := start.UnixNano()
+	unixEnd := end.UnixNano()
+	ourChannelForwards, err := s.pool.Query(ctx, tokenChannelsCte+`
+		SELECT token
+		,      nodeid
+		,      direction
+		,      SUM(amt_msat_in - amt_msat_out) AS fees_msat
+		,      SUM(channel_fees_msat) AS channel_fees_msat
+		,      COUNT(*) AS count
+		,      SUM(amt_msat_out) AS forwarded_msat
+		FROM (
+			SELECT 'send' AS direction
+			,      c.token
+			,      h.nodeid
+			,      h.amt_msat_in
+			,      h.amt_msat_out
+			,      h.resolved_time
+			,      0 AS channel_fees_msat
+			FROM public.forwarding_history h
+			INNER JOIN token_channels c 
+				ON h.nodeid = c.nodeid
+				AND h.funding_tx_id_in = c.funding_tx_id
+				AND h.funding_tx_outnum_in = c.funding_tx_outnum
+			UNION ALL
+			SELECT 'receive' AS direction
+			,      c.token
+			,      h.nodeid
+			,      h.amt_msat_in
+			,      h.amt_msat_out
+			,      h.resolved_time
+			,      LEAST(GREATEST(c.channel_fees_msat - previous_fees.fee_sum_msat, 0), h.amt_msat_in - h.amt_msat_out) AS channel_fees_msat
+			FROM public.forwarding_history h
+			INNER JOIN token_channels c 
+				ON h.nodeid = c.nodeid 
+				AND h.funding_tx_id_out = c.funding_tx_id
+				AND h.funding_tx_outnum_out = c.funding_tx_outnum
+			CROSS JOIN (
+				SELECT SUM(h2.amt_msat_in - h2.amt_msat_out) AS fee_sum_msat
+				FROM public.forwarding_history h2
+				WHERE h2.resolved_time < h.resolved_time
+			) previous_fees
+		) a
+		WHERE h.resolved_time >= $1 AND h.resolved_time < $2
+		GROUP BY token, nodeid, direction
+		ORDER BY token, nodeid, direction`,
+		unixStart,
+		unixEnd)
+	if err != nil {
+		return nil, err
+	}
+	defer ourChannelForwards.Close()
+
+	resp := &history.GetRevenueResponse{
+		TokenRevenues: make(map[string]*history.TokenRevenue, 0),
+	}
+	for ourChannelForwards.Next() {
+		var token string
+		var nodeid []byte
+		var direction string
+
+		// Note that we're not allowed to make more than 92 million btc in fees
+		// within the selected time period.
+		var fees_msat int64
+		var channel_fees_msat int64
+		var count int64
+		var forwarded_msat int64
+		err = ourChannelForwards.Scan(
+			&token,
+			&nodeid,
+			&direction,
+			&fees_msat,
+			&channel_fees_msat,
+			&count,
+			&forwarded_msat,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		currentTokenRevenue, ok := resp.TokenRevenues[token]
+		if !ok {
+			currentTokenRevenue = &history.TokenRevenue{
+				Token:        token,
+				NodeRevenues: make(map[string]*history.NodeRevenue, 0),
+			}
+			resp.TokenRevenues[token] = currentTokenRevenue
+		}
+
+		nodeidStr := hex.EncodeToString(nodeid)
+		currentNodeRevenue, ok := currentTokenRevenue.NodeRevenues[nodeidStr]
+		if !ok {
+			currentNodeRevenue = &history.NodeRevenue{
+				NodeId:           nodeidStr,
+				ExternalRevenues: make(map[string]*history.ExternalRevenue, 0),
+			}
+			currentTokenRevenue.NodeRevenues[nodeidStr] = currentNodeRevenue
+		}
+
+		if direction == "receive" {
+			currentTokenRevenue.TotalReceiveFeesMsat += uint64(fees_msat)
+			currentNodeRevenue.TotalReceiveFeesMsat += uint64(fees_msat)
+			currentTokenRevenue.TotalReceiveForwardCount += uint64(count)
+			currentNodeRevenue.TotalReceiveForwardCount += uint64(count)
+			currentTokenRevenue.TotalReceiveForwardedAmount += uint64(forwarded_msat)
+			currentNodeRevenue.TotalReceiveForwardedAmount += uint64(forwarded_msat)
+			currentTokenRevenue.TotalChannelOpenFees += uint64(channel_fees_msat)
+		} else if direction == "send" {
+			currentTokenRevenue.TotalSendFeesMsat += uint64(fees_msat)
+			currentNodeRevenue.TotalSendFeesMsat += uint64(fees_msat)
+			currentTokenRevenue.TotalSendForwardCount += uint64(count)
+			currentNodeRevenue.TotalSendForwardCount += uint64(count)
+			currentTokenRevenue.TotalSendForwardedAmount += uint64(forwarded_msat)
+			currentNodeRevenue.TotalSendForwardedAmount += uint64(forwarded_msat)
+		} else {
+			return nil, fmt.Errorf("got record with invalid direction '%s'", direction)
+		}
+	}
+
+	for _, tokenRevenue := range resp.TokenRevenues {
+		resp.TotalReceiveFeesMsat += tokenRevenue.TotalReceiveFeesMsat
+		resp.TotalSendFeesMsat += tokenRevenue.TotalSendFeesMsat
+	}
+
+	remoteChannelForwards, err := s.pool.Query(ctx, tokenChannelsCte+`
+	SELECT token
+	,      nodeid
+	,      external_nodeid
+	,      direction
+	,      SUM(amt_msat_in - amt_msat_out) AS fees_msat
+	,      COUNT(*) AS count
+	,      SUM(amt_msat_out) AS forwarded_msat
+	FROM (
+		-- forwards where a another local lsp has a channel with the client
+		SELECT ch.token
+		,      'send' AS direction
+		,      h_local.nodeid
+		,      h_remote.nodeid AS external_nodeid
+		,      h_local.amt_msat_in
+		,      h_local.amt_msat_out
+		FROM forwarding_history h_local 
+		INNER JOIN forward_correlations corr
+			ON h_local.forward_correlation_in = corr.id
+		INNER JOIN forwarding_history h_remote
+			ON h_remote.nodeid = corr.internal_remote_forward_nodeid
+				AND h_remote.identifier = corr.internal_remote_forward_identifier
+		INNER JOIN token_channels ch
+			ON h_remote.nodeid = ch.nodeid 
+				AND h_remote.funding_tx_id = ch.funding_tx_id 
+				AND h_remote.funding_tx_outnum = ch.funding_tx_outnum
+		WHERE h_local.resolved_time >= $1 AND h_local.resolved_time < $2
+		UNION ALL
+		SELECT ch.token
+		,      'receive' AS direction
+		,      h_local.nodeid
+		,      h_remote.nodeid AS external_nodeid
+		,      h_local.amt_msat_in
+		,      h_local.amt_msat_out
+		FROM forwarding_history h_local 
+		INNER JOIN forward_correlations corr
+			ON h_local.forward_correlation_out = corr.id
+		INNER JOIN forwarding_history h_remote
+			ON h_remote.nodeid = corr.internal_remote_forward_nodeid
+				AND h_remote.identifier = corr.internal_remote_forward_identifier
+		INNER JOIN token_channels ch
+			ON h_remote.nodeid = ch.nodeid 
+				AND h_remote.funding_tx_id = ch.funding_tx_id 
+				AND h_remote.funding_tx_outnum = ch.funding_tx_outnum
+		WHERE h_local.resolved_time >= $1 AND h_local.resolved_time < $2
+		UNION ALL
+		-- forwards where a remote lsp has a channel with the client
+		SELECT h_remote.token
+		,      h_remote.direction
+		,      h_local.nodeid
+		,      h_remote.nodeid AS external_nodeid
+		,      h_local.amt_msat_in
+		,      h_local.amt_msat_out
+		FROM forwarding_history h_local
+		INNER JOIN forward_correlations corr
+			ON h_local.forward_correlation_in = corr.id
+				OR h_local.forward_correlation_out = corr.id
+		INNER JOIN external_token_forwards h_remote
+			ON corr.external_remote_forward_id = h_remote.id
+		WHERE h_local.resolved_time >= $1 AND h_local.resolved_time < $2
+	) a
+	GROUP BY token, nodeid, external_nodeid, direction
+	ORDER BY token, nodeid, external_nodeid, direction`,
+		unixStart,
+		unixEnd)
+	if err != nil {
+		return nil, err
+	}
+	defer remoteChannelForwards.Close()
+
+	for remoteChannelForwards.Next() {
+		var token string
+		var nodeid []byte
+		var externalNodeid []byte
+		var direction string
+
+		// Note that we're not allowed to make more than 92 million btc in fees
+		// within the selected time period.
+		var fees_msat int64
+		var count int64
+		var forwarded_msat int64
+		err = remoteChannelForwards.Scan(
+			&token,
+			&nodeid,
+			&externalNodeid,
+			&direction,
+			&fees_msat,
+			&count,
+			&forwarded_msat,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		currentTokenRevenue, ok := resp.TokenRevenues[token]
+		if !ok {
+			currentTokenRevenue = &history.TokenRevenue{
+				Token:        token,
+				NodeRevenues: make(map[string]*history.NodeRevenue, 0),
+			}
+			resp.TokenRevenues[token] = currentTokenRevenue
+		}
+
+		nodeidStr := hex.EncodeToString(nodeid)
+		currentNodeRevenue, ok := currentTokenRevenue.NodeRevenues[nodeidStr]
+		if !ok {
+			currentNodeRevenue = &history.NodeRevenue{
+				NodeId:           nodeidStr,
+				ExternalRevenues: make(map[string]*history.ExternalRevenue, 0),
+			}
+			currentTokenRevenue.NodeRevenues[nodeidStr] = currentNodeRevenue
+		}
+
+		externalNodeidStr := hex.EncodeToString(externalNodeid)
+		currentExternalNodeRevenue, ok := currentNodeRevenue.ExternalRevenues[externalNodeidStr]
+		if !ok {
+			currentExternalNodeRevenue = &history.ExternalRevenue{
+				ExternalNodeId: externalNodeidStr,
+			}
+			currentNodeRevenue.ExternalRevenues[externalNodeidStr] = currentExternalNodeRevenue
+		}
+
+		if direction == "receive" {
+			currentTokenRevenue.TotalReceiveFeesMsat += uint64(fees_msat)
+			currentNodeRevenue.TotalReceiveFeesMsat += uint64(fees_msat)
+			currentExternalNodeRevenue.TotalReceiveFeesMsat += uint64(fees_msat)
+			currentTokenRevenue.TotalReceiveForwardCount += uint64(count)
+			currentNodeRevenue.TotalReceiveForwardCount += uint64(count)
+			currentExternalNodeRevenue.TotalReceiveForwardCount += uint64(count)
+			currentTokenRevenue.TotalReceiveForwardedAmount += uint64(forwarded_msat)
+			currentNodeRevenue.TotalReceiveForwardedAmount += uint64(forwarded_msat)
+			currentExternalNodeRevenue.TotalReceiveForwardedAmount += uint64(forwarded_msat)
+		} else if direction == "send" {
+			currentTokenRevenue.TotalSendFeesMsat += uint64(fees_msat)
+			currentNodeRevenue.TotalSendFeesMsat += uint64(fees_msat)
+			currentExternalNodeRevenue.TotalSendFeesMsat += uint64(fees_msat)
+			currentTokenRevenue.TotalSendForwardCount += uint64(count)
+			currentNodeRevenue.TotalSendForwardCount += uint64(count)
+			currentExternalNodeRevenue.TotalSendForwardCount += uint64(count)
+			currentTokenRevenue.TotalSendForwardedAmount += uint64(forwarded_msat)
+			currentNodeRevenue.TotalSendForwardedAmount += uint64(forwarded_msat)
+			currentExternalNodeRevenue.TotalSendForwardedAmount += uint64(forwarded_msat)
+		} else {
+			return nil, fmt.Errorf("got record with invalid direction '%s'", direction)
+		}
+	}
+
+	rows, err := s.pool.Query(ctx, tokenChannelsCte+`
+		SELECT COALESCE(tch_in.token, h_remote_in_tch.token, ext_in.token) AS token_in
+		,      COALESCE(tch_out.token, h_remote_out_tch.token, ext_out.token) AS token_out
+		,      SUM(h_local.amt_msat_in - h_local.amt_msat_out) AS fee_msat
+		FROM forwarding_history h_local
+		LEFT JOIN token_channels tch_in
+			ON h_local.nodeid = tch_in.nodeid 
+				AND h_local.funding_tx_id_in = tch_in.funding_tx_id
+				AND h_local.funding_tx_outnum_in = tch_in.funding_tx_outnum
+		LEFT JOIN token_channels tch_out
+			ON h_local.nodeid = tch_in.nodeid 
+				AND h_local.funding_tx_id_out = tch_out.funding_tx_id
+				AND h_local.funding_tx_outnum_out = tch_out.funding_tx_outnum
+		LEFT JOIN forward_correlations corr_in
+			ON h_local.forward_correlation_in = corr_in.id
+		LEFT JOIN forward_correlations corr_out
+			ON h_local.forward_correlation_out = corr_out.id
+		LEFT JOIN forwarding_history h_remote_in
+			ON corr_in.internal_remote_forward_nodeid = h_remote_in.nodeid
+				AND corr_in.internal_remote_forward_identifier = h_remote_in.identifier
+		LEFT JOIN token_channels h_remote_in_tch
+			ON h_remote_in.nodeid = h_remote_in_tch.nodeid 
+				AND h_remote_in.funding_tx_id_in = h_remote_in_tch.funding_tx_id
+				AND h_remote_in.funding_tx_outnum_in = h_remote_in_tch.funding_tx_outnum
+		LEFT JOIN forwarding_history h_remote_out
+			ON corr_out.internal_remote_forward_nodeid = h_remote_out.nodeid
+				AND corr_out.internal_remote_forward_identifier = h_remote_out.identifier
+		LEFT JOIN token_channels h_remote_out_tch
+			ON h_remote_out.nodeid = h_remote_out_tch.nodeid 
+				AND h_remote_out.funding_tx_id_out = h_remote_out_tch.funding_tx_id
+				AND h_remote_out.funding_tx_outnum_out = h_remote_out_tch.funding_tx_outnum
+		LEFT JOIN external_token_forwards ext_in
+			ON corr_in.external_remote_forward_id = ext_in.id
+		LEFT JOIN external_token_forwards ext_out
+			ON corr_out.external_remote_forward_id = ext_out.id
+		WHERE h_local.resolved_time >= $1 AND h_local.resolved_time < $2
+		GROUP BY token_in, token_out
+		HAVING token_in IS NOT NULL AND token_out IS NOT NULL
+		ORDER BY token_in, token_out
+		`,
+		unixStart,
+		unixEnd,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch fee sum where there is an in token and an out token: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var token_in string
+		var token_out string
+		var fee_msat int64
+		err = rows.Scan(&token_in, &token_out, &fee_msat)
+		if err != nil {
+			return nil, err
+		}
+
+		tokenRevenueIn, ok := resp.TokenRevenues[token_in]
+		if !ok {
+			return nil, fmt.Errorf("tried to get adjusted value for non-existant token")
+		}
+
+		tokenRevenueIn.TotalSendFeesAlsoReceiveMsat += uint64(fee_msat)
+
+		tokenRevenueOut, ok := resp.TokenRevenues[token_out]
+		if !ok {
+			return nil, fmt.Errorf("tried to get adjusted value for non-existant token")
+		}
+
+		tokenRevenueOut.TotalReceiveFeesAlsoSendMsat += uint64(fee_msat)
+	}
+
+	for _, tokenRevenue := range resp.TokenRevenues {
+		tokenRevenue.AdjustedTotalReceiveFeesMsat = tokenRevenue.TotalReceiveFeesMsat - (tokenRevenue.TotalReceiveFeesAlsoSendMsat / 2) - tokenRevenue.TotalChannelOpenFees
+		tokenRevenue.AdjustedTotalSendFeesMsat = tokenRevenue.TotalSendFeesMsat - (tokenRevenue.TotalSendFeesAlsoReceiveMsat / 2) - tokenRevenue.TotalChannelOpenFees
+	}
+
+	return resp, nil
 }
 
 func (s *HistoryStore) insertInternalMatches(ctx context.Context, matches []*match) error {
