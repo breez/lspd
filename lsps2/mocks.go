@@ -102,6 +102,21 @@ type mockHistoryStore struct{}
 func (s *mockHistoryStore) UpdateChannels(ctx context.Context, updates []*history.ChannelUpdate) error {
 	return nil
 }
+func (s *mockHistoryStore) InsertForwards(ctx context.Context, forwards []*history.Forward, nodeId []byte) error {
+	return nil
+}
+func (s *mockHistoryStore) UpdateForwards(ctx context.Context, forwards []*history.Forward, nodeId []byte) error {
+	return nil
+}
+func (s *mockHistoryStore) FetchClnForwardOffsets(ctx context.Context, nodeId []byte) (uint64, uint64, error) {
+	return 0, 0, ErrNotImplemented
+}
+func (s *mockHistoryStore) SetClnForwardOffsets(ctx context.Context, nodeId []byte, created uint64, updated uint64) error {
+	return nil
+}
+func (s *mockHistoryStore) FetchLndForwardOffset(ctx context.Context, nodeId []byte) (*time.Time, error) {
+	return nil, ErrNotImplemented
+}
 
 type mockLightningClient struct {
 	openResponses    []*wire.OutPoint
