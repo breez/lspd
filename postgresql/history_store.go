@@ -345,3 +345,34 @@ func (s *HistoryStore) SetClnForwardOffsets(
 	)
 	return err
 }
+
+func (s *HistoryStore) MatchForwardsAndChannels(ctx context.Context) error {
+	upd, err := s.pool.Exec(ctx, `
+	UPDATE forwarding_history h
+	SET funding_tx_id_in = c.funding_tx_id,
+	    funding_tx_outnum_in = c.funding_tx_outnum
+	FROM channels c
+	WHERE h.funding_tx_id_in IS NULL
+	    AND h.nodeid = c.nodeid 
+	    AND (h.chanid_in = c.alias_scid OR h.chanid_in = c.confirmed_scid)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to update incoming side of forwards: %w", err)
+	}
+	log.Printf("Matched %v incoming forwards with their corresponding peers", upd.RowsAffected())
+
+	upd, err = s.pool.Exec(ctx, `
+	UPDATE forwarding_history h
+	SET funding_tx_id_out = c.funding_tx_id,
+	    funding_tx_outnum_out = c.funding_tx_outnum
+	FROM channels c
+	WHERE h.funding_tx_id_out IS NULL
+	    AND h.nodeid = c.nodeid 
+	    AND (h.chanid_out = c.alias_scid OR h.chanid_out = c.confirmed_scid)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to update incoming side of forwards: %w", err)
+	}
+	log.Printf("Matched %v outgoing forwards with their corresponding peers", upd.RowsAffected())
+	return nil
+}

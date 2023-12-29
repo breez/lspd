@@ -117,6 +117,9 @@ func (s *mockHistoryStore) SetClnForwardOffsets(ctx context.Context, nodeId []by
 func (s *mockHistoryStore) FetchLndForwardOffset(ctx context.Context, nodeId []byte) (*time.Time, error) {
 	return nil, ErrNotImplemented
 }
+func (s *mockHistoryStore) MatchForwardsAndChannels(ctx context.Context) error {
+	return nil
+}
 
 type mockLightningClient struct {
 	openResponses    []*wire.OutPoint

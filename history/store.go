@@ -33,4 +33,5 @@ type Store interface {
 	FetchClnForwardOffsets(ctx context.Context, nodeId []byte) (uint64, uint64, error)
 	SetClnForwardOffsets(ctx context.Context, nodeId []byte, created uint64, updated uint64) error
 	FetchLndForwardOffset(ctx context.Context, nodeId []byte) (*time.Time, error)
+	MatchForwardsAndChannels(ctx context.Context) error
 }
