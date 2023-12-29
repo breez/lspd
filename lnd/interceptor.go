@@ -23,7 +23,6 @@ import (
 )
 
 type LndHtlcInterceptor struct {
-	fwsync        *ForwardingHistorySync
 	interceptor   *interceptor.Interceptor
 	config        *config.NodeConfig
 	client        *LndClient
@@ -37,13 +36,11 @@ type LndHtlcInterceptor struct {
 func NewLndHtlcInterceptor(
 	conf *config.NodeConfig,
 	client *LndClient,
-	fwsync *ForwardingHistorySync,
 	interceptor *interceptor.Interceptor,
 ) (*LndHtlcInterceptor, error) {
 	i := &LndHtlcInterceptor{
 		config:      conf,
 		client:      client,
-		fwsync:      fwsync,
 		interceptor: interceptor,
 	}
 
@@ -57,8 +54,6 @@ func (i *LndHtlcInterceptor) Start() error {
 	i.ctx = ctx
 	i.cancel = cancel
 	i.stopRequested = false
-	go i.fwsync.ForwardingHistorySynchronize(ctx)
-	go i.fwsync.ChannelsSynchronize(ctx)
 
 	return i.intercept()
 }
