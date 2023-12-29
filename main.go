@@ -18,6 +18,7 @@ import (
 	"github.com/breez/lspd/cln"
 	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/history"
 	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lnd"
 	"github.com/breez/lspd/lsps0"
@@ -99,6 +100,7 @@ func main() {
 	openingStore := postgresql.NewPostgresOpeningStore(pool)
 	notificationsStore := postgresql.NewNotificationsStore(pool)
 	lsps2Store := postgresql.NewLsps2Store(pool)
+	historyStore := postgresql.NewHistoryStore(pool)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	notificationService := notifications.NewNotificationService(notificationsStore)
@@ -108,6 +110,8 @@ func main() {
 	go lsps2CleanupService.Start(ctx)
 	notificationCleanupService := notifications.NewCleanupService(notificationsStore)
 	go notificationCleanupService.Start(ctx)
+	channelSync := history.NewChannelSync(nodes, historyStore)
+	go channelSync.ChannelsSynchronize(ctx)
 
 	var interceptors []interceptor.HtlcInterceptor
 	for _, node := range nodes {
