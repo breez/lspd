@@ -13,7 +13,6 @@ import (
 	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightningnetwork/lnd/htlcswitch/hop"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/chainrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
@@ -298,17 +297,11 @@ func (c *LndClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 	for _, c := range r.Channels {
 		log.Printf("getChannel(%x): %v", peerID, c.ChanId)
 		if c.ChannelPoint == channelPointStr && c.Active {
-			confirmedChanId := c.ChanId
-			if c.ZeroConf {
-				confirmedChanId = c.ZeroConfConfirmedScid
-				if confirmedChanId == hop.Source.ToUint64() {
-					confirmedChanId = 0
-				}
-			}
+			aliasScid, confirmedScid := mapScidsFromChannel(c)
 			return &lightning.GetChannelResult{
-				InitialChannelID:   lightning.ShortChannelID(c.ChanId),
-				ConfirmedChannelID: lightning.ShortChannelID(confirmedChanId),
-				HtlcMinimumMsat:    c.LocalConstraints.MinHtlcMsat,
+				AliasScid:       aliasScid,
+				ConfirmedScid:   confirmedScid,
+				HtlcMinimumMsat: c.LocalConstraints.MinHtlcMsat,
 			}, nil
 		}
 	}
@@ -497,4 +490,22 @@ func (c *LndClient) WaitChannelActive(peerID []byte, deadline time.Time) error {
 	case <-time.After(time.Until(deadline)):
 		return fmt.Errorf("deadline exceeded")
 	}
+}
+
+func mapScidsFromChannel(c *lnrpc.Channel) (*lightning.ShortChannelID, *lightning.ShortChannelID) {
+	var alias *lightning.ShortChannelID
+	var confirmedScid *lightning.ShortChannelID
+	if c.ZeroConf {
+		if c.ZeroConfConfirmedScid != 0 {
+			confirmedScid = (*lightning.ShortChannelID)(&c.ZeroConfConfirmedScid)
+		}
+		alias = (*lightning.ShortChannelID)(&c.ChanId)
+	} else {
+		confirmedScid = (*lightning.ShortChannelID)(&c.ChanId)
+		if len(c.AliasScids) > 0 {
+			alias = (*lightning.ShortChannelID)(&c.AliasScids[0])
+		}
+	}
+
+	return alias, confirmedScid
 }

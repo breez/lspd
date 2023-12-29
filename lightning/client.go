@@ -12,9 +12,9 @@ type GetInfoResult struct {
 }
 
 type GetChannelResult struct {
-	InitialChannelID   ShortChannelID
-	ConfirmedChannelID ShortChannelID
-	HtlcMinimumMsat    uint64
+	AliasScid       *ShortChannelID
+	ConfirmedScid   *ShortChannelID
+	HtlcMinimumMsat uint64
 }
 
 type OpenChannelRequest struct {

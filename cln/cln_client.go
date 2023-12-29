@@ -198,7 +198,7 @@ func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 	pubkey := hex.EncodeToString(peerID)
 	channels, err := client.GetPeerChannels(pubkey)
 	if err != nil {
-		log.Printf("CLN: client.GetPeer(%s) error: %v", pubkey, err)
+		log.Printf("CLN: client.GetPeerChannels(%s) error: %v", pubkey, err)
 		return nil, err
 	}
 
@@ -206,20 +206,15 @@ func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 	for _, c := range channels {
 		log.Printf("getChannel destination: %s, Short channel id: %v, local alias: %v , FundingTxID:%v, State:%v ", pubkey, c.ShortChannelId, c.Alias.Local, c.FundingTxId, c.State)
 		if slices.Contains(OPEN_STATUSES, c.State) && c.FundingTxId == fundingTxID {
-			confirmedChanID, err := lightning.NewShortChannelIDFromString(c.ShortChannelId)
+
+			aliasScid, confirmedScid, err := mapScidsFromChannel(c)
 			if err != nil {
-				fmt.Printf("NewShortChannelIDFromString %v error: %v", c.ShortChannelId, err)
-				return nil, err
-			}
-			initialChanID, err := lightning.NewShortChannelIDFromString(c.Alias.Local)
-			if err != nil {
-				fmt.Printf("NewShortChannelIDFromString %v error: %v", c.Alias.Local, err)
 				return nil, err
 			}
 			return &lightning.GetChannelResult{
-				InitialChannelID:   *initialChanID,
-				ConfirmedChannelID: *confirmedChanID,
-				HtlcMinimumMsat:    c.MinimumHtlcOutMsat.MSat(),
+				AliasScid:       aliasScid,
+				ConfirmedScid:   confirmedScid,
+				HtlcMinimumMsat: c.MinimumHtlcOutMsat.MSat(),
 			}, nil
 		}
 	}
@@ -323,4 +318,25 @@ func (c *ClnClient) WaitOnline(peerID []byte, deadline time.Time) error {
 
 func (c *ClnClient) WaitChannelActive(peerID []byte, deadline time.Time) error {
 	return nil
+}
+
+func mapScidsFromChannel(c *glightning.PeerChannel) (*lightning.ShortChannelID, *lightning.ShortChannelID, error) {
+	var confirmedScid *lightning.ShortChannelID
+	var aliasScid *lightning.ShortChannelID
+	var err error
+	if c.ShortChannelId != "" {
+		confirmedScid, err = lightning.NewShortChannelIDFromString(c.ShortChannelId)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse scid '%s': %w", c.ShortChannelId, err)
+		}
+	}
+
+	if c.Alias != nil && c.Alias.Local != "" {
+		aliasScid, err = lightning.NewShortChannelIDFromString(c.Alias.Local)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse scid '%s': %w", c.Alias.Local, err)
+		}
+	}
+
+	return aliasScid, confirmedScid, nil
 }

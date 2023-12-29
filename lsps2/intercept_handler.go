@@ -516,18 +516,25 @@ func (i *Interceptor) ensureChannelOpen(payment *paymentState) {
 		log.Printf(
 			"Got new channel for forward successfully. scid alias: %v, "+
 				"confirmed scid: %v",
-			chanResult.InitialChannelID.ToString(),
-			chanResult.ConfirmedChannelID.ToString(),
+			chanResult.AliasScid.ToString(),
+			chanResult.ConfirmedScid.ToString(),
 		)
 
-		scid := chanResult.ConfirmedChannelID
-		if uint64(scid) == 0 {
-			scid = chanResult.InitialChannelID
+		var scid *lightning.ShortChannelID
+		if chanResult.ConfirmedScid == nil {
+			if chanResult.AliasScid == nil {
+				log.Printf("Error: GetChannel: Both confirmed scid and alias scid are nil: %+v", chanResult)
+				<-time.After(1 * time.Second)
+				continue
+			}
+			scid = chanResult.AliasScid
+		} else {
+			scid = chanResult.ConfirmedScid
 		}
 
 		i.paymentChanOpened <- &paymentChanOpenedEvent{
 			paymentId:       payment.id,
-			scid:            scid,
+			scid:            *scid,
 			channelPoint:    payment.registration.ChannelPoint,
 			htlcMinimumMsat: chanResult.HtlcMinimumMsat,
 		}
