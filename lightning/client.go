@@ -3,12 +3,14 @@ package lightning
 import (
 	"time"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
 
 type GetInfoResult struct {
-	Alias  string
-	Pubkey string
+	ChainHash *chainhash.Hash
+	Alias     string
+	Pubkey    string
 }
 
 type GetChannelResult struct {
