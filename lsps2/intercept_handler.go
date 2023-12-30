@@ -487,7 +487,7 @@ func (i *Interceptor) ensureChannelOpen(payment *paymentState) {
 			)
 
 			code := common.FAILURE_UNKNOWN_NEXT_PEER
-			if strings.Contains(err.Error(), "not enough funds") {
+			if strings.Contains(err.Error(), "not enough") {
 				code = common.FailureTemporaryChannelFailure(&chanUpdate)
 			}
 
