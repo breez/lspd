@@ -55,18 +55,17 @@ python %s
 `
 
 type clnBreezClient struct {
-	name               string
-	scriptDir          string
-	pluginFilePath     string
-	pluginAddress      string
-	htlcAcceptor       func(*proto.HtlcAccepted) *proto.HtlcResolution
-	htlcAcceptorCancel context.CancelFunc
-	customMsgCancel    context.CancelFunc
-	customMsgQueue     chan *lntest.CustomMsgRequest
-	harness            *lntest.TestHarness
-	isInitialized      bool
-	node               *lntest.ClnNode
-	mtx                sync.Mutex
+	name           string
+	scriptDir      string
+	pluginFilePath string
+	pluginAddress  string
+	htlcAcceptor   func(*proto.HtlcAccepted) *proto.HtlcResolution
+	cancel         context.CancelFunc
+	customMsgQueue chan *lntest.CustomMsgRequest
+	harness        *lntest.TestHarness
+	isInitialized  bool
+	node           *lntest.ClnNode
+	mtx            sync.Mutex
 }
 
 func newClnBreezClient(h *lntest.TestHarness, m *lntest.Miner, name string) BreezClient {
@@ -127,10 +126,12 @@ func (c *clnBreezClient) Start() {
 		c.isInitialized = true
 	}
 
+	ctx, cancel := context.WithCancel(c.harness.Ctx)
+	c.cancel = cancel
 	c.node.Start()
-	c.startHtlcAcceptor()
+	c.startHtlcAcceptor(ctx)
 	c.customMsgQueue = make(chan *lntest.CustomMsgRequest, 100)
-	c.startCustomMsgListener()
+	c.startCustomMsgListener(ctx)
 }
 
 func (c *clnBreezClient) ResetHtlcAcceptor() {
@@ -212,20 +213,13 @@ func (c *clnBreezClient) SetHtlcAcceptor(totalMsat uint64) {
 	}
 }
 
-func (c *clnBreezClient) startCustomMsgListener() {
-	ctx, cancel := context.WithCancel(c.harness.Ctx)
-	c.customMsgCancel = cancel
-
+func (c *clnBreezClient) startCustomMsgListener(ctx context.Context) {
 	go func() {
 		for {
-			if ctx.Err() != nil {
-				return
-			}
-
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(time.Second):
+			case <-time.After(time.Millisecond * 100):
 			}
 
 			conn, err := grpc.DialContext(
@@ -249,6 +243,10 @@ func (c *clnBreezClient) startCustomMsgListener() {
 				break
 			}
 			for {
+				if ctx.Err() != nil {
+					return
+				}
+
 				msg, err := listener.Recv()
 				if err != nil {
 					log.Printf("%s: listener.Recv() error: %v", c.name, err)
@@ -273,20 +271,13 @@ func (c *clnBreezClient) ReceiveCustomMessage() *lntest.CustomMsgRequest {
 	return msg
 }
 
-func (c *clnBreezClient) startHtlcAcceptor() {
-	ctx, cancel := context.WithCancel(c.harness.Ctx)
-	c.htlcAcceptorCancel = cancel
-
+func (c *clnBreezClient) startHtlcAcceptor(ctx context.Context) {
 	go func() {
 		for {
-			if ctx.Err() != nil {
-				return
-			}
-
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(time.Second):
+			case <-time.After(time.Millisecond * 100):
 			}
 
 			conn, err := grpc.DialContext(
@@ -310,6 +301,10 @@ func (c *clnBreezClient) startHtlcAcceptor() {
 				break
 			}
 			for {
+				if ctx.Err() != nil {
+					return
+				}
+
 				htlc, err := acceptor.Recv()
 				if err != nil {
 					log.Printf("%s: acceptor.Recv() error: %v", c.name, err)
@@ -398,9 +393,9 @@ func (c *clnBreezClient) initialize() error {
 func (c *clnBreezClient) Stop() error {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
-	if c.htlcAcceptorCancel != nil {
-		c.htlcAcceptorCancel()
-		c.htlcAcceptorCancel = nil
+	if c.cancel != nil {
+		c.cancel()
+		c.cancel = nil
 	}
 	return c.node.Stop()
 }
