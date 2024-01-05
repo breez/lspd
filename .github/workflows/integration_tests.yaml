@@ -134,6 +134,7 @@ jobs:
           CLIENT_REF: ${{ env.CLIENT_REF }}
           GO_VERSION: ${{ env.GO_VERSION }}
           CLN_VERSION: ${{ env.CLN_VERSION }}
+          timeout: 6m
   
   run-lsps2-test:
     runs-on: ubuntu-22.04
@@ -176,6 +177,7 @@ jobs:
           CLIENT_REF: ${{ env.CLIENT_REF }}
           GO_VERSION: ${{ env.GO_VERSION }}
           CLN_VERSION: ${{ env.CLN_VERSION }}
+          timeout: 6m
 
   run-unit-tests:
     runs-on: ubuntu-22.04

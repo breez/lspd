@@ -22,6 +22,10 @@ inputs:
   CLN_VERSION:
     description: 'Core Lightning version.'
     required: true
+  timeout:
+    description: 'test timeout'
+    required: false
+    default: 45m
 runs:
   using: 'composite'
   steps:
@@ -113,7 +117,7 @@ runs:
     - name: Test LSPD
       run: |
         go get github.com/breez/lspd/itest
-        go test -timeout 45m -v \
+        go test -timeout ${{ inputs.timeout || '45m' }} -v \
           ./itest \
           -test.run \
           ${{ inputs.TESTRE }} \
