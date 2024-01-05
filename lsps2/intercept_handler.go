@@ -13,10 +13,13 @@ import (
 	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
 
 type InterceptorConfig struct {
+	NodeId                       []byte
+	ChainHash                    chainhash.Hash
 	AdditionalChannelCapacitySat uint64
 	MinConfs                     *uint32
 	TargetConf                   uint32
