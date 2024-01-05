@@ -23,10 +23,10 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	ecies "github.com/ecies/go/v2"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/tv42/zbase32"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 )
 
 var (

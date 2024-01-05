@@ -15,7 +15,7 @@ import (
 	"github.com/breez/lspd/lsps0"
 	lspdrpc "github.com/breez/lspd/rpc"
 	ecies "github.com/ecies/go/v2"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -236,7 +236,7 @@ func getSignedEncryptedData(n *common.Node, in *lspdrpc.Encrypted) (string, []by
 		log.Printf("unable to parse pubkey: %v", err)
 		return "", nil, usedEcies, fmt.Errorf("unable to parse pubkey: %w", err)
 	}
-	wireSig, err := lnwire.NewSigFromRawSignature(signed.Signature)
+	wireSig, err := lnwire.NewSigFromECDSARawSignature(signed.Signature)
 	if err != nil {
 		return "", nil, usedEcies, fmt.Errorf("failed to decode signature: %v", err)
 	}

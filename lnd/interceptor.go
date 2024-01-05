@@ -223,9 +223,9 @@ func (i *LndHtlcInterceptor) constructOnion(
 		return nil, err
 	}
 
-	payload, err := sphinx.NewHopPayload(nil, b.Bytes())
+	payload, err := sphinx.NewTLVHopPayload(b.Bytes())
 	if err != nil {
-		log.Printf("sphinx.NewHopPayload(): %v", err)
+		log.Printf("sphinx.NewTLVHopPayload(): %v", err)
 		return nil, err
 	}
 

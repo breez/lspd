@@ -9,7 +9,7 @@ import (
 	"github.com/breez/lspd/lightning"
 	lspdrpc "github.com/breez/lspd/rpc"
 	ecies "github.com/ecies/go/v2"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 var ErrInternal = fmt.Errorf("internal error")
