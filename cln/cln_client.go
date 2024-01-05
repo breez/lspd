@@ -95,10 +95,31 @@ func (c *ClnClient) GetInfo() (*lightning.GetInfoResult, error) {
 	if info.Alias != nil {
 		alias = *info.Alias
 	}
+
+	supportsSplicing := supportsSplicing(info.OurFeatures.Init)
+
 	return &lightning.GetInfoResult{
-		Alias:  alias,
-		Pubkey: hex.EncodeToString(info.Id),
+		Alias:            alias,
+		Pubkey:           hex.EncodeToString(info.Id),
+		SupportsSplicing: supportsSplicing,
 	}, nil
+}
+
+func hasFeature(features []byte, bit int) bool {
+	if len(features)*8-1 < bit {
+		return false
+	}
+
+	byteIndex := bit / 8
+	bitIndex := bit % 8
+	return (features[len(features)-byteIndex-1]>>bitIndex)&1 == 1
+}
+
+func supportsSplicing(features []byte) bool {
+	return hasFeature(features, 62) ||
+		hasFeature(features, 63) ||
+		hasFeature(features, 162) ||
+		hasFeature(features, 163)
 }
 
 func (c *ClnClient) IsConnected(destination []byte) (bool, error) {
