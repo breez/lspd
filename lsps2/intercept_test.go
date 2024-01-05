@@ -322,7 +322,7 @@ func Test_NoMpp_CltvDeltaBelowMinimum(t *testing.T) {
 
 	res := i.Intercept(createPart(&part{cltvDelta: 145}))
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res.Action)
-	assert.ElementsMatch(t, common.FAILURE_INCORRECT_CLTV_EXPIRY, res.FailureMessage)
+	assert.ElementsMatch(t, common.FAILURE_INCORRECT_CLTV_EXPIRY, res.FailureMessage[:2])
 	assertEmpty(t, i)
 }
 
@@ -408,7 +408,7 @@ func Test_Mpp_SinglePart_AmtTooSmall(t *testing.T) {
 	res := i.Intercept(createPart(&part{amt: defaultPaymentSizeMsat - 1}))
 	end := time.Now()
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res.Action)
-	assert.ElementsMatch(t, common.FAILURE_TEMPORARY_CHANNEL_FAILURE, res.FailureMessage)
+	assert.ElementsMatch(t, common.FAILURE_TEMPORARY_CHANNEL_FAILURE, res.FailureMessage[:2])
 	assert.GreaterOrEqual(t, end.Sub(start).Milliseconds(), config.MppTimeout.Milliseconds())
 	assertEmpty(t, i)
 }
@@ -541,7 +541,7 @@ func Test_Mpp_CltvDeltaBelowMinimum(t *testing.T) {
 
 	res := i.Intercept(createPart(&part{cltvDelta: 145}))
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res.Action)
-	assert.ElementsMatch(t, common.FAILURE_INCORRECT_CLTV_EXPIRY, res.FailureMessage)
+	assert.ElementsMatch(t, common.FAILURE_INCORRECT_CLTV_EXPIRY, res.FailureMessage[:2])
 	assertEmpty(t, i)
 }
 

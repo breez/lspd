@@ -1,10 +1,13 @@
 package common
 
 import (
+	"bytes"
 	"fmt"
+	"log"
 
 	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/lightningnetwork/lnd/lnwire"
 )
 
 type InterceptAction int
@@ -26,6 +29,30 @@ var (
 	FAILURE_UNKNOWN_NEXT_PEER                    InterceptFailureCode = []byte{0x40, 0x0A}
 	FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS InterceptFailureCode = []byte{0x40, 0x0F}
 )
+
+func FailureTemporaryChannelFailure(update *lnwire.ChannelUpdate) []byte {
+	var buf bytes.Buffer
+	msg := lnwire.NewTemporaryChannelFailure(update)
+	err := lnwire.EncodeFailureMessage(&buf, msg, 0)
+	if err != nil {
+		log.Printf("Failed to encode failure message for temporary channel failure: %v", err)
+		return FAILURE_TEMPORARY_CHANNEL_FAILURE
+	}
+
+	return buf.Bytes()
+}
+
+func FailureIncorrectCltvExpiry(cltvExpiry uint32, update lnwire.ChannelUpdate) []byte {
+	var buf bytes.Buffer
+	msg := lnwire.NewIncorrectCltvExpiry(cltvExpiry, update)
+	err := lnwire.EncodeFailureMessage(&buf, msg, 0)
+	if err != nil {
+		log.Printf("Failed to encode failure message for incorrect cltv expiry: %v", err)
+		return FAILURE_INCORRECT_CLTV_EXPIRY
+	}
+
+	return buf.Bytes()
+}
 
 type InterceptRequest struct {
 	// Identifier that uniquely identifies this htlc.
