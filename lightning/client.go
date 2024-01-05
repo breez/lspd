@@ -7,8 +7,9 @@ import (
 )
 
 type GetInfoResult struct {
-	Alias  string
-	Pubkey string
+	Alias            string
+	Pubkey           string
+	SupportsSplicing bool
 }
 
 type GetChannelResult struct {
