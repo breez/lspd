@@ -344,8 +344,11 @@ func initializeNodes(configs []*config.NodeConfig) ([]*common.Node, error) {
 		}
 
 		node.NodeId = nodeId
+		node.SupportsSplicing = info.SupportsSplicing
 		node.Tokens = config.Tokens
 		nodes = append(nodes, node)
+
+		log.Printf("Node %s, supports splicing: %v", node.NodeConfig.NodePubkey, node.SupportsSplicing)
 	}
 
 	return nodes, nil
