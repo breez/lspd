@@ -14,7 +14,6 @@ require (
 	github.com/docker/docker v20.10.24+incompatible
 	github.com/docker/go-connections v0.4.0
 	github.com/elementsproject/glightning v0.0.0-20230525134205-ef34d849f564
-	github.com/golang/protobuf v1.5.3
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/jackc/pgtype v1.14.0
 	github.com/jackc/pgx/v5 v5.4.3
@@ -38,6 +37,7 @@ require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ethereum/go-ethereum v1.13.5 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.14.0 // indirect
@@ -194,7 +194,7 @@ require (
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
 
-replace github.com/lightningnetwork/lnd v0.17.2-beta => github.com/breez/lnd v0.15.0-beta.rc6.0.20231122093500-0c939786ced7
+replace github.com/lightningnetwork/lnd v0.17.2-beta => github.com/breez/lnd v0.15.0-beta.rc6.0.20240105103917-ec16df3d9d48
 
 replace google.golang.org/protobuf => github.com/lightninglabs/protobuf-go-hex-display v1.30.0-hex-display
 
