@@ -222,6 +222,7 @@ Resources:
             sudo mkdir /etc/lightningd
             #cat <<EOL | sudo tee /home/lightning/.lightning/config
             cat <<EOL | sudo tee /etc/lightningd/lightningd.conf
+            developer
             bitcoin-rpcuser=cln
             bitcoin-rpcpassword=$RPCPASSWORD
             bitcoin-rpcconnect=127.0.0.1
@@ -240,8 +241,8 @@ Resources:
             chmod 755 /etc/lightningd/
             git clone https://github.com/ElementsProject/lightning.git /opt/lightning
             cd /opt/lightning
-            git checkout v23.05
-            ./configure --enable-developer
+            git checkout v23.11
+            ./configure
             make
             make install
             cat <<EOL | sudo tee /etc/systemd/system/lightningd.service

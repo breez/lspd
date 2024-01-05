@@ -1,7 +1,7 @@
 
 ## Installation instructions for core lightning and lspd
 ### Requirements 
-- CLN (compiled with developer mode on)
+- CLN
 - lspd
 - lspd plugin for cln
 - postgresql
@@ -61,6 +61,7 @@ NODES='[ { "name": "${LSPName}", "nodePubkey": "$PUBKEY", "lspdPrivateKey": "$LS
 In order to run lspd on top of CLN, you need to run the lspd process and run cln with the provided cln plugin.
 
 1. Run cln with the following options set:
+    - `--developer`: to allow passing the `--dev-allowdustreserve` flag
     - `--plugin=/path/to/lspd_plugin`: to use lspd as plugin
     - `--max-concurrent-htlcs=30`: In order to use zero reserve channels on the client side, (local max_accepted_htlcs + remote max_accepted_htlcs + 2) * dust limit must be lower than the channel capacity. Reduce max-concurrent-htlcs or increase channel capacity accordingly.
     - `--dev-allowdustreserve=true`: In order to allow zero reserve on the client side (requires developer mode turned on)
