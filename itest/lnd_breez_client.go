@@ -2,8 +2,11 @@ package itest
 
 import (
 	"context"
+	"encoding/hex"
 	"flag"
+	"log"
 	"sync"
+	"time"
 
 	"github.com/breez/lntest"
 	"github.com/breez/lntest/lnd"
@@ -15,11 +18,12 @@ var lndMobileExecutable = flag.String(
 )
 
 type lndBreezClient struct {
-	name    string
-	harness *lntest.TestHarness
-	node    *lntest.LndNode
-	cancel  context.CancelFunc
-	mtx     sync.Mutex
+	name           string
+	harness        *lntest.TestHarness
+	node           *lntest.LndNode
+	customMsgQueue chan *lntest.CustomMsgRequest
+	cancel         context.CancelFunc
+	mtx            sync.Mutex
 }
 
 func newLndBreezClient(h *lntest.TestHarness, m *lntest.Miner, name string) BreezClient {
@@ -63,6 +67,8 @@ func (c *lndBreezClient) Start() {
 	ctx, cancel := context.WithCancel(c.harness.Ctx)
 	c.cancel = cancel
 	go c.startChannelAcceptor(ctx)
+	c.customMsgQueue = make(chan *lntest.CustomMsgRequest, 100)
+	c.startCustomMsgListener(ctx)
 }
 
 func (c *lndBreezClient) Stop() error {
@@ -86,9 +92,51 @@ func (c *lndBreezClient) SetHtlcAcceptor(totalMsat uint64) {
 	// No need for a htlc acceptor in the LND breez client
 }
 
+func (c *lndBreezClient) startCustomMsgListener(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Second):
+			}
+
+			if !c.node.IsStarted() {
+				log.Printf("%s: cannot listen to custom messages, node is not started.", c.name)
+				break
+			}
+
+			listener, err := c.node.LightningClient().SubscribeCustomMessages(
+				ctx,
+				&lnd.SubscribeCustomMessagesRequest{},
+			)
+			if err != nil {
+				log.Printf("%s: client.SubscribeCustomMessages() error: %v", c.name, err)
+				break
+			}
+			for {
+				if ctx.Err() != nil {
+					return
+				}
+				msg, err := listener.Recv()
+				if err != nil {
+					log.Printf("%s: listener.Recv() error: %v", c.name, err)
+					break
+				}
+
+				c.customMsgQueue <- &lntest.CustomMsgRequest{
+					PeerId: hex.EncodeToString(msg.Peer),
+					Type:   msg.Type,
+					Data:   msg.Data,
+				}
+			}
+		}
+	}()
+}
+
 func (c *lndBreezClient) ReceiveCustomMessage() *lntest.CustomMsgRequest {
-	// TODO: Not implemented.
-	return nil
+	msg := <-c.customMsgQueue
+	return msg
 }
 
 func (c *lndBreezClient) startChannelAcceptor(ctx context.Context) error {
@@ -98,6 +146,10 @@ func (c *lndBreezClient) startChannelAcceptor(ctx context.Context) error {
 	}
 
 	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
 		request, err := client.Recv()
 		if err != nil {
 			return err
