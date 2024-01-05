@@ -297,7 +297,13 @@ func initializeNodes(configs []*config.NodeConfig) ([]*common.Node, error) {
 			node.NodeConfig.NodePubkey = info.Pubkey
 		}
 
+		nodeid, err := hex.DecodeString(info.Pubkey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode node id '%s'", info.Pubkey)
+		}
+		node.ChainHash = *info.ChainHash
 		node.Tokens = config.Tokens
+		node.NodeId = nodeid
 		nodes = append(nodes, node)
 	}
 
