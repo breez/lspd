@@ -134,7 +134,7 @@ func runLspd(cliCtx *cli.Context) error {
 
 			forwardSync := lnd.NewForwardSync(node.NodeId, client, historyStore)
 			go forwardSync.ForwardsSynchronize(ctx)
-			interceptor := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, feeStrategy, notificationService)
+			interceptor := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, feeStrategy, notificationService, node.SupportsSplicing)
 			combinedHandler := common.NewCombinedHandler(interceptor)
 			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node.NodeConfig, client, combinedHandler)
 			if err != nil {
@@ -150,7 +150,7 @@ func runLspd(cliCtx *cli.Context) error {
 
 			forwardSync := cln.NewForwardSync(node.NodeId, client, historyStore)
 			go forwardSync.ForwardsSynchronize(ctx)
-			legacyHandler := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, feeStrategy, notificationService)
+			legacyHandler := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, feeStrategy, notificationService, node.SupportsSplicing)
 			lsps2Handler := lsps2.NewInterceptHandler(lsps2Store, historyStore, openingService, client, feeEstimator, &lsps2.InterceptorConfig{
 				NodeId:                       node.NodeId,
 				AdditionalChannelCapacitySat: uint64(node.NodeConfig.AdditionalChannelCapacity),
