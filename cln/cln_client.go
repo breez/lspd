@@ -349,20 +349,16 @@ func (c *ClnClient) GetPeerInfo(peerID []byte) (*lightning.PeerInfo, error) {
 			return nil, err
 		}
 
-		var confirmationHeight *uint32
+		var confirmedScid *lightning.ShortChannelID
 		if peerChannel.ShortChannelId != "" {
-			scid, err := lightning.NewShortChannelIDFromString(peerChannel.ShortChannelId)
-			if err != nil {
-				h := scid.BlockHeight()
-				confirmationHeight = &h
-			}
+			confirmedScid, _ = lightning.NewShortChannelIDFromString(peerChannel.ShortChannelId)
 		}
 
 		isZeroFeeHtlcTx := slices.Contains(peerChannel.Features, "option_anchors_zero_fee_htlc_tx")
 		channels[i] = &lightning.PeerChannel{
-			FundingOutpoint:    outpoint,
-			ConfirmationHeight: confirmationHeight,
-			IsZeroFeeHtlcTx:    isZeroFeeHtlcTx,
+			FundingOutpoint: outpoint,
+			ConfirmedScid:   confirmedScid,
+			IsZeroFeeHtlcTx: isZeroFeeHtlcTx,
 		}
 	}
 
