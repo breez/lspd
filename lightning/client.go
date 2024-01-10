@@ -42,6 +42,17 @@ type SpliceInRequest struct {
 	MinConfs              *uint32
 }
 
+type PeerInfo struct {
+	SupportsSplicing bool
+	Channels         []*PeerChannel
+}
+
+type PeerChannel struct {
+	FundingOutpoint    *wire.OutPoint
+	IsZeroFeeHtlcTx    bool
+	ConfirmationHeight *uint32
+}
+
 type Client interface {
 	GetInfo() (*GetInfoResult, error)
 	IsConnected(destination []byte) (bool, error)
@@ -49,6 +60,7 @@ type Client interface {
 	SpliceIn(req *SpliceInRequest) (*wire.OutPoint, error)
 	GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetChannelResult, error)
 	GetPeerId(scid *ShortChannelID) ([]byte, error)
+	GetPeerInfo(peerID []byte) (*PeerInfo, error)
 	GetClosedChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error)
 	WaitOnline(peerID []byte, deadline time.Time) error
 	WaitChannelActive(peerID []byte, deadline time.Time) error
