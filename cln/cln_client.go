@@ -324,6 +324,54 @@ func (c *ClnClient) GetPeerId(scid *lightning.ShortChannelID) ([]byte, error) {
 	return dest, nil
 }
 
+func (c *ClnClient) GetPeerInfo(peerID []byte) (*lightning.PeerInfo, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+
+	peerHex := hex.EncodeToString(peerID)
+	peerChannels, err := client.GetPeerChannels(peerHex)
+	if err != nil {
+		return nil, err
+	}
+
+	peer, err := client.GetPeer(peerHex)
+	if err != nil {
+		return nil, err
+	}
+
+	supportsSplicing := supportsSplicing(peer.Features.Raw)
+	channels := make([]*lightning.PeerChannel, len(peerChannels))
+	for i, peerChannel := range peerChannels {
+		outpoint, err := toOutpoint(peerChannel.FundingTxId, peerChannel.FundingOutnum)
+		if err != nil {
+			return nil, err
+		}
+
+		var confirmationHeight *uint32
+		if peerChannel.ShortChannelId != "" {
+			scid, err := lightning.NewShortChannelIDFromString(peerChannel.ShortChannelId)
+			if err != nil {
+				h := scid.BlockHeight()
+				confirmationHeight = &h
+			}
+		}
+
+		isZeroFeeHtlcTx := slices.Contains(peerChannel.Features, "option_anchors_zero_fee_htlc_tx")
+		channels[i] = &lightning.PeerChannel{
+			FundingOutpoint:    outpoint,
+			ConfirmationHeight: confirmationHeight,
+			IsZeroFeeHtlcTx:    isZeroFeeHtlcTx,
+		}
+	}
+
+	return &lightning.PeerInfo{
+		SupportsSplicing: supportsSplicing,
+		Channels:         channels,
+	}, nil
+}
+
 var pollingInterval = 400 * time.Millisecond
 
 func (c *ClnClient) WaitOnline(peerID []byte, deadline time.Time) error {

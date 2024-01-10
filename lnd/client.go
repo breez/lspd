@@ -557,6 +557,10 @@ func (c *LndClient) SpliceIn(
 	return nil, fmt.Errorf("not supported")
 }
 
+func (c *LndClient) GetPeerInfo(peerID []byte) (*lightning.PeerInfo, error) {
+	return nil, fmt.Errorf("not supported")
+}
+
 func mapScidsFromChannel(c *lnrpc.Channel) (*lightning.ShortChannelID, *lightning.ShortChannelID) {
 	var alias *lightning.ShortChannelID
 	var confirmedScid *lightning.ShortChannelID
