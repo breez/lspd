@@ -48,9 +48,9 @@ type PeerInfo struct {
 }
 
 type PeerChannel struct {
-	FundingOutpoint    *wire.OutPoint
-	IsZeroFeeHtlcTx    bool
-	ConfirmationHeight *uint32
+	FundingOutpoint *wire.OutPoint
+	IsZeroFeeHtlcTx bool
+	ConfirmedScid   *ShortChannelID
 }
 
 type Client interface {
