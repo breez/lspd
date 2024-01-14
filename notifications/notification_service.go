@@ -70,6 +70,8 @@ func (s *NotificationService) Notify(
 		return false, err
 	}
 
+	log.Printf("Notifying %d registrations for %s", len(registrations), pubkey)
+
 	req := &PaymentReceivedPayload{
 		Template: "payment_received",
 		Data: struct {
@@ -100,6 +102,7 @@ func (s *NotificationService) Notify(
 	wg.Wait()
 	cancel()
 
+	log.Printf("finished notifying %s with result: %v", pubkey, notified)
 	if notified {
 		s.mtx.Lock()
 		s.recentNotifications[paymentIdentifier(pubkey, paymenthash)] = time.Now()
@@ -123,11 +126,11 @@ func (s *NotificationService) notifyOnce(ctx context.Context, req *PaymentReceiv
 		return false
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode/100 != 2 {
 		buf := make([]byte, 1000)
 		bytesRead, _ := io.ReadFull(resp.Body, buf)
 		respBody := buf[:bytesRead]
-		log.Printf("Got non 200 status code (%s) for payment notification for %s to %s: %s", resp.Status, pubkey, url, respBody)
+		log.Printf("Got non successfull status code (%s) for payment notification for %s to %s: %s", resp.Status, pubkey, url, respBody)
 		// TODO: Remove subscription?
 		return false
 	}

@@ -36,18 +36,34 @@ func (s *server) SubscribeNotifications(
 
 	data, err := ecies.Decrypt(node.EciesPrivateKey, in.Blob)
 	if err != nil {
+		log.Printf(
+			"failed to register for notifications: ecies.Decrypt error: %v",
+			err,
+		)
 		return nil, fmt.Errorf("ecies.Decrypt(%x) error: %w", in.Blob, err)
 	}
 
 	var request SubscribeNotificationsRequest
 	err = proto.Unmarshal(data, &request)
 	if err != nil {
-		log.Printf("proto.Unmarshal(%x) error: %v", data, err)
+		log.Printf(
+			"failed to register for notifications on url %v: proto.Unmarshal(%x) error: %v",
+			request.Url,
+			data,
+			err,
+		)
 		return nil, fmt.Errorf("proto.Unmarshal(%x) error: %w", data, err)
 	}
 
 	pubkey, err := lightning.VerifyMessage([]byte(request.Url), request.Signature)
 	if err != nil {
+		log.Printf(
+			"failed to register %x for notifications on url %s: lightning.VerifyMessage error: %v",
+			pubkey.SerializeCompressed(),
+			request.Url,
+			err,
+		)
+
 		return nil, err
 	}
 
@@ -63,5 +79,6 @@ func (s *server) SubscribeNotifications(
 		return nil, ErrInternal
 	}
 
+	log.Printf("%v was successfully registered for notifications on url %s", pubkey, request.Url)
 	return &SubscribeNotificationsReply{}, nil
 }
