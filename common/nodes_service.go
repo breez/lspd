@@ -7,11 +7,14 @@ import (
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	ecies "github.com/ecies/go/v2"
 	"golang.org/x/sync/singleflight"
 )
 
 type Node struct {
+	NodeId              []byte
+	ChainHash           chainhash.Hash
 	Client              lightning.Client
 	NodeConfig          *config.NodeConfig
 	PrivateKey          *btcec.PrivateKey

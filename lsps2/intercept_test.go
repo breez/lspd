@@ -284,7 +284,7 @@ func Test_NoMpp_AmtBelowMinimum(t *testing.T) {
 
 	res := i.Intercept(createPart(&part{amt: defaultMinViableAmount - 1}))
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res.Action)
-	assert.Equal(t, common.FAILURE_UNKNOWN_NEXT_PEER, res.FailureCode)
+	assert.ElementsMatch(t, common.FAILURE_UNKNOWN_NEXT_PEER, res.FailureMessage)
 	assertEmpty(t, i)
 }
 
@@ -309,7 +309,7 @@ func Test_NoMpp_AmtAboveMaximum(t *testing.T) {
 
 	res := i.Intercept(createPart(&part{amt: defaultConfig().MaxPaymentSizeMsat + 1}))
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res.Action)
-	assert.Equal(t, common.FAILURE_UNKNOWN_NEXT_PEER, res.FailureCode)
+	assert.ElementsMatch(t, common.FAILURE_UNKNOWN_NEXT_PEER, res.FailureMessage)
 	assertEmpty(t, i)
 }
 
@@ -322,7 +322,7 @@ func Test_NoMpp_CltvDeltaBelowMinimum(t *testing.T) {
 
 	res := i.Intercept(createPart(&part{cltvDelta: 145}))
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res.Action)
-	assert.Equal(t, common.FAILURE_INCORRECT_CLTV_EXPIRY, res.FailureCode)
+	assert.ElementsMatch(t, common.FAILURE_INCORRECT_CLTV_EXPIRY, res.FailureMessage[:2])
 	assertEmpty(t, i)
 }
 
@@ -350,7 +350,7 @@ func Test_NoMpp_ParamsExpired(t *testing.T) {
 
 	res := i.Intercept(createPart(nil))
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res.Action)
-	assert.Equal(t, common.FAILURE_UNKNOWN_NEXT_PEER, res.FailureCode)
+	assert.ElementsMatch(t, common.FAILURE_UNKNOWN_NEXT_PEER, res.FailureMessage)
 	assertEmpty(t, i)
 }
 
@@ -376,7 +376,7 @@ func Test_NoMpp_ChannelAlreadyOpened_Complete_Fails(t *testing.T) {
 
 	res := i.Intercept(createPart(nil))
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res.Action)
-	assert.Equal(t, common.FAILURE_UNKNOWN_NEXT_PEER, res.FailureCode)
+	assert.ElementsMatch(t, common.FAILURE_UNKNOWN_NEXT_PEER, res.FailureMessage)
 	assertEmpty(t, i)
 }
 
@@ -408,7 +408,7 @@ func Test_Mpp_SinglePart_AmtTooSmall(t *testing.T) {
 	res := i.Intercept(createPart(&part{amt: defaultPaymentSizeMsat - 1}))
 	end := time.Now()
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res.Action)
-	assert.Equal(t, common.FAILURE_TEMPORARY_CHANNEL_FAILURE, res.FailureCode)
+	assert.ElementsMatch(t, common.FAILURE_TEMPORARY_CHANNEL_FAILURE, res.FailureMessage[:2])
 	assert.GreaterOrEqual(t, end.Sub(start).Milliseconds(), config.MppTimeout.Milliseconds())
 	assertEmpty(t, i)
 }
@@ -519,7 +519,7 @@ func Test_Mpp_BadSecondPart_ThirdPartCompletes(t *testing.T) {
 	assert.Equal(t, defaultFee, *res1.FeeMsat)
 
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res2.Action)
-	assert.Equal(t, common.FAILURE_AMOUNT_BELOW_MINIMUM, res2.FailureCode)
+	assert.ElementsMatch(t, common.FAILURE_AMOUNT_BELOW_MINIMUM, res2.FailureMessage)
 
 	assert.Equal(t, common.INTERCEPT_RESUME_WITH_ONION, res3.Action)
 	assert.Equal(t, defaultConfig().HtlcMinimumMsat, res3.AmountMsat)
@@ -541,7 +541,7 @@ func Test_Mpp_CltvDeltaBelowMinimum(t *testing.T) {
 
 	res := i.Intercept(createPart(&part{cltvDelta: 145}))
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res.Action)
-	assert.Equal(t, common.FAILURE_INCORRECT_CLTV_EXPIRY, res.FailureCode)
+	assert.ElementsMatch(t, common.FAILURE_INCORRECT_CLTV_EXPIRY, res.FailureMessage[:2])
 	assertEmpty(t, i)
 }
 
@@ -569,7 +569,7 @@ func Test_Mpp_ParamsExpired(t *testing.T) {
 
 	res := i.Intercept(createPart(nil))
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res.Action)
-	assert.Equal(t, common.FAILURE_UNKNOWN_NEXT_PEER, res.FailureCode)
+	assert.ElementsMatch(t, common.FAILURE_UNKNOWN_NEXT_PEER, res.FailureMessage)
 	assertEmpty(t, i)
 }
 
@@ -605,9 +605,9 @@ func Test_Mpp_ParamsExpireInFlight(t *testing.T) {
 
 	wg.Wait()
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res1.Action)
-	assert.Equal(t, common.FAILURE_UNKNOWN_NEXT_PEER, res1.FailureCode)
+	assert.ElementsMatch(t, common.FAILURE_UNKNOWN_NEXT_PEER, res1.FailureMessage)
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res2.Action)
-	assert.Equal(t, common.FAILURE_UNKNOWN_NEXT_PEER, res2.FailureCode)
+	assert.ElementsMatch(t, common.FAILURE_UNKNOWN_NEXT_PEER, res2.FailureMessage)
 
 	assertEmpty(t, i)
 }
@@ -698,7 +698,7 @@ func Test_Mpp_ChannelAlreadyOpened_Complete_Fails(t *testing.T) {
 
 	res := i.Intercept(createPart(nil))
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res.Action)
-	assert.Equal(t, common.FAILURE_UNKNOWN_NEXT_PEER, res.FailureCode)
+	assert.ElementsMatch(t, common.FAILURE_UNKNOWN_NEXT_PEER, res.FailureMessage)
 	assertEmpty(t, i)
 }
 

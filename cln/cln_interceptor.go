@@ -161,7 +161,7 @@ func (i *ClnHtlcInterceptor) intercept() error {
 					interceptorClient.Send(i.resumeWithOnion(request, interceptResult))
 				case common.INTERCEPT_FAIL_HTLC_WITH_CODE:
 					interceptorClient.Send(
-						i.failWithCode(request, interceptResult.FailureCode),
+						i.failWithMessage(request, interceptResult.FailureMessage),
 					)
 				case common.INTERCEPT_IGNORE:
 					// Do nothing
@@ -202,12 +202,12 @@ func (i *ClnHtlcInterceptor) resumeWithOnion(request *proto.HtlcAccepted, interc
 	payload, err := hex.DecodeString(request.Onion.Payload)
 	if err != nil {
 		log.Printf("paymenthash: %s, resumeWithOnion: hex.DecodeString(%v) error: %v", request.Htlc.PaymentHash, request.Onion.Payload, err)
-		return i.failWithCode(request, common.FAILURE_TEMPORARY_CHANNEL_FAILURE)
+		return i.failWithMessage(request, common.FAILURE_TEMPORARY_CHANNEL_FAILURE)
 	}
 	newPayload, err := encodePayloadWithNextHop(payload, interceptResult.Scid, interceptResult.AmountMsat, interceptResult.FeeMsat)
 	if err != nil {
 		log.Printf("paymenthash: %s, encodePayloadWithNextHop error: %v", request.Htlc.PaymentHash, err)
-		return i.failWithCode(request, common.FAILURE_TEMPORARY_CHANNEL_FAILURE)
+		return i.failWithMessage(request, common.FAILURE_TEMPORARY_CHANNEL_FAILURE)
 	}
 
 	newPayloadStr := hex.EncodeToString(newPayload)
@@ -234,14 +234,14 @@ func (i *ClnHtlcInterceptor) defaultResolution(request *proto.HtlcAccepted) *pro
 	}
 }
 
-func (i *ClnHtlcInterceptor) failWithCode(request *proto.HtlcAccepted, code common.InterceptFailureCode) *proto.HtlcResolution {
-	log.Printf("paymenthash: %s, failing htlc with code: '%x'", request.Htlc.PaymentHash, code)
+func (i *ClnHtlcInterceptor) failWithMessage(request *proto.HtlcAccepted, message []byte) *proto.HtlcResolution {
+	log.Printf("paymenthash: %s, failing htlc with message '%x'", request.Htlc.PaymentHash, message)
 	return &proto.HtlcResolution{
 		Correlationid: request.Correlationid,
 		Outcome: &proto.HtlcResolution_Fail{
 			Fail: &proto.HtlcFail{
 				Failure: &proto.HtlcFail_FailureMessage{
-					FailureMessage: i.mapFailureCode(code),
+					FailureMessage: hex.EncodeToString(message),
 				},
 			},
 		},
@@ -304,24 +304,4 @@ func encodePayloadWithNextHop(payload []byte, scid lightning.ShortChannelID, amo
 		return nil, fmt.Errorf("encode error: %v", err)
 	}
 	return newPayloadBuf.Bytes(), nil
-}
-
-func (i *ClnHtlcInterceptor) mapFailureCode(original common.InterceptFailureCode) string {
-	switch original {
-	case common.FAILURE_TEMPORARY_CHANNEL_FAILURE:
-		return "1007"
-	case common.FAILURE_AMOUNT_BELOW_MINIMUM:
-		return "100B"
-	case common.FAILURE_INCORRECT_CLTV_EXPIRY:
-		return "100D"
-	case common.FAILURE_TEMPORARY_NODE_FAILURE:
-		return "2002"
-	case common.FAILURE_UNKNOWN_NEXT_PEER:
-		return "400A"
-	case common.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
-		return "400F"
-	default:
-		log.Printf("Unknown failure code %v, default to temporary channel failure.", original)
-		return "1007" // temporary channel failure
-	}
 }

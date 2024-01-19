@@ -150,11 +150,12 @@ func (i *LndHtlcInterceptor) intercept() error {
 				case common.INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(i.createOnionResponse(interceptResult, request))
 				case common.INTERCEPT_FAIL_HTLC_WITH_CODE:
-					log.Printf("paymenthash %x, failing htlc with code '%x'", request.PaymentHash, interceptResult.FailureCode)
+					log.Printf("paymenthash %x, failing htlc with message '%x'", request.PaymentHash, interceptResult.FailureMessage)
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
-						IncomingCircuitKey: request.IncomingCircuitKey,
-						Action:             routerrpc.ResolveHoldForwardAction_FAIL,
-						FailureCode:        i.mapFailureCode(interceptResult.FailureCode),
+						IncomingCircuitKey:        request.IncomingCircuitKey,
+						Action:                    routerrpc.ResolveHoldForwardAction_FAIL,
+						FailureMessage:            interceptResult.FailureMessage,
+						FailureMessageUnencrypted: true,
 					})
 				case common.INTERCEPT_RESUME:
 					fallthrough
@@ -173,20 +174,6 @@ func (i *LndHtlcInterceptor) intercept() error {
 		}
 
 		<-time.After(time.Second)
-	}
-}
-
-func (i *LndHtlcInterceptor) mapFailureCode(original common.InterceptFailureCode) lnrpc.Failure_FailureCode {
-	switch original {
-	case common.FAILURE_TEMPORARY_CHANNEL_FAILURE:
-		return lnrpc.Failure_TEMPORARY_CHANNEL_FAILURE
-	case common.FAILURE_TEMPORARY_NODE_FAILURE:
-		return lnrpc.Failure_TEMPORARY_NODE_FAILURE
-	case common.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
-		return lnrpc.Failure_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
-	default:
-		log.Printf("Unknown failure code %v, default to temporary channel failure.", original)
-		return lnrpc.Failure_TEMPORARY_CHANNEL_FAILURE
 	}
 }
 
