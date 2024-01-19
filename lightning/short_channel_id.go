@@ -49,3 +49,7 @@ func (c *ShortChannelID) ToString() string {
 	outputIndex := u & 0xFFFF
 	return fmt.Sprintf("%dx%dx%d", blockHeight, txIndex, outputIndex)
 }
+
+func (c *ShortChannelID) ToLnwire() lnwire.ShortChannelID {
+	return lnwire.NewShortChanIDFromInt(uint64(*c))
+}

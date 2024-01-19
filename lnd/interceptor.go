@@ -9,7 +9,6 @@ import (
 
 	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/config"
-	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/btcec/v2"
 	sphinx "github.com/lightningnetwork/lightning-onion"
@@ -24,7 +23,7 @@ import (
 
 type LndHtlcInterceptor struct {
 	fwsync        *ForwardingHistorySync
-	interceptor   *interceptor.Interceptor
+	interceptor   common.InterceptHandler
 	config        *config.NodeConfig
 	client        *LndClient
 	stopRequested bool
@@ -38,7 +37,7 @@ func NewLndHtlcInterceptor(
 	conf *config.NodeConfig,
 	client *LndClient,
 	fwsync *ForwardingHistorySync,
-	interceptor *interceptor.Interceptor,
+	interceptor common.InterceptHandler,
 ) (*LndHtlcInterceptor, error) {
 	i := &LndHtlcInterceptor{
 		config:      conf,
@@ -150,11 +149,12 @@ func (i *LndHtlcInterceptor) intercept() error {
 				case common.INTERCEPT_RESUME_WITH_ONION:
 					interceptorClient.Send(i.createOnionResponse(interceptResult, request))
 				case common.INTERCEPT_FAIL_HTLC_WITH_CODE:
-					log.Printf("paymenthash %x, failing htlc with code '%x'", request.PaymentHash, interceptResult.FailureCode)
+					log.Printf("paymenthash %x, failing htlc with message '%x'", request.PaymentHash, interceptResult.FailureMessage)
 					interceptorClient.Send(&routerrpc.ForwardHtlcInterceptResponse{
-						IncomingCircuitKey: request.IncomingCircuitKey,
-						Action:             routerrpc.ResolveHoldForwardAction_FAIL,
-						FailureCode:        i.mapFailureCode(interceptResult.FailureCode),
+						IncomingCircuitKey:        request.IncomingCircuitKey,
+						Action:                    routerrpc.ResolveHoldForwardAction_FAIL,
+						FailureMessage:            interceptResult.FailureMessage,
+						FailureMessageUnencrypted: true,
 					})
 				case common.INTERCEPT_RESUME:
 					fallthrough
@@ -173,20 +173,6 @@ func (i *LndHtlcInterceptor) intercept() error {
 		}
 
 		<-time.After(time.Second)
-	}
-}
-
-func (i *LndHtlcInterceptor) mapFailureCode(original common.InterceptFailureCode) lnrpc.Failure_FailureCode {
-	switch original {
-	case common.FAILURE_TEMPORARY_CHANNEL_FAILURE:
-		return lnrpc.Failure_TEMPORARY_CHANNEL_FAILURE
-	case common.FAILURE_TEMPORARY_NODE_FAILURE:
-		return lnrpc.Failure_TEMPORARY_NODE_FAILURE
-	case common.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
-		return lnrpc.Failure_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
-	default:
-		log.Printf("Unknown failure code %v, default to temporary channel failure.", original)
-		return lnrpc.Failure_TEMPORARY_CHANNEL_FAILURE
 	}
 }
 

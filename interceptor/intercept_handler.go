@@ -11,7 +11,6 @@ import (
 
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/common"
-	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/notifications"
@@ -22,7 +21,7 @@ import (
 
 type Interceptor struct {
 	client              lightning.Client
-	config              *config.NodeConfig
+	node                *common.Node
 	store               InterceptStore
 	openingService      common.OpeningService
 	feeEstimator        chain.FeeEstimator
@@ -33,7 +32,7 @@ type Interceptor struct {
 
 func NewInterceptHandler(
 	client lightning.Client,
-	config *config.NodeConfig,
+	node *common.Node,
 	store InterceptStore,
 	openingService common.OpeningService,
 	feeEstimator chain.FeeEstimator,
@@ -42,7 +41,7 @@ func NewInterceptHandler(
 ) *Interceptor {
 	return &Interceptor{
 		client:              client,
-		config:              config,
+		node:                node,
 		store:               store,
 		openingService:      openingService,
 		feeEstimator:        feeEstimator,
@@ -59,8 +58,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 		if err != nil {
 			log.Printf("paymentInfo(%x) error: %v", req.PaymentHash, err)
 			return common.InterceptResult{
-				Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-				FailureCode: common.FAILURE_TEMPORARY_NODE_FAILURE,
+				Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+				FailureMessage: common.FAILURE_TEMPORARY_NODE_FAILURE,
 			}, nil
 		}
 
@@ -111,8 +110,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 		if err != nil {
 			log.Printf("IsConnected(%x) error: %v", nextHop, err)
 			return &common.InterceptResult{
-				Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-				FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+				Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+				FailureMessage: common.FailureTemporaryChannelFailure(nil),
 			}, nil
 		}
 
@@ -133,8 +132,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 			if channelPoint == nil {
 				log.Printf("paymentHash: %s, probe and channelPoint == nil", reqPaymentHashStr)
 				return common.InterceptResult{
-					Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-					FailureCode: common.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
+					Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureMessage: common.FAILURE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS,
 				}, nil
 			}
 		}
@@ -161,26 +160,37 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 			}, nil
 		}
 
+		// In case we fail with an error, this is the used channel update.
+		chanUpdate := common.ConstructChanUpdate(
+			i.node.ChainHash,
+			i.node.NodeId,
+			destination,
+			req.Scid,
+			uint16(i.node.NodeConfig.TimeLockDelta),
+			i.node.NodeConfig.MinHtlcMsat,
+			req.IncomingAmountMsat,
+		)
+
 		// The first htlc of a MPP will open the channel.
 		if channelPoint == nil {
 			// TODO: When opening_fee_params is enforced, turn this check in a temporary channel failure.
 			if params == nil {
 				log.Printf("DEPRECATED: Intercepted htlc with deprecated fee mechanism. Using default fees. payment hash: %s", reqPaymentHashStr)
 				params = &common.OpeningFeeParams{
-					MinFeeMsat:           uint64(i.config.ChannelMinimumFeeMsat),
-					Proportional:         uint32(i.config.ChannelFeePermyriad * 100),
+					MinFeeMsat:           uint64(i.node.NodeConfig.ChannelMinimumFeeMsat),
+					Proportional:         uint32(i.node.NodeConfig.ChannelFeePermyriad * 100),
 					ValidUntil:           time.Now().UTC().Add(time.Duration(time.Hour * 24)).Format(lsps0.TIME_FORMAT),
-					MinLifetime:          uint32(i.config.MaxInactiveDuration / 600),
+					MinLifetime:          uint32(i.node.NodeConfig.MaxInactiveDuration / 600),
 					MaxClientToSelfDelay: uint32(10000),
 				}
 			}
 
 			// Make sure the cltv delta is enough.
-			if int64(req.IncomingExpiry)-int64(req.OutgoingExpiry) < int64(i.config.TimeLockDelta) {
-				log.Printf("paymentHash: %s, outgoingExpiry: %v, incomingExpiry: %v, i.config.TimeLockDelta: %v", reqPaymentHashStr, req.OutgoingExpiry, req.IncomingExpiry, i.config.TimeLockDelta)
+			if int64(req.IncomingExpiry)-int64(req.OutgoingExpiry) < int64(i.node.NodeConfig.TimeLockDelta) {
+				log.Printf("paymentHash: %s, outgoingExpiry: %v, incomingExpiry: %v, i.node.NodeConfig.TimeLockDelta: %v", reqPaymentHashStr, req.OutgoingExpiry, req.IncomingExpiry, i.node.NodeConfig.TimeLockDelta)
 				return common.InterceptResult{
-					Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-					FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureMessage: common.FailureIncorrectCltvExpiry(req.IncomingExpiry, chanUpdate),
 				}, nil
 			}
 
@@ -188,8 +198,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 			if err != nil {
 				log.Printf("paymentHash: %s, time.Parse(%s, %s) failed. Failing channel open: %v", reqPaymentHashStr, lsps0.TIME_FORMAT, params.ValidUntil, err)
 				return common.InterceptResult{
-					Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-					FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureMessage: common.FailureTemporaryChannelFailure(&chanUpdate),
 				}, nil
 			}
 
@@ -199,8 +209,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 				if !i.openingService.IsCurrentChainFeeCheaper(token, params) {
 					log.Printf("Intercepted expired payment registration. Failing payment. payment hash: %s, valid until: %s", reqPaymentHashStr, params.ValidUntil)
 					return common.InterceptResult{
-						Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-						FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+						Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+						FailureMessage: common.FailureTemporaryChannelFailure(&chanUpdate),
 					}, nil
 				}
 
@@ -211,8 +221,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 			if err != nil {
 				log.Printf("paymentHash: %s, openChannel(%x, %v) err: %v", reqPaymentHashStr, destination, incomingAmountMsat, err)
 				return common.InterceptResult{
-					Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-					FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+					FailureMessage: common.FailureTemporaryChannelFailure(&chanUpdate),
 				}, nil
 			}
 		}
@@ -238,8 +248,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 				if err != nil {
 					log.Printf("paymentHash: %s, insertChannel error: %v", reqPaymentHashStr, err)
 					return common.InterceptResult{
-						Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-						FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+						Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+						FailureMessage: common.FailureTemporaryChannelFailure(&chanUpdate),
 					}, nil
 				}
 
@@ -248,7 +258,7 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 					channelID = chanResult.InitialChannelID
 				}
 
-				useLegacyOnionBlob := slices.Contains(i.config.LegacyOnionTokens, token)
+				useLegacyOnionBlob := slices.Contains(i.node.NodeConfig.LegacyOnionTokens, token)
 				return common.InterceptResult{
 					Action:             common.INTERCEPT_RESUME_WITH_ONION,
 					Destination:        destination,
@@ -271,8 +281,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 
 		log.Printf("paymentHash: %s, Error: Channel failed to open... timed out. ", reqPaymentHashStr)
 		return common.InterceptResult{
-			Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-			FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+			Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+			FailureMessage: common.FailureTemporaryChannelFailure(&chanUpdate),
 		}, nil
 	})
 
@@ -297,7 +307,7 @@ func (i *Interceptor) notifyAndWait(reqPaymentHashStr string, nextHop []byte, is
 	}
 
 	log.Printf("paymentHash %s, Notified %x of pending htlc", reqPaymentHashStr, nextHop)
-	d, err := time.ParseDuration(i.config.NotificationTimeout)
+	d, err := time.ParseDuration(i.node.NodeConfig.NotificationTimeout)
 	if err != nil {
 		log.Printf("WARN: No NotificationTimeout set. Using default 1m")
 		d = time.Minute
@@ -349,8 +359,8 @@ func (i *Interceptor) notifyAndWait(reqPaymentHashStr string, nextHop []byte, is
 }
 
 func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmountMsat int64, tag *string) (*wire.OutPoint, error) {
-	capacity := incomingAmountMsat/1000 + i.config.AdditionalChannelCapacity
-	if capacity == i.config.PublicChannelAmount {
+	capacity := incomingAmountMsat/1000 + i.node.NodeConfig.AdditionalChannelCapacity
+	if capacity == i.node.NodeConfig.PublicChannelAmount {
 		capacity++
 	}
 
@@ -368,7 +378,7 @@ func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmoun
 			feeStr = fmt.Sprintf("%.5f", *feeEstimation)
 		} else {
 			log.Printf("Error estimating chain fee, fallback to target conf: %v", err)
-			targetConf = &i.config.TargetConf
+			targetConf = &i.node.NodeConfig.TargetConf
 			confStr = fmt.Sprintf("%v", *targetConf)
 		}
 	}
@@ -384,7 +394,7 @@ func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmoun
 	channelPoint, err := i.client.OpenChannel(&lightning.OpenChannelRequest{
 		Destination:    destination,
 		CapacitySat:    uint64(capacity),
-		MinConfs:       i.config.MinConfs,
+		MinConfs:       i.node.NodeConfig.MinConfs,
 		IsPrivate:      true,
 		IsZeroConf:     true,
 		FeeSatPerVByte: feeEstimation,

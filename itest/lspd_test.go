@@ -24,7 +24,7 @@ func TestLspd(t *testing.T) {
 			lndTestCases = append(lndTestCases, c)
 		}
 	}
-	runTests(t, lndTestCases, "LND-lsp-CLN-client", lndLspFunc, clnClientFunc)
+	runTests(t, testCases, "LND-lsp-CLN-client", lndLspFunc, clnClientFunc)
 	runTests(t, lndTestCases, "LND-lsp-LND-client", legacyOnionLndLspFunc, lndClientFunc)
 	runTests(t, testCases, "CLN-lsp-CLN-client", clnLspFunc, clnClientFunc)
 }

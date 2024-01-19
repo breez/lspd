@@ -137,10 +137,10 @@ func testOfflineNotificationRegularForward(p *testParams) {
 		p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
 	}()
 
+	<-time.After(time.Second * 2)
 	url := "http://" + addr + "/api/v1/notify"
 	SubscribeNotifications(p.lsp, p.BreezClient(), url, false)
 
-	<-time.After(time.Second * 2)
 	log.Printf("Adding bob's invoice")
 	amountMsat := uint64(2100000)
 	bobInvoice := p.BreezClient().Node().CreateBolt11Invoice(&lntest.CreateInvoiceOptions{

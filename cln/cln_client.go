@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
@@ -88,8 +89,9 @@ func (c *ClnClient) GetInfo() (*lightning.GetInfoResult, error) {
 	}
 
 	return &lightning.GetInfoResult{
-		Alias:  info.Alias,
-		Pubkey: info.Id,
+		ChainHash: common.MapChainHash(info.Network),
+		Alias:     info.Alias,
+		Pubkey:    info.Id,
 	}, nil
 }
 

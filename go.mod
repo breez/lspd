@@ -194,7 +194,7 @@ require (
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
 
-replace github.com/lightningnetwork/lnd v0.17.2-beta => github.com/breez/lnd v0.15.0-beta.rc6.0.20231122093500-0c939786ced7
+replace github.com/lightningnetwork/lnd v0.17.2-beta => github.com/breez/lnd v0.15.0-beta.rc6.0.20240105103917-ec16df3d9d48
 
 replace google.golang.org/protobuf => github.com/lightninglabs/protobuf-go-hex-display v1.30.0-hex-display
 

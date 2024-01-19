@@ -13,10 +13,13 @@ import (
 	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
 
 type InterceptorConfig struct {
+	NodeId                       []byte
+	ChainHash                    chainhash.Hash
 	AdditionalChannelCapacitySat uint64
 	MinConfs                     *uint32
 	TargetConf                   uint32
@@ -111,7 +114,7 @@ type paymentChanOpenedEvent struct {
 
 type paymentFailureEvent struct {
 	paymentId string
-	code      common.InterceptFailureCode
+	message   common.InterceptFailureCode
 }
 
 func (i *Interceptor) Start(ctx context.Context) {
@@ -132,7 +135,7 @@ func (i *Interceptor) Start(ctx context.Context) {
 		case paymentId := <-i.paymentReady:
 			i.handlePaymentReady(paymentId)
 		case ev := <-i.paymentFailure:
-			i.handlePaymentFailure(ev.paymentId, ev.code)
+			i.handlePaymentFailure(ev.paymentId, ev.message)
 		case ev := <-i.paymentChanOpened:
 			i.handlePaymentChanOpened(ev)
 		}
@@ -186,7 +189,7 @@ func (i *Interceptor) handleNewPart(part *partState) {
 				// a goroutine.
 				i.paymentFailure <- &paymentFailureEvent{
 					paymentId: paymentId,
-					code:      common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					message:   common.FailureTemporaryChannelFailure(nil),
 				}
 			case <-payment.timeoutChan:
 				// Stop listening for timeouts when the payment is ready.
@@ -281,7 +284,17 @@ func (i *Interceptor) processPart(payment *paymentState, part *partState) {
 	// Make sure the cltv delta is enough (actual cltv delta + 2).
 	if int64(part.req.IncomingExpiry)-int64(part.req.OutgoingExpiry) <
 		int64(i.config.TimeLockDelta)+2 {
-		i.failPart(payment, part, common.FAILURE_INCORRECT_CLTV_EXPIRY)
+		peerid, _ := hex.DecodeString(payment.registration.PeerId)
+		chanUpdate := common.ConstructChanUpdate(
+			i.config.ChainHash,
+			i.config.NodeId,
+			peerid,
+			payment.fakeScid,
+			uint16(i.config.TimeLockDelta),
+			i.config.HtlcMinimumMsat,
+			payment.paymentSizeMsat,
+		)
+		i.failPart(payment, part, common.FailureIncorrectCltvExpiry(part.req.IncomingExpiry, chanUpdate))
 		return
 	}
 
@@ -373,6 +386,16 @@ func (i *Interceptor) handlePaymentReady(paymentId string) {
 // a goroutine.
 func (i *Interceptor) ensureChannelOpen(payment *paymentState) {
 	destination, _ := hex.DecodeString(payment.registration.PeerId)
+	peerid, _ := hex.DecodeString(payment.registration.PeerId)
+	chanUpdate := common.ConstructChanUpdate(
+		i.config.ChainHash,
+		i.config.NodeId,
+		peerid,
+		payment.fakeScid,
+		uint16(i.config.TimeLockDelta),
+		i.config.HtlcMinimumMsat,
+		payment.paymentSizeMsat,
+	)
 
 	if payment.registration.ChannelPoint == nil {
 
@@ -389,7 +412,7 @@ func (i *Interceptor) ensureChannelOpen(payment *paymentState) {
 			)
 			i.paymentFailure <- &paymentFailureEvent{
 				paymentId: payment.id,
-				code:      common.FAILURE_UNKNOWN_NEXT_PEER,
+				message:   common.FAILURE_UNKNOWN_NEXT_PEER,
 			}
 			return
 		}
@@ -409,7 +432,7 @@ func (i *Interceptor) ensureChannelOpen(payment *paymentState) {
 			)
 			i.paymentFailure <- &paymentFailureEvent{
 				paymentId: payment.id,
-				code:      common.FAILURE_UNKNOWN_NEXT_PEER,
+				message:   common.FAILURE_UNKNOWN_NEXT_PEER,
 			}
 			return
 		}
@@ -464,8 +487,8 @@ func (i *Interceptor) ensureChannelOpen(payment *paymentState) {
 			)
 
 			code := common.FAILURE_UNKNOWN_NEXT_PEER
-			if strings.Contains(err.Error(), "not enough funds") {
-				code = common.FAILURE_TEMPORARY_CHANNEL_FAILURE
+			if strings.Contains(err.Error(), "not enough") {
+				code = common.FailureTemporaryChannelFailure(&chanUpdate)
 			}
 
 			// TODO: Verify that a client disconnect before receiving
@@ -476,7 +499,7 @@ func (i *Interceptor) ensureChannelOpen(payment *paymentState) {
 			// temporary_channel_failure should be returned.
 			i.paymentFailure <- &paymentFailureEvent{
 				paymentId: payment.id,
-				code:      code,
+				message:   code,
 			}
 			return
 		}
@@ -499,7 +522,7 @@ func (i *Interceptor) ensureChannelOpen(payment *paymentState) {
 			)
 			i.paymentFailure <- &paymentFailureEvent{
 				paymentId: payment.id,
-				code:      common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+				message:   common.FailureTemporaryChannelFailure(&chanUpdate),
 			}
 			return
 		}
@@ -521,7 +544,7 @@ func (i *Interceptor) ensureChannelOpen(payment *paymentState) {
 			case <-time.After(time.Until(deadline)):
 				i.paymentFailure <- &paymentFailureEvent{
 					paymentId: payment.id,
-					code:      common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+					message:   common.FailureTemporaryChannelFailure(&chanUpdate),
 				}
 				return
 			}
@@ -600,11 +623,22 @@ func (i *Interceptor) handlePaymentChanOpened(event *paymentChanOpenedEvent) {
 			event.paymentId,
 			feeRemainingMsat,
 		)
+
+		peerid, _ := hex.DecodeString(payment.registration.PeerId)
+		chanUpdate := common.ConstructChanUpdate(
+			i.config.ChainHash,
+			i.config.NodeId,
+			peerid,
+			payment.fakeScid,
+			uint16(i.config.TimeLockDelta),
+			i.config.HtlcMinimumMsat,
+			payment.paymentSizeMsat,
+		)
 		// TODO: Verify temporary_channel_failure is the way to go here, maybe
 		// unknown_next_peer is more appropriate.
 		i.paymentFailure <- &paymentFailureEvent{
 			paymentId: event.paymentId,
-			code:      common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
+			message:   common.FailureTemporaryChannelFailure(&chanUpdate),
 		}
 		return
 	}
@@ -620,11 +654,11 @@ func (i *Interceptor) handlePaymentChanOpened(event *paymentChanOpenedEvent) {
 
 func (i *Interceptor) handlePaymentFailure(
 	paymentId string,
-	code common.InterceptFailureCode,
+	message []byte,
 ) {
 	i.finalizeAllParts(paymentId, &common.InterceptResult{
-		Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-		FailureCode: code,
+		Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+		FailureMessage: message,
 	})
 }
 
@@ -660,11 +694,11 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 func (i *Interceptor) failPart(
 	payment *paymentState,
 	part *partState,
-	code common.InterceptFailureCode,
+	message []byte,
 ) {
 	part.resolution <- &common.InterceptResult{
-		Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
-		FailureCode: code,
+		Action:         common.INTERCEPT_FAIL_HTLC_WITH_CODE,
+		FailureMessage: message,
 	}
 	delete(payment.parts, part.req.HtlcId())
 	if len(payment.parts) == 0 {

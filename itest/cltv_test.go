@@ -54,5 +54,5 @@ func testInvalidCltv(p *testParams) {
 	// Decrement the delay in the first hop, so the cltv delta will become 143 (too little)
 	route.Hops[0].Delay--
 	_, err := alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
-	assert.Contains(p.t, err.Error(), "WIRE_TEMPORARY_CHANNEL_FAILURE")
+	assert.Contains(p.t, err.Error(), "WIRE_INCORRECT_CLTV_EXPIRY")
 }

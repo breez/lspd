@@ -5,7 +5,7 @@ on:
   pull_request:    
 env:
   BITCOIN_VERSION: '25.0'
-  LSP_REF: 'breez-node-v0.17.2-beta'
+  LSP_REF: 'unencrypted-failure-messages'
   CLIENT_REF: 'v0.16.4-breez-3'
   GO_VERSION: '^1.19'
   CLN_VERSION: 'v23.11'
@@ -158,6 +158,7 @@ jobs:
           testLsps2ZeroConfUtxo
         ]
         lsp: [
+          LND,
           CLN
         ]
         client: [

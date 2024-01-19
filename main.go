@@ -111,6 +111,25 @@ func main() {
 	var interceptors []interceptor.HtlcInterceptor
 	for _, node := range nodes {
 		var htlcInterceptor interceptor.HtlcInterceptor
+		lsps2Config := &lsps2.InterceptorConfig{
+			NodeId:                       node.NodeId,
+			ChainHash:                    node.ChainHash,
+			AdditionalChannelCapacitySat: uint64(node.NodeConfig.AdditionalChannelCapacity),
+			MinConfs:                     node.NodeConfig.MinConfs,
+			TargetConf:                   node.NodeConfig.TargetConf,
+			FeeStrategy:                  feeStrategy,
+			MinPaymentSizeMsat:           node.NodeConfig.MinPaymentSizeMsat,
+			MaxPaymentSizeMsat:           node.NodeConfig.MaxPaymentSizeMsat,
+			TimeLockDelta:                node.NodeConfig.TimeLockDelta,
+			HtlcMinimumMsat:              node.NodeConfig.MinHtlcMsat,
+			MppTimeout:                   time.Second * 90,
+		}
+		msgServer := lsps0.NewServer()
+		protocolServer := lsps0.NewProtocolServer([]uint32{2})
+		lsps2Server := lsps2.NewLsps2Server(openingService, nodesService, node, lsps2Store)
+		lsps0.RegisterProtocolServer(msgServer, protocolServer)
+		lsps2.RegisterLsps2Server(msgServer, lsps2Server)
+
 		if node.NodeConfig.Lnd != nil {
 			client, err := lnd.NewLndClient(node.NodeConfig.Lnd)
 			if err != nil {
@@ -119,11 +138,20 @@ func main() {
 
 			client.StartListeners()
 			fwsync := lnd.NewForwardingHistorySync(client, interceptStore, forwardingStore)
-			interceptor := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, openingService, feeEstimator, feeStrategy, notificationService)
-			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node.NodeConfig, client, fwsync, interceptor)
+			legacyHandler := interceptor.NewInterceptHandler(client, node, interceptStore, openingService, feeEstimator, feeStrategy, notificationService)
+			lsps2Handler := lsps2.NewInterceptHandler(lsps2Store, openingService, client, feeEstimator, lsps2Config)
+			go lsps2Handler.Start(ctx)
+			combinedHandler := common.NewCombinedHandler(lsps2Handler, legacyHandler)
+			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node.NodeConfig, client, fwsync, combinedHandler)
 			if err != nil {
 				log.Fatalf("failed to initialize LND interceptor: %v", err)
 			}
+
+			msgClient := lnd.NewCustomMsgClient(node.NodeConfig.Cln, client)
+			go msgClient.Start()
+			msgClient.WaitStarted()
+			defer msgClient.Stop()
+			go msgServer.Serve(msgClient)
 		}
 
 		if node.NodeConfig.Cln != nil {
@@ -132,18 +160,8 @@ func main() {
 				log.Fatalf("failed to initialize CLN client: %v", err)
 			}
 
-			legacyHandler := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, openingService, feeEstimator, feeStrategy, notificationService)
-			lsps2Handler := lsps2.NewInterceptHandler(lsps2Store, openingService, client, feeEstimator, &lsps2.InterceptorConfig{
-				AdditionalChannelCapacitySat: uint64(node.NodeConfig.AdditionalChannelCapacity),
-				MinConfs:                     node.NodeConfig.MinConfs,
-				TargetConf:                   node.NodeConfig.TargetConf,
-				FeeStrategy:                  feeStrategy,
-				MinPaymentSizeMsat:           node.NodeConfig.MinPaymentSizeMsat,
-				MaxPaymentSizeMsat:           node.NodeConfig.MaxPaymentSizeMsat,
-				TimeLockDelta:                node.NodeConfig.TimeLockDelta,
-				HtlcMinimumMsat:              node.NodeConfig.MinHtlcMsat,
-				MppTimeout:                   time.Second * 90,
-			})
+			legacyHandler := interceptor.NewInterceptHandler(client, node, interceptStore, openingService, feeEstimator, feeStrategy, notificationService)
+			lsps2Handler := lsps2.NewInterceptHandler(lsps2Store, openingService, client, feeEstimator, lsps2Config)
 			go lsps2Handler.Start(ctx)
 			combinedHandler := common.NewCombinedHandler(lsps2Handler, legacyHandler)
 			htlcInterceptor, err = cln.NewClnHtlcInterceptor(node.NodeConfig, client, combinedHandler)
@@ -153,11 +171,6 @@ func main() {
 
 			msgClient := cln.NewCustomMsgClient(node.NodeConfig.Cln, client)
 			go msgClient.Start()
-			msgServer := lsps0.NewServer()
-			protocolServer := lsps0.NewProtocolServer([]uint32{2})
-			lsps2Server := lsps2.NewLsps2Server(openingService, nodesService, node, lsps2Store)
-			lsps0.RegisterProtocolServer(msgServer, protocolServer)
-			lsps2.RegisterLsps2Server(msgServer, lsps2Server)
 			msgClient.WaitStarted()
 			defer msgClient.Stop()
 			go msgServer.Serve(msgClient)
@@ -297,7 +310,13 @@ func initializeNodes(configs []*config.NodeConfig) ([]*common.Node, error) {
 			node.NodeConfig.NodePubkey = info.Pubkey
 		}
 
+		nodeid, err := hex.DecodeString(info.Pubkey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode node id '%s'", info.Pubkey)
+		}
+		node.ChainHash = *info.ChainHash
 		node.Tokens = config.Tokens
+		node.NodeId = nodeid
 		nodes = append(nodes, node)
 	}
 
