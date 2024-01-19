@@ -235,7 +235,7 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 		for {
 			chanResult, _ := i.client.GetChannel(destination, *channelPoint)
 			if chanResult != nil {
-				log.Printf("paymentHash: %s, channel opened successfully alias: '%v', confirmed: '%v'", reqPaymentHashStr, chanResult.AliasScid.ToString(), chanResult.ConfirmedScid.ToString())
+				log.Printf("paymentHash: %s, liquidity added successfully. alias: '%v', confirmed: '%v'", reqPaymentHashStr, chanResult.AliasScid.ToString(), chanResult.ConfirmedScid.ToString())
 
 				var scid *lightning.ShortChannelID
 				if chanResult.ConfirmedScid == nil {
@@ -297,7 +297,7 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 				}, nil
 			}
 
-			log.Printf("paymentHash: %s, waiting for channel to get opened... %x", reqPaymentHashStr, destination)
+			log.Printf("paymentHash: %s, waiting for channel with channelpoint %s to become active.... %x", reqPaymentHashStr, channelPoint.String(), destination)
 			if time.Now().After(deadline) {
 				log.Printf("paymentHash: %s, Stop retrying getChannel(%v, %v)", reqPaymentHashStr, destination, channelPoint.String())
 				break
