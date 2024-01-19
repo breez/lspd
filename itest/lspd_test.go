@@ -211,11 +211,6 @@ var allTestCases = []*testCase{
 		isLsps2: true,
 	},
 	{
-		name:    "testLsps2Cltv",
-		test:    testLsps2Cltv,
-		isLsps2: true,
-	},
-	{
 		name:    "testLsps2NoBalance",
 		test:    testLsps2NoBalance,
 		isLsps2: true,

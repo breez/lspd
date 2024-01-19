@@ -278,9 +278,9 @@ func (i *Interceptor) processPart(payment *paymentState, part *partState) {
 		}
 	}
 
-	// Make sure the cltv delta is enough (actual cltv delta + 2).
+	// Make sure the cltv delta is enough.
 	if int64(part.req.IncomingExpiry)-int64(part.req.OutgoingExpiry) <
-		int64(i.config.TimeLockDelta)+2 {
+		int64(i.config.TimeLockDelta) {
 		i.failPart(payment, part, common.FAILURE_INCORRECT_CLTV_EXPIRY)
 		return
 	}

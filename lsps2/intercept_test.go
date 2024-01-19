@@ -314,13 +314,13 @@ func Test_NoMpp_AmtAboveMaximum(t *testing.T) {
 }
 
 // Asserts that a no-MPP+var-invoice mode payment fails when the cltv delta is
-// less than cltv delta + 2.
+// less than cltv delta.
 func Test_NoMpp_CltvDeltaBelowMinimum(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	i := setupInterceptor(ctx, nil)
 
-	res := i.Intercept(createPart(&part{cltvDelta: 145}))
+	res := i.Intercept(createPart(&part{cltvDelta: 143}))
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res.Action)
 	assert.Equal(t, common.FAILURE_INCORRECT_CLTV_EXPIRY, res.FailureCode)
 	assertEmpty(t, i)
@@ -533,13 +533,13 @@ func Test_Mpp_BadSecondPart_ThirdPartCompletes(t *testing.T) {
 }
 
 // Asserts that a MPP+fixed-invoice mode payment fails when the cltv delta is
-// less than cltv delta + 2.
+// less than cltv delta.
 func Test_Mpp_CltvDeltaBelowMinimum(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	i := setupInterceptor(ctx, &interceptP{store: mppStore()})
 
-	res := i.Intercept(createPart(&part{cltvDelta: 145}))
+	res := i.Intercept(createPart(&part{cltvDelta: 143}))
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res.Action)
 	assert.Equal(t, common.FAILURE_INCORRECT_CLTV_EXPIRY, res.FailureCode)
 	assertEmpty(t, i)
