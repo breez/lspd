@@ -154,7 +154,8 @@ jobs:
           testLsps2Buy,
           testLsps2HappyFlow,
           testLsps2NoBalance,
-          testLsps2ZeroConfUtxo
+          testLsps2ZeroConfUtxo,
+          testSplicing,
         ]
         lsp: [
           CLN
