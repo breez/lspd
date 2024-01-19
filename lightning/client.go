@@ -32,10 +32,20 @@ type Channel struct {
 	PeerId        []byte
 }
 
+type SpliceInRequest struct {
+	PeerId                []byte
+	ChannelOutpoint       *wire.OutPoint
+	AdditionalCapacitySat uint64
+	FeeSatPerVByte        *float64
+	TargetConf            *uint32
+	MinConfs              *uint32
+}
+
 type Client interface {
 	GetInfo() (*GetInfoResult, error)
 	IsConnected(destination []byte) (bool, error)
 	OpenChannel(req *OpenChannelRequest) (*wire.OutPoint, error)
+	SpliceIn(req *SpliceInRequest) (*wire.OutPoint, error)
 	GetChannel(peerID []byte, channelPoint wire.OutPoint) (*GetChannelResult, error)
 	GetPeerId(scid *ShortChannelID) ([]byte, error)
 	GetClosedChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error)
