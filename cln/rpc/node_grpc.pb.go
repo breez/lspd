@@ -28,7 +28,10 @@ type NodeClient interface {
 	SendPay(ctx context.Context, in *SendpayRequest, opts ...grpc.CallOption) (*SendpayResponse, error)
 	ListChannels(ctx context.Context, in *ListchannelsRequest, opts ...grpc.CallOption) (*ListchannelsResponse, error)
 	AddGossip(ctx context.Context, in *AddgossipRequest, opts ...grpc.CallOption) (*AddgossipResponse, error)
+	AddPsbtOutput(ctx context.Context, in *AddpsbtoutputRequest, opts ...grpc.CallOption) (*AddpsbtoutputResponse, error)
 	AutoCleanInvoice(ctx context.Context, in *AutocleaninvoiceRequest, opts ...grpc.CallOption) (*AutocleaninvoiceResponse, error)
+	AutoCleanOnce(ctx context.Context, in *AutocleanonceRequest, opts ...grpc.CallOption) (*AutocleanonceResponse, error)
+	AutoCleanStatus(ctx context.Context, in *AutocleanstatusRequest, opts ...grpc.CallOption) (*AutocleanstatusResponse, error)
 	CheckMessage(ctx context.Context, in *CheckmessageRequest, opts ...grpc.CallOption) (*CheckmessageResponse, error)
 	Close(ctx context.Context, in *CloseRequest, opts ...grpc.CallOption) (*CloseResponse, error)
 	ConnectPeer(ctx context.Context, in *ConnectRequest, opts ...grpc.CallOption) (*ConnectResponse, error)
@@ -37,14 +40,21 @@ type NodeClient interface {
 	DatastoreUsage(ctx context.Context, in *DatastoreusageRequest, opts ...grpc.CallOption) (*DatastoreusageResponse, error)
 	CreateOnion(ctx context.Context, in *CreateonionRequest, opts ...grpc.CallOption) (*CreateonionResponse, error)
 	DelDatastore(ctx context.Context, in *DeldatastoreRequest, opts ...grpc.CallOption) (*DeldatastoreResponse, error)
-	DelExpiredInvoice(ctx context.Context, in *DelexpiredinvoiceRequest, opts ...grpc.CallOption) (*DelexpiredinvoiceResponse, error)
 	DelInvoice(ctx context.Context, in *DelinvoiceRequest, opts ...grpc.CallOption) (*DelinvoiceResponse, error)
+	DevForgetChannel(ctx context.Context, in *DevforgetchannelRequest, opts ...grpc.CallOption) (*DevforgetchannelResponse, error)
+	EmergencyRecover(ctx context.Context, in *EmergencyrecoverRequest, opts ...grpc.CallOption) (*EmergencyrecoverResponse, error)
+	Recover(ctx context.Context, in *RecoverRequest, opts ...grpc.CallOption) (*RecoverResponse, error)
+	RecoverChannel(ctx context.Context, in *RecoverchannelRequest, opts ...grpc.CallOption) (*RecoverchannelResponse, error)
 	Invoice(ctx context.Context, in *InvoiceRequest, opts ...grpc.CallOption) (*InvoiceResponse, error)
+	CreateInvoiceRequest(ctx context.Context, in *InvoicerequestRequest, opts ...grpc.CallOption) (*InvoicerequestResponse, error)
+	DisableInvoiceRequest(ctx context.Context, in *DisableinvoicerequestRequest, opts ...grpc.CallOption) (*DisableinvoicerequestResponse, error)
+	ListInvoiceRequests(ctx context.Context, in *ListinvoicerequestsRequest, opts ...grpc.CallOption) (*ListinvoicerequestsResponse, error)
 	ListDatastore(ctx context.Context, in *ListdatastoreRequest, opts ...grpc.CallOption) (*ListdatastoreResponse, error)
 	ListInvoices(ctx context.Context, in *ListinvoicesRequest, opts ...grpc.CallOption) (*ListinvoicesResponse, error)
 	SendOnion(ctx context.Context, in *SendonionRequest, opts ...grpc.CallOption) (*SendonionResponse, error)
 	ListSendPays(ctx context.Context, in *ListsendpaysRequest, opts ...grpc.CallOption) (*ListsendpaysResponse, error)
 	ListTransactions(ctx context.Context, in *ListtransactionsRequest, opts ...grpc.CallOption) (*ListtransactionsResponse, error)
+	MakeSecret(ctx context.Context, in *MakesecretRequest, opts ...grpc.CallOption) (*MakesecretResponse, error)
 	Pay(ctx context.Context, in *PayRequest, opts ...grpc.CallOption) (*PayResponse, error)
 	ListNodes(ctx context.Context, in *ListnodesRequest, opts ...grpc.CallOption) (*ListnodesResponse, error)
 	WaitAnyInvoice(ctx context.Context, in *WaitanyinvoiceRequest, opts ...grpc.CallOption) (*WaitanyinvoiceResponse, error)
@@ -64,28 +74,72 @@ type NodeClient interface {
 	ListClosedChannels(ctx context.Context, in *ListclosedchannelsRequest, opts ...grpc.CallOption) (*ListclosedchannelsResponse, error)
 	DecodePay(ctx context.Context, in *DecodepayRequest, opts ...grpc.CallOption) (*DecodepayResponse, error)
 	Decode(ctx context.Context, in *DecodeRequest, opts ...grpc.CallOption) (*DecodeResponse, error)
+	DelPay(ctx context.Context, in *DelpayRequest, opts ...grpc.CallOption) (*DelpayResponse, error)
+	DelForward(ctx context.Context, in *DelforwardRequest, opts ...grpc.CallOption) (*DelforwardResponse, error)
+	DisableOffer(ctx context.Context, in *DisableofferRequest, opts ...grpc.CallOption) (*DisableofferResponse, error)
 	Disconnect(ctx context.Context, in *DisconnectRequest, opts ...grpc.CallOption) (*DisconnectResponse, error)
 	Feerates(ctx context.Context, in *FeeratesRequest, opts ...grpc.CallOption) (*FeeratesResponse, error)
 	FetchInvoice(ctx context.Context, in *FetchinvoiceRequest, opts ...grpc.CallOption) (*FetchinvoiceResponse, error)
+	FundChannel_Cancel(ctx context.Context, in *FundchannelCancelRequest, opts ...grpc.CallOption) (*FundchannelCancelResponse, error)
+	FundChannel_Complete(ctx context.Context, in *FundchannelCompleteRequest, opts ...grpc.CallOption) (*FundchannelCompleteResponse, error)
 	FundChannel(ctx context.Context, in *FundchannelRequest, opts ...grpc.CallOption) (*FundchannelResponse, error)
+	FundChannel_Start(ctx context.Context, in *FundchannelStartRequest, opts ...grpc.CallOption) (*FundchannelStartResponse, error)
+	GetLog(ctx context.Context, in *GetlogRequest, opts ...grpc.CallOption) (*GetlogResponse, error)
+	FunderUpdate(ctx context.Context, in *FunderupdateRequest, opts ...grpc.CallOption) (*FunderupdateResponse, error)
 	GetRoute(ctx context.Context, in *GetrouteRequest, opts ...grpc.CallOption) (*GetrouteResponse, error)
 	ListForwards(ctx context.Context, in *ListforwardsRequest, opts ...grpc.CallOption) (*ListforwardsResponse, error)
 	ListOffers(ctx context.Context, in *ListoffersRequest, opts ...grpc.CallOption) (*ListoffersResponse, error)
 	ListPays(ctx context.Context, in *ListpaysRequest, opts ...grpc.CallOption) (*ListpaysResponse, error)
 	ListHtlcs(ctx context.Context, in *ListhtlcsRequest, opts ...grpc.CallOption) (*ListhtlcsResponse, error)
+	MultiFundChannel(ctx context.Context, in *MultifundchannelRequest, opts ...grpc.CallOption) (*MultifundchannelResponse, error)
+	MultiWithdraw(ctx context.Context, in *MultiwithdrawRequest, opts ...grpc.CallOption) (*MultiwithdrawResponse, error)
 	Offer(ctx context.Context, in *OfferRequest, opts ...grpc.CallOption) (*OfferResponse, error)
+	OpenChannel_Abort(ctx context.Context, in *OpenchannelAbortRequest, opts ...grpc.CallOption) (*OpenchannelAbortResponse, error)
+	OpenChannel_Bump(ctx context.Context, in *OpenchannelBumpRequest, opts ...grpc.CallOption) (*OpenchannelBumpResponse, error)
+	OpenChannel_Init(ctx context.Context, in *OpenchannelInitRequest, opts ...grpc.CallOption) (*OpenchannelInitResponse, error)
+	OpenChannel_Signed(ctx context.Context, in *OpenchannelSignedRequest, opts ...grpc.CallOption) (*OpenchannelSignedResponse, error)
+	OpenChannel_Update(ctx context.Context, in *OpenchannelUpdateRequest, opts ...grpc.CallOption) (*OpenchannelUpdateResponse, error)
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
+	Plugin(ctx context.Context, in *PluginRequest, opts ...grpc.CallOption) (*PluginResponse, error)
+	RenePayStatus(ctx context.Context, in *RenepaystatusRequest, opts ...grpc.CallOption) (*RenepaystatusResponse, error)
+	RenePay(ctx context.Context, in *RenepayRequest, opts ...grpc.CallOption) (*RenepayResponse, error)
+	ReserveInputs(ctx context.Context, in *ReserveinputsRequest, opts ...grpc.CallOption) (*ReserveinputsResponse, error)
 	SendCustomMsg(ctx context.Context, in *SendcustommsgRequest, opts ...grpc.CallOption) (*SendcustommsgResponse, error)
+	SendInvoice(ctx context.Context, in *SendinvoiceRequest, opts ...grpc.CallOption) (*SendinvoiceResponse, error)
+	SendOnionMessage(ctx context.Context, in *SendonionmessageRequest, opts ...grpc.CallOption) (*SendonionmessageResponse, error)
 	SetChannel(ctx context.Context, in *SetchannelRequest, opts ...grpc.CallOption) (*SetchannelResponse, error)
+	SetConfig(ctx context.Context, in *SetconfigRequest, opts ...grpc.CallOption) (*SetconfigResponse, error)
+	SetPsbtVersion(ctx context.Context, in *SetpsbtversionRequest, opts ...grpc.CallOption) (*SetpsbtversionResponse, error)
 	SignInvoice(ctx context.Context, in *SigninvoiceRequest, opts ...grpc.CallOption) (*SigninvoiceResponse, error)
 	SignMessage(ctx context.Context, in *SignmessageRequest, opts ...grpc.CallOption) (*SignmessageResponse, error)
+	Splice_Init(ctx context.Context, in *SpliceInitRequest, opts ...grpc.CallOption) (*SpliceInitResponse, error)
+	Splice_Signed(ctx context.Context, in *SpliceSignedRequest, opts ...grpc.CallOption) (*SpliceSignedResponse, error)
+	Splice_Update(ctx context.Context, in *SpliceUpdateRequest, opts ...grpc.CallOption) (*SpliceUpdateResponse, error)
+	UnreserveInputs(ctx context.Context, in *UnreserveinputsRequest, opts ...grpc.CallOption) (*UnreserveinputsResponse, error)
+	UpgradeWallet(ctx context.Context, in *UpgradewalletRequest, opts ...grpc.CallOption) (*UpgradewalletResponse, error)
 	WaitBlockHeight(ctx context.Context, in *WaitblockheightRequest, opts ...grpc.CallOption) (*WaitblockheightResponse, error)
 	Wait(ctx context.Context, in *WaitRequest, opts ...grpc.CallOption) (*WaitResponse, error)
+	ListConfigs(ctx context.Context, in *ListconfigsRequest, opts ...grpc.CallOption) (*ListconfigsResponse, error)
 	Stop(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*StopResponse, error)
+	Help(ctx context.Context, in *HelpRequest, opts ...grpc.CallOption) (*HelpResponse, error)
 	PreApproveKeysend(ctx context.Context, in *PreapprovekeysendRequest, opts ...grpc.CallOption) (*PreapprovekeysendResponse, error)
 	PreApproveInvoice(ctx context.Context, in *PreapproveinvoiceRequest, opts ...grpc.CallOption) (*PreapproveinvoiceResponse, error)
 	StaticBackup(ctx context.Context, in *StaticbackupRequest, opts ...grpc.CallOption) (*StaticbackupResponse, error)
+	BkprChannelsApy(ctx context.Context, in *BkprchannelsapyRequest, opts ...grpc.CallOption) (*BkprchannelsapyResponse, error)
+	BkprDumpIncomeCsv(ctx context.Context, in *BkprdumpincomecsvRequest, opts ...grpc.CallOption) (*BkprdumpincomecsvResponse, error)
+	BkprInspect(ctx context.Context, in *BkprinspectRequest, opts ...grpc.CallOption) (*BkprinspectResponse, error)
+	BkprListAccountEvents(ctx context.Context, in *BkprlistaccounteventsRequest, opts ...grpc.CallOption) (*BkprlistaccounteventsResponse, error)
+	BkprListBalances(ctx context.Context, in *BkprlistbalancesRequest, opts ...grpc.CallOption) (*BkprlistbalancesResponse, error)
 	BkprListIncome(ctx context.Context, in *BkprlistincomeRequest, opts ...grpc.CallOption) (*BkprlistincomeResponse, error)
+	BlacklistRune(ctx context.Context, in *BlacklistruneRequest, opts ...grpc.CallOption) (*BlacklistruneResponse, error)
+	CheckRune(ctx context.Context, in *CheckruneRequest, opts ...grpc.CallOption) (*CheckruneResponse, error)
+	CreateRune(ctx context.Context, in *CreateruneRequest, opts ...grpc.CallOption) (*CreateruneResponse, error)
+	ShowRunes(ctx context.Context, in *ShowrunesRequest, opts ...grpc.CallOption) (*ShowrunesResponse, error)
+	SubscribeBlockAdded(ctx context.Context, in *StreamBlockAddedRequest, opts ...grpc.CallOption) (Node_SubscribeBlockAddedClient, error)
+	SubscribeChannelOpenFailed(ctx context.Context, in *StreamChannelOpenFailedRequest, opts ...grpc.CallOption) (Node_SubscribeChannelOpenFailedClient, error)
+	SubscribeChannelOpened(ctx context.Context, in *StreamChannelOpenedRequest, opts ...grpc.CallOption) (Node_SubscribeChannelOpenedClient, error)
+	SubscribeConnect(ctx context.Context, in *StreamConnectRequest, opts ...grpc.CallOption) (Node_SubscribeConnectClient, error)
+	SubscribeCustomMsg(ctx context.Context, in *StreamCustomMsgRequest, opts ...grpc.CallOption) (Node_SubscribeCustomMsgClient, error)
 }
 
 type nodeClient struct {
@@ -150,9 +204,36 @@ func (c *nodeClient) AddGossip(ctx context.Context, in *AddgossipRequest, opts .
 	return out, nil
 }
 
+func (c *nodeClient) AddPsbtOutput(ctx context.Context, in *AddpsbtoutputRequest, opts ...grpc.CallOption) (*AddpsbtoutputResponse, error) {
+	out := new(AddpsbtoutputResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/AddPsbtOutput", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeClient) AutoCleanInvoice(ctx context.Context, in *AutocleaninvoiceRequest, opts ...grpc.CallOption) (*AutocleaninvoiceResponse, error) {
 	out := new(AutocleaninvoiceResponse)
 	err := c.cc.Invoke(ctx, "/cln.Node/AutoCleanInvoice", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) AutoCleanOnce(ctx context.Context, in *AutocleanonceRequest, opts ...grpc.CallOption) (*AutocleanonceResponse, error) {
+	out := new(AutocleanonceResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/AutoCleanOnce", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) AutoCleanStatus(ctx context.Context, in *AutocleanstatusRequest, opts ...grpc.CallOption) (*AutocleanstatusResponse, error) {
+	out := new(AutocleanstatusResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/AutoCleanStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -231,15 +312,6 @@ func (c *nodeClient) DelDatastore(ctx context.Context, in *DeldatastoreRequest, 
 	return out, nil
 }
 
-func (c *nodeClient) DelExpiredInvoice(ctx context.Context, in *DelexpiredinvoiceRequest, opts ...grpc.CallOption) (*DelexpiredinvoiceResponse, error) {
-	out := new(DelexpiredinvoiceResponse)
-	err := c.cc.Invoke(ctx, "/cln.Node/DelExpiredInvoice", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *nodeClient) DelInvoice(ctx context.Context, in *DelinvoiceRequest, opts ...grpc.CallOption) (*DelinvoiceResponse, error) {
 	out := new(DelinvoiceResponse)
 	err := c.cc.Invoke(ctx, "/cln.Node/DelInvoice", in, out, opts...)
@@ -249,9 +321,72 @@ func (c *nodeClient) DelInvoice(ctx context.Context, in *DelinvoiceRequest, opts
 	return out, nil
 }
 
+func (c *nodeClient) DevForgetChannel(ctx context.Context, in *DevforgetchannelRequest, opts ...grpc.CallOption) (*DevforgetchannelResponse, error) {
+	out := new(DevforgetchannelResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/DevForgetChannel", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) EmergencyRecover(ctx context.Context, in *EmergencyrecoverRequest, opts ...grpc.CallOption) (*EmergencyrecoverResponse, error) {
+	out := new(EmergencyrecoverResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/EmergencyRecover", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) Recover(ctx context.Context, in *RecoverRequest, opts ...grpc.CallOption) (*RecoverResponse, error) {
+	out := new(RecoverResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/Recover", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) RecoverChannel(ctx context.Context, in *RecoverchannelRequest, opts ...grpc.CallOption) (*RecoverchannelResponse, error) {
+	out := new(RecoverchannelResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/RecoverChannel", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeClient) Invoice(ctx context.Context, in *InvoiceRequest, opts ...grpc.CallOption) (*InvoiceResponse, error) {
 	out := new(InvoiceResponse)
 	err := c.cc.Invoke(ctx, "/cln.Node/Invoice", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) CreateInvoiceRequest(ctx context.Context, in *InvoicerequestRequest, opts ...grpc.CallOption) (*InvoicerequestResponse, error) {
+	out := new(InvoicerequestResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/CreateInvoiceRequest", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) DisableInvoiceRequest(ctx context.Context, in *DisableinvoicerequestRequest, opts ...grpc.CallOption) (*DisableinvoicerequestResponse, error) {
+	out := new(DisableinvoicerequestResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/DisableInvoiceRequest", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) ListInvoiceRequests(ctx context.Context, in *ListinvoicerequestsRequest, opts ...grpc.CallOption) (*ListinvoicerequestsResponse, error) {
+	out := new(ListinvoicerequestsResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/ListInvoiceRequests", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -297,6 +432,15 @@ func (c *nodeClient) ListSendPays(ctx context.Context, in *ListsendpaysRequest, 
 func (c *nodeClient) ListTransactions(ctx context.Context, in *ListtransactionsRequest, opts ...grpc.CallOption) (*ListtransactionsResponse, error) {
 	out := new(ListtransactionsResponse)
 	err := c.cc.Invoke(ctx, "/cln.Node/ListTransactions", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) MakeSecret(ctx context.Context, in *MakesecretRequest, opts ...grpc.CallOption) (*MakesecretResponse, error) {
+	out := new(MakesecretResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/MakeSecret", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -474,6 +618,33 @@ func (c *nodeClient) Decode(ctx context.Context, in *DecodeRequest, opts ...grpc
 	return out, nil
 }
 
+func (c *nodeClient) DelPay(ctx context.Context, in *DelpayRequest, opts ...grpc.CallOption) (*DelpayResponse, error) {
+	out := new(DelpayResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/DelPay", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) DelForward(ctx context.Context, in *DelforwardRequest, opts ...grpc.CallOption) (*DelforwardResponse, error) {
+	out := new(DelforwardResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/DelForward", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) DisableOffer(ctx context.Context, in *DisableofferRequest, opts ...grpc.CallOption) (*DisableofferResponse, error) {
+	out := new(DisableofferResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/DisableOffer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeClient) Disconnect(ctx context.Context, in *DisconnectRequest, opts ...grpc.CallOption) (*DisconnectResponse, error) {
 	out := new(DisconnectResponse)
 	err := c.cc.Invoke(ctx, "/cln.Node/Disconnect", in, out, opts...)
@@ -501,9 +672,54 @@ func (c *nodeClient) FetchInvoice(ctx context.Context, in *FetchinvoiceRequest, 
 	return out, nil
 }
 
+func (c *nodeClient) FundChannel_Cancel(ctx context.Context, in *FundchannelCancelRequest, opts ...grpc.CallOption) (*FundchannelCancelResponse, error) {
+	out := new(FundchannelCancelResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/FundChannel_Cancel", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) FundChannel_Complete(ctx context.Context, in *FundchannelCompleteRequest, opts ...grpc.CallOption) (*FundchannelCompleteResponse, error) {
+	out := new(FundchannelCompleteResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/FundChannel_Complete", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeClient) FundChannel(ctx context.Context, in *FundchannelRequest, opts ...grpc.CallOption) (*FundchannelResponse, error) {
 	out := new(FundchannelResponse)
 	err := c.cc.Invoke(ctx, "/cln.Node/FundChannel", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) FundChannel_Start(ctx context.Context, in *FundchannelStartRequest, opts ...grpc.CallOption) (*FundchannelStartResponse, error) {
+	out := new(FundchannelStartResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/FundChannel_Start", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) GetLog(ctx context.Context, in *GetlogRequest, opts ...grpc.CallOption) (*GetlogResponse, error) {
+	out := new(GetlogResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/GetLog", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) FunderUpdate(ctx context.Context, in *FunderupdateRequest, opts ...grpc.CallOption) (*FunderupdateResponse, error) {
+	out := new(FunderupdateResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/FunderUpdate", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -555,9 +771,72 @@ func (c *nodeClient) ListHtlcs(ctx context.Context, in *ListhtlcsRequest, opts .
 	return out, nil
 }
 
+func (c *nodeClient) MultiFundChannel(ctx context.Context, in *MultifundchannelRequest, opts ...grpc.CallOption) (*MultifundchannelResponse, error) {
+	out := new(MultifundchannelResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/MultiFundChannel", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) MultiWithdraw(ctx context.Context, in *MultiwithdrawRequest, opts ...grpc.CallOption) (*MultiwithdrawResponse, error) {
+	out := new(MultiwithdrawResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/MultiWithdraw", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeClient) Offer(ctx context.Context, in *OfferRequest, opts ...grpc.CallOption) (*OfferResponse, error) {
 	out := new(OfferResponse)
 	err := c.cc.Invoke(ctx, "/cln.Node/Offer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) OpenChannel_Abort(ctx context.Context, in *OpenchannelAbortRequest, opts ...grpc.CallOption) (*OpenchannelAbortResponse, error) {
+	out := new(OpenchannelAbortResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/OpenChannel_Abort", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) OpenChannel_Bump(ctx context.Context, in *OpenchannelBumpRequest, opts ...grpc.CallOption) (*OpenchannelBumpResponse, error) {
+	out := new(OpenchannelBumpResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/OpenChannel_Bump", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) OpenChannel_Init(ctx context.Context, in *OpenchannelInitRequest, opts ...grpc.CallOption) (*OpenchannelInitResponse, error) {
+	out := new(OpenchannelInitResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/OpenChannel_Init", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) OpenChannel_Signed(ctx context.Context, in *OpenchannelSignedRequest, opts ...grpc.CallOption) (*OpenchannelSignedResponse, error) {
+	out := new(OpenchannelSignedResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/OpenChannel_Signed", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) OpenChannel_Update(ctx context.Context, in *OpenchannelUpdateRequest, opts ...grpc.CallOption) (*OpenchannelUpdateResponse, error) {
+	out := new(OpenchannelUpdateResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/OpenChannel_Update", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -573,6 +852,42 @@ func (c *nodeClient) Ping(ctx context.Context, in *PingRequest, opts ...grpc.Cal
 	return out, nil
 }
 
+func (c *nodeClient) Plugin(ctx context.Context, in *PluginRequest, opts ...grpc.CallOption) (*PluginResponse, error) {
+	out := new(PluginResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/Plugin", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) RenePayStatus(ctx context.Context, in *RenepaystatusRequest, opts ...grpc.CallOption) (*RenepaystatusResponse, error) {
+	out := new(RenepaystatusResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/RenePayStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) RenePay(ctx context.Context, in *RenepayRequest, opts ...grpc.CallOption) (*RenepayResponse, error) {
+	out := new(RenepayResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/RenePay", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) ReserveInputs(ctx context.Context, in *ReserveinputsRequest, opts ...grpc.CallOption) (*ReserveinputsResponse, error) {
+	out := new(ReserveinputsResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/ReserveInputs", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeClient) SendCustomMsg(ctx context.Context, in *SendcustommsgRequest, opts ...grpc.CallOption) (*SendcustommsgResponse, error) {
 	out := new(SendcustommsgResponse)
 	err := c.cc.Invoke(ctx, "/cln.Node/SendCustomMsg", in, out, opts...)
@@ -582,9 +897,45 @@ func (c *nodeClient) SendCustomMsg(ctx context.Context, in *SendcustommsgRequest
 	return out, nil
 }
 
+func (c *nodeClient) SendInvoice(ctx context.Context, in *SendinvoiceRequest, opts ...grpc.CallOption) (*SendinvoiceResponse, error) {
+	out := new(SendinvoiceResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/SendInvoice", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) SendOnionMessage(ctx context.Context, in *SendonionmessageRequest, opts ...grpc.CallOption) (*SendonionmessageResponse, error) {
+	out := new(SendonionmessageResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/SendOnionMessage", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeClient) SetChannel(ctx context.Context, in *SetchannelRequest, opts ...grpc.CallOption) (*SetchannelResponse, error) {
 	out := new(SetchannelResponse)
 	err := c.cc.Invoke(ctx, "/cln.Node/SetChannel", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) SetConfig(ctx context.Context, in *SetconfigRequest, opts ...grpc.CallOption) (*SetconfigResponse, error) {
+	out := new(SetconfigResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/SetConfig", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) SetPsbtVersion(ctx context.Context, in *SetpsbtversionRequest, opts ...grpc.CallOption) (*SetpsbtversionResponse, error) {
+	out := new(SetpsbtversionResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/SetPsbtVersion", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -609,6 +960,51 @@ func (c *nodeClient) SignMessage(ctx context.Context, in *SignmessageRequest, op
 	return out, nil
 }
 
+func (c *nodeClient) Splice_Init(ctx context.Context, in *SpliceInitRequest, opts ...grpc.CallOption) (*SpliceInitResponse, error) {
+	out := new(SpliceInitResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/Splice_Init", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) Splice_Signed(ctx context.Context, in *SpliceSignedRequest, opts ...grpc.CallOption) (*SpliceSignedResponse, error) {
+	out := new(SpliceSignedResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/Splice_Signed", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) Splice_Update(ctx context.Context, in *SpliceUpdateRequest, opts ...grpc.CallOption) (*SpliceUpdateResponse, error) {
+	out := new(SpliceUpdateResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/Splice_Update", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) UnreserveInputs(ctx context.Context, in *UnreserveinputsRequest, opts ...grpc.CallOption) (*UnreserveinputsResponse, error) {
+	out := new(UnreserveinputsResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/UnreserveInputs", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) UpgradeWallet(ctx context.Context, in *UpgradewalletRequest, opts ...grpc.CallOption) (*UpgradewalletResponse, error) {
+	out := new(UpgradewalletResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/UpgradeWallet", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeClient) WaitBlockHeight(ctx context.Context, in *WaitblockheightRequest, opts ...grpc.CallOption) (*WaitblockheightResponse, error) {
 	out := new(WaitblockheightResponse)
 	err := c.cc.Invoke(ctx, "/cln.Node/WaitBlockHeight", in, out, opts...)
@@ -627,9 +1023,27 @@ func (c *nodeClient) Wait(ctx context.Context, in *WaitRequest, opts ...grpc.Cal
 	return out, nil
 }
 
+func (c *nodeClient) ListConfigs(ctx context.Context, in *ListconfigsRequest, opts ...grpc.CallOption) (*ListconfigsResponse, error) {
+	out := new(ListconfigsResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/ListConfigs", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeClient) Stop(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*StopResponse, error) {
 	out := new(StopResponse)
 	err := c.cc.Invoke(ctx, "/cln.Node/Stop", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) Help(ctx context.Context, in *HelpRequest, opts ...grpc.CallOption) (*HelpResponse, error) {
+	out := new(HelpResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/Help", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -663,6 +1077,51 @@ func (c *nodeClient) StaticBackup(ctx context.Context, in *StaticbackupRequest, 
 	return out, nil
 }
 
+func (c *nodeClient) BkprChannelsApy(ctx context.Context, in *BkprchannelsapyRequest, opts ...grpc.CallOption) (*BkprchannelsapyResponse, error) {
+	out := new(BkprchannelsapyResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/BkprChannelsApy", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) BkprDumpIncomeCsv(ctx context.Context, in *BkprdumpincomecsvRequest, opts ...grpc.CallOption) (*BkprdumpincomecsvResponse, error) {
+	out := new(BkprdumpincomecsvResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/BkprDumpIncomeCsv", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) BkprInspect(ctx context.Context, in *BkprinspectRequest, opts ...grpc.CallOption) (*BkprinspectResponse, error) {
+	out := new(BkprinspectResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/BkprInspect", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) BkprListAccountEvents(ctx context.Context, in *BkprlistaccounteventsRequest, opts ...grpc.CallOption) (*BkprlistaccounteventsResponse, error) {
+	out := new(BkprlistaccounteventsResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/BkprListAccountEvents", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) BkprListBalances(ctx context.Context, in *BkprlistbalancesRequest, opts ...grpc.CallOption) (*BkprlistbalancesResponse, error) {
+	out := new(BkprlistbalancesResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/BkprListBalances", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeClient) BkprListIncome(ctx context.Context, in *BkprlistincomeRequest, opts ...grpc.CallOption) (*BkprlistincomeResponse, error) {
 	out := new(BkprlistincomeResponse)
 	err := c.cc.Invoke(ctx, "/cln.Node/BkprListIncome", in, out, opts...)
@@ -670,6 +1129,202 @@ func (c *nodeClient) BkprListIncome(ctx context.Context, in *BkprlistincomeReque
 		return nil, err
 	}
 	return out, nil
+}
+
+func (c *nodeClient) BlacklistRune(ctx context.Context, in *BlacklistruneRequest, opts ...grpc.CallOption) (*BlacklistruneResponse, error) {
+	out := new(BlacklistruneResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/BlacklistRune", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) CheckRune(ctx context.Context, in *CheckruneRequest, opts ...grpc.CallOption) (*CheckruneResponse, error) {
+	out := new(CheckruneResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/CheckRune", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) CreateRune(ctx context.Context, in *CreateruneRequest, opts ...grpc.CallOption) (*CreateruneResponse, error) {
+	out := new(CreateruneResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/CreateRune", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) ShowRunes(ctx context.Context, in *ShowrunesRequest, opts ...grpc.CallOption) (*ShowrunesResponse, error) {
+	out := new(ShowrunesResponse)
+	err := c.cc.Invoke(ctx, "/cln.Node/ShowRunes", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) SubscribeBlockAdded(ctx context.Context, in *StreamBlockAddedRequest, opts ...grpc.CallOption) (Node_SubscribeBlockAddedClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Node_ServiceDesc.Streams[0], "/cln.Node/SubscribeBlockAdded", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &nodeSubscribeBlockAddedClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Node_SubscribeBlockAddedClient interface {
+	Recv() (*BlockAddedNotification, error)
+	grpc.ClientStream
+}
+
+type nodeSubscribeBlockAddedClient struct {
+	grpc.ClientStream
+}
+
+func (x *nodeSubscribeBlockAddedClient) Recv() (*BlockAddedNotification, error) {
+	m := new(BlockAddedNotification)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *nodeClient) SubscribeChannelOpenFailed(ctx context.Context, in *StreamChannelOpenFailedRequest, opts ...grpc.CallOption) (Node_SubscribeChannelOpenFailedClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Node_ServiceDesc.Streams[1], "/cln.Node/SubscribeChannelOpenFailed", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &nodeSubscribeChannelOpenFailedClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Node_SubscribeChannelOpenFailedClient interface {
+	Recv() (*ChannelOpenFailedNotification, error)
+	grpc.ClientStream
+}
+
+type nodeSubscribeChannelOpenFailedClient struct {
+	grpc.ClientStream
+}
+
+func (x *nodeSubscribeChannelOpenFailedClient) Recv() (*ChannelOpenFailedNotification, error) {
+	m := new(ChannelOpenFailedNotification)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *nodeClient) SubscribeChannelOpened(ctx context.Context, in *StreamChannelOpenedRequest, opts ...grpc.CallOption) (Node_SubscribeChannelOpenedClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Node_ServiceDesc.Streams[2], "/cln.Node/SubscribeChannelOpened", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &nodeSubscribeChannelOpenedClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Node_SubscribeChannelOpenedClient interface {
+	Recv() (*ChannelOpenedNotification, error)
+	grpc.ClientStream
+}
+
+type nodeSubscribeChannelOpenedClient struct {
+	grpc.ClientStream
+}
+
+func (x *nodeSubscribeChannelOpenedClient) Recv() (*ChannelOpenedNotification, error) {
+	m := new(ChannelOpenedNotification)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *nodeClient) SubscribeConnect(ctx context.Context, in *StreamConnectRequest, opts ...grpc.CallOption) (Node_SubscribeConnectClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Node_ServiceDesc.Streams[3], "/cln.Node/SubscribeConnect", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &nodeSubscribeConnectClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Node_SubscribeConnectClient interface {
+	Recv() (*PeerConnectNotification, error)
+	grpc.ClientStream
+}
+
+type nodeSubscribeConnectClient struct {
+	grpc.ClientStream
+}
+
+func (x *nodeSubscribeConnectClient) Recv() (*PeerConnectNotification, error) {
+	m := new(PeerConnectNotification)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *nodeClient) SubscribeCustomMsg(ctx context.Context, in *StreamCustomMsgRequest, opts ...grpc.CallOption) (Node_SubscribeCustomMsgClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Node_ServiceDesc.Streams[4], "/cln.Node/SubscribeCustomMsg", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &nodeSubscribeCustomMsgClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Node_SubscribeCustomMsgClient interface {
+	Recv() (*CustomMsgNotification, error)
+	grpc.ClientStream
+}
+
+type nodeSubscribeCustomMsgClient struct {
+	grpc.ClientStream
+}
+
+func (x *nodeSubscribeCustomMsgClient) Recv() (*CustomMsgNotification, error) {
+	m := new(CustomMsgNotification)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // NodeServer is the server API for Node service.
@@ -682,7 +1337,10 @@ type NodeServer interface {
 	SendPay(context.Context, *SendpayRequest) (*SendpayResponse, error)
 	ListChannels(context.Context, *ListchannelsRequest) (*ListchannelsResponse, error)
 	AddGossip(context.Context, *AddgossipRequest) (*AddgossipResponse, error)
+	AddPsbtOutput(context.Context, *AddpsbtoutputRequest) (*AddpsbtoutputResponse, error)
 	AutoCleanInvoice(context.Context, *AutocleaninvoiceRequest) (*AutocleaninvoiceResponse, error)
+	AutoCleanOnce(context.Context, *AutocleanonceRequest) (*AutocleanonceResponse, error)
+	AutoCleanStatus(context.Context, *AutocleanstatusRequest) (*AutocleanstatusResponse, error)
 	CheckMessage(context.Context, *CheckmessageRequest) (*CheckmessageResponse, error)
 	Close(context.Context, *CloseRequest) (*CloseResponse, error)
 	ConnectPeer(context.Context, *ConnectRequest) (*ConnectResponse, error)
@@ -691,14 +1349,21 @@ type NodeServer interface {
 	DatastoreUsage(context.Context, *DatastoreusageRequest) (*DatastoreusageResponse, error)
 	CreateOnion(context.Context, *CreateonionRequest) (*CreateonionResponse, error)
 	DelDatastore(context.Context, *DeldatastoreRequest) (*DeldatastoreResponse, error)
-	DelExpiredInvoice(context.Context, *DelexpiredinvoiceRequest) (*DelexpiredinvoiceResponse, error)
 	DelInvoice(context.Context, *DelinvoiceRequest) (*DelinvoiceResponse, error)
+	DevForgetChannel(context.Context, *DevforgetchannelRequest) (*DevforgetchannelResponse, error)
+	EmergencyRecover(context.Context, *EmergencyrecoverRequest) (*EmergencyrecoverResponse, error)
+	Recover(context.Context, *RecoverRequest) (*RecoverResponse, error)
+	RecoverChannel(context.Context, *RecoverchannelRequest) (*RecoverchannelResponse, error)
 	Invoice(context.Context, *InvoiceRequest) (*InvoiceResponse, error)
+	CreateInvoiceRequest(context.Context, *InvoicerequestRequest) (*InvoicerequestResponse, error)
+	DisableInvoiceRequest(context.Context, *DisableinvoicerequestRequest) (*DisableinvoicerequestResponse, error)
+	ListInvoiceRequests(context.Context, *ListinvoicerequestsRequest) (*ListinvoicerequestsResponse, error)
 	ListDatastore(context.Context, *ListdatastoreRequest) (*ListdatastoreResponse, error)
 	ListInvoices(context.Context, *ListinvoicesRequest) (*ListinvoicesResponse, error)
 	SendOnion(context.Context, *SendonionRequest) (*SendonionResponse, error)
 	ListSendPays(context.Context, *ListsendpaysRequest) (*ListsendpaysResponse, error)
 	ListTransactions(context.Context, *ListtransactionsRequest) (*ListtransactionsResponse, error)
+	MakeSecret(context.Context, *MakesecretRequest) (*MakesecretResponse, error)
 	Pay(context.Context, *PayRequest) (*PayResponse, error)
 	ListNodes(context.Context, *ListnodesRequest) (*ListnodesResponse, error)
 	WaitAnyInvoice(context.Context, *WaitanyinvoiceRequest) (*WaitanyinvoiceResponse, error)
@@ -718,28 +1383,72 @@ type NodeServer interface {
 	ListClosedChannels(context.Context, *ListclosedchannelsRequest) (*ListclosedchannelsResponse, error)
 	DecodePay(context.Context, *DecodepayRequest) (*DecodepayResponse, error)
 	Decode(context.Context, *DecodeRequest) (*DecodeResponse, error)
+	DelPay(context.Context, *DelpayRequest) (*DelpayResponse, error)
+	DelForward(context.Context, *DelforwardRequest) (*DelforwardResponse, error)
+	DisableOffer(context.Context, *DisableofferRequest) (*DisableofferResponse, error)
 	Disconnect(context.Context, *DisconnectRequest) (*DisconnectResponse, error)
 	Feerates(context.Context, *FeeratesRequest) (*FeeratesResponse, error)
 	FetchInvoice(context.Context, *FetchinvoiceRequest) (*FetchinvoiceResponse, error)
+	FundChannel_Cancel(context.Context, *FundchannelCancelRequest) (*FundchannelCancelResponse, error)
+	FundChannel_Complete(context.Context, *FundchannelCompleteRequest) (*FundchannelCompleteResponse, error)
 	FundChannel(context.Context, *FundchannelRequest) (*FundchannelResponse, error)
+	FundChannel_Start(context.Context, *FundchannelStartRequest) (*FundchannelStartResponse, error)
+	GetLog(context.Context, *GetlogRequest) (*GetlogResponse, error)
+	FunderUpdate(context.Context, *FunderupdateRequest) (*FunderupdateResponse, error)
 	GetRoute(context.Context, *GetrouteRequest) (*GetrouteResponse, error)
 	ListForwards(context.Context, *ListforwardsRequest) (*ListforwardsResponse, error)
 	ListOffers(context.Context, *ListoffersRequest) (*ListoffersResponse, error)
 	ListPays(context.Context, *ListpaysRequest) (*ListpaysResponse, error)
 	ListHtlcs(context.Context, *ListhtlcsRequest) (*ListhtlcsResponse, error)
+	MultiFundChannel(context.Context, *MultifundchannelRequest) (*MultifundchannelResponse, error)
+	MultiWithdraw(context.Context, *MultiwithdrawRequest) (*MultiwithdrawResponse, error)
 	Offer(context.Context, *OfferRequest) (*OfferResponse, error)
+	OpenChannel_Abort(context.Context, *OpenchannelAbortRequest) (*OpenchannelAbortResponse, error)
+	OpenChannel_Bump(context.Context, *OpenchannelBumpRequest) (*OpenchannelBumpResponse, error)
+	OpenChannel_Init(context.Context, *OpenchannelInitRequest) (*OpenchannelInitResponse, error)
+	OpenChannel_Signed(context.Context, *OpenchannelSignedRequest) (*OpenchannelSignedResponse, error)
+	OpenChannel_Update(context.Context, *OpenchannelUpdateRequest) (*OpenchannelUpdateResponse, error)
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
+	Plugin(context.Context, *PluginRequest) (*PluginResponse, error)
+	RenePayStatus(context.Context, *RenepaystatusRequest) (*RenepaystatusResponse, error)
+	RenePay(context.Context, *RenepayRequest) (*RenepayResponse, error)
+	ReserveInputs(context.Context, *ReserveinputsRequest) (*ReserveinputsResponse, error)
 	SendCustomMsg(context.Context, *SendcustommsgRequest) (*SendcustommsgResponse, error)
+	SendInvoice(context.Context, *SendinvoiceRequest) (*SendinvoiceResponse, error)
+	SendOnionMessage(context.Context, *SendonionmessageRequest) (*SendonionmessageResponse, error)
 	SetChannel(context.Context, *SetchannelRequest) (*SetchannelResponse, error)
+	SetConfig(context.Context, *SetconfigRequest) (*SetconfigResponse, error)
+	SetPsbtVersion(context.Context, *SetpsbtversionRequest) (*SetpsbtversionResponse, error)
 	SignInvoice(context.Context, *SigninvoiceRequest) (*SigninvoiceResponse, error)
 	SignMessage(context.Context, *SignmessageRequest) (*SignmessageResponse, error)
+	Splice_Init(context.Context, *SpliceInitRequest) (*SpliceInitResponse, error)
+	Splice_Signed(context.Context, *SpliceSignedRequest) (*SpliceSignedResponse, error)
+	Splice_Update(context.Context, *SpliceUpdateRequest) (*SpliceUpdateResponse, error)
+	UnreserveInputs(context.Context, *UnreserveinputsRequest) (*UnreserveinputsResponse, error)
+	UpgradeWallet(context.Context, *UpgradewalletRequest) (*UpgradewalletResponse, error)
 	WaitBlockHeight(context.Context, *WaitblockheightRequest) (*WaitblockheightResponse, error)
 	Wait(context.Context, *WaitRequest) (*WaitResponse, error)
+	ListConfigs(context.Context, *ListconfigsRequest) (*ListconfigsResponse, error)
 	Stop(context.Context, *StopRequest) (*StopResponse, error)
+	Help(context.Context, *HelpRequest) (*HelpResponse, error)
 	PreApproveKeysend(context.Context, *PreapprovekeysendRequest) (*PreapprovekeysendResponse, error)
 	PreApproveInvoice(context.Context, *PreapproveinvoiceRequest) (*PreapproveinvoiceResponse, error)
 	StaticBackup(context.Context, *StaticbackupRequest) (*StaticbackupResponse, error)
+	BkprChannelsApy(context.Context, *BkprchannelsapyRequest) (*BkprchannelsapyResponse, error)
+	BkprDumpIncomeCsv(context.Context, *BkprdumpincomecsvRequest) (*BkprdumpincomecsvResponse, error)
+	BkprInspect(context.Context, *BkprinspectRequest) (*BkprinspectResponse, error)
+	BkprListAccountEvents(context.Context, *BkprlistaccounteventsRequest) (*BkprlistaccounteventsResponse, error)
+	BkprListBalances(context.Context, *BkprlistbalancesRequest) (*BkprlistbalancesResponse, error)
 	BkprListIncome(context.Context, *BkprlistincomeRequest) (*BkprlistincomeResponse, error)
+	BlacklistRune(context.Context, *BlacklistruneRequest) (*BlacklistruneResponse, error)
+	CheckRune(context.Context, *CheckruneRequest) (*CheckruneResponse, error)
+	CreateRune(context.Context, *CreateruneRequest) (*CreateruneResponse, error)
+	ShowRunes(context.Context, *ShowrunesRequest) (*ShowrunesResponse, error)
+	SubscribeBlockAdded(*StreamBlockAddedRequest, Node_SubscribeBlockAddedServer) error
+	SubscribeChannelOpenFailed(*StreamChannelOpenFailedRequest, Node_SubscribeChannelOpenFailedServer) error
+	SubscribeChannelOpened(*StreamChannelOpenedRequest, Node_SubscribeChannelOpenedServer) error
+	SubscribeConnect(*StreamConnectRequest, Node_SubscribeConnectServer) error
+	SubscribeCustomMsg(*StreamCustomMsgRequest, Node_SubscribeCustomMsgServer) error
 	mustEmbedUnimplementedNodeServer()
 }
 
@@ -765,8 +1474,17 @@ func (UnimplementedNodeServer) ListChannels(context.Context, *ListchannelsReques
 func (UnimplementedNodeServer) AddGossip(context.Context, *AddgossipRequest) (*AddgossipResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddGossip not implemented")
 }
+func (UnimplementedNodeServer) AddPsbtOutput(context.Context, *AddpsbtoutputRequest) (*AddpsbtoutputResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddPsbtOutput not implemented")
+}
 func (UnimplementedNodeServer) AutoCleanInvoice(context.Context, *AutocleaninvoiceRequest) (*AutocleaninvoiceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AutoCleanInvoice not implemented")
+}
+func (UnimplementedNodeServer) AutoCleanOnce(context.Context, *AutocleanonceRequest) (*AutocleanonceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AutoCleanOnce not implemented")
+}
+func (UnimplementedNodeServer) AutoCleanStatus(context.Context, *AutocleanstatusRequest) (*AutocleanstatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AutoCleanStatus not implemented")
 }
 func (UnimplementedNodeServer) CheckMessage(context.Context, *CheckmessageRequest) (*CheckmessageResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CheckMessage not implemented")
@@ -792,14 +1510,32 @@ func (UnimplementedNodeServer) CreateOnion(context.Context, *CreateonionRequest)
 func (UnimplementedNodeServer) DelDatastore(context.Context, *DeldatastoreRequest) (*DeldatastoreResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DelDatastore not implemented")
 }
-func (UnimplementedNodeServer) DelExpiredInvoice(context.Context, *DelexpiredinvoiceRequest) (*DelexpiredinvoiceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DelExpiredInvoice not implemented")
-}
 func (UnimplementedNodeServer) DelInvoice(context.Context, *DelinvoiceRequest) (*DelinvoiceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DelInvoice not implemented")
 }
+func (UnimplementedNodeServer) DevForgetChannel(context.Context, *DevforgetchannelRequest) (*DevforgetchannelResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DevForgetChannel not implemented")
+}
+func (UnimplementedNodeServer) EmergencyRecover(context.Context, *EmergencyrecoverRequest) (*EmergencyrecoverResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EmergencyRecover not implemented")
+}
+func (UnimplementedNodeServer) Recover(context.Context, *RecoverRequest) (*RecoverResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Recover not implemented")
+}
+func (UnimplementedNodeServer) RecoverChannel(context.Context, *RecoverchannelRequest) (*RecoverchannelResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RecoverChannel not implemented")
+}
 func (UnimplementedNodeServer) Invoice(context.Context, *InvoiceRequest) (*InvoiceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Invoice not implemented")
+}
+func (UnimplementedNodeServer) CreateInvoiceRequest(context.Context, *InvoicerequestRequest) (*InvoicerequestResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateInvoiceRequest not implemented")
+}
+func (UnimplementedNodeServer) DisableInvoiceRequest(context.Context, *DisableinvoicerequestRequest) (*DisableinvoicerequestResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DisableInvoiceRequest not implemented")
+}
+func (UnimplementedNodeServer) ListInvoiceRequests(context.Context, *ListinvoicerequestsRequest) (*ListinvoicerequestsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListInvoiceRequests not implemented")
 }
 func (UnimplementedNodeServer) ListDatastore(context.Context, *ListdatastoreRequest) (*ListdatastoreResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListDatastore not implemented")
@@ -815,6 +1551,9 @@ func (UnimplementedNodeServer) ListSendPays(context.Context, *ListsendpaysReques
 }
 func (UnimplementedNodeServer) ListTransactions(context.Context, *ListtransactionsRequest) (*ListtransactionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListTransactions not implemented")
+}
+func (UnimplementedNodeServer) MakeSecret(context.Context, *MakesecretRequest) (*MakesecretResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MakeSecret not implemented")
 }
 func (UnimplementedNodeServer) Pay(context.Context, *PayRequest) (*PayResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Pay not implemented")
@@ -873,6 +1612,15 @@ func (UnimplementedNodeServer) DecodePay(context.Context, *DecodepayRequest) (*D
 func (UnimplementedNodeServer) Decode(context.Context, *DecodeRequest) (*DecodeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Decode not implemented")
 }
+func (UnimplementedNodeServer) DelPay(context.Context, *DelpayRequest) (*DelpayResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DelPay not implemented")
+}
+func (UnimplementedNodeServer) DelForward(context.Context, *DelforwardRequest) (*DelforwardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DelForward not implemented")
+}
+func (UnimplementedNodeServer) DisableOffer(context.Context, *DisableofferRequest) (*DisableofferResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DisableOffer not implemented")
+}
 func (UnimplementedNodeServer) Disconnect(context.Context, *DisconnectRequest) (*DisconnectResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Disconnect not implemented")
 }
@@ -882,8 +1630,23 @@ func (UnimplementedNodeServer) Feerates(context.Context, *FeeratesRequest) (*Fee
 func (UnimplementedNodeServer) FetchInvoice(context.Context, *FetchinvoiceRequest) (*FetchinvoiceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FetchInvoice not implemented")
 }
+func (UnimplementedNodeServer) FundChannel_Cancel(context.Context, *FundchannelCancelRequest) (*FundchannelCancelResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FundChannel_Cancel not implemented")
+}
+func (UnimplementedNodeServer) FundChannel_Complete(context.Context, *FundchannelCompleteRequest) (*FundchannelCompleteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FundChannel_Complete not implemented")
+}
 func (UnimplementedNodeServer) FundChannel(context.Context, *FundchannelRequest) (*FundchannelResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FundChannel not implemented")
+}
+func (UnimplementedNodeServer) FundChannel_Start(context.Context, *FundchannelStartRequest) (*FundchannelStartResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FundChannel_Start not implemented")
+}
+func (UnimplementedNodeServer) GetLog(context.Context, *GetlogRequest) (*GetlogResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetLog not implemented")
+}
+func (UnimplementedNodeServer) FunderUpdate(context.Context, *FunderupdateRequest) (*FunderupdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FunderUpdate not implemented")
 }
 func (UnimplementedNodeServer) GetRoute(context.Context, *GetrouteRequest) (*GetrouteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRoute not implemented")
@@ -900,17 +1663,62 @@ func (UnimplementedNodeServer) ListPays(context.Context, *ListpaysRequest) (*Lis
 func (UnimplementedNodeServer) ListHtlcs(context.Context, *ListhtlcsRequest) (*ListhtlcsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListHtlcs not implemented")
 }
+func (UnimplementedNodeServer) MultiFundChannel(context.Context, *MultifundchannelRequest) (*MultifundchannelResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MultiFundChannel not implemented")
+}
+func (UnimplementedNodeServer) MultiWithdraw(context.Context, *MultiwithdrawRequest) (*MultiwithdrawResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MultiWithdraw not implemented")
+}
 func (UnimplementedNodeServer) Offer(context.Context, *OfferRequest) (*OfferResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Offer not implemented")
+}
+func (UnimplementedNodeServer) OpenChannel_Abort(context.Context, *OpenchannelAbortRequest) (*OpenchannelAbortResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OpenChannel_Abort not implemented")
+}
+func (UnimplementedNodeServer) OpenChannel_Bump(context.Context, *OpenchannelBumpRequest) (*OpenchannelBumpResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OpenChannel_Bump not implemented")
+}
+func (UnimplementedNodeServer) OpenChannel_Init(context.Context, *OpenchannelInitRequest) (*OpenchannelInitResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OpenChannel_Init not implemented")
+}
+func (UnimplementedNodeServer) OpenChannel_Signed(context.Context, *OpenchannelSignedRequest) (*OpenchannelSignedResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OpenChannel_Signed not implemented")
+}
+func (UnimplementedNodeServer) OpenChannel_Update(context.Context, *OpenchannelUpdateRequest) (*OpenchannelUpdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OpenChannel_Update not implemented")
 }
 func (UnimplementedNodeServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
+func (UnimplementedNodeServer) Plugin(context.Context, *PluginRequest) (*PluginResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Plugin not implemented")
+}
+func (UnimplementedNodeServer) RenePayStatus(context.Context, *RenepaystatusRequest) (*RenepaystatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RenePayStatus not implemented")
+}
+func (UnimplementedNodeServer) RenePay(context.Context, *RenepayRequest) (*RenepayResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RenePay not implemented")
+}
+func (UnimplementedNodeServer) ReserveInputs(context.Context, *ReserveinputsRequest) (*ReserveinputsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReserveInputs not implemented")
+}
 func (UnimplementedNodeServer) SendCustomMsg(context.Context, *SendcustommsgRequest) (*SendcustommsgResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendCustomMsg not implemented")
 }
+func (UnimplementedNodeServer) SendInvoice(context.Context, *SendinvoiceRequest) (*SendinvoiceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendInvoice not implemented")
+}
+func (UnimplementedNodeServer) SendOnionMessage(context.Context, *SendonionmessageRequest) (*SendonionmessageResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendOnionMessage not implemented")
+}
 func (UnimplementedNodeServer) SetChannel(context.Context, *SetchannelRequest) (*SetchannelResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetChannel not implemented")
+}
+func (UnimplementedNodeServer) SetConfig(context.Context, *SetconfigRequest) (*SetconfigResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetConfig not implemented")
+}
+func (UnimplementedNodeServer) SetPsbtVersion(context.Context, *SetpsbtversionRequest) (*SetpsbtversionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetPsbtVersion not implemented")
 }
 func (UnimplementedNodeServer) SignInvoice(context.Context, *SigninvoiceRequest) (*SigninvoiceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SignInvoice not implemented")
@@ -918,14 +1726,35 @@ func (UnimplementedNodeServer) SignInvoice(context.Context, *SigninvoiceRequest)
 func (UnimplementedNodeServer) SignMessage(context.Context, *SignmessageRequest) (*SignmessageResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SignMessage not implemented")
 }
+func (UnimplementedNodeServer) Splice_Init(context.Context, *SpliceInitRequest) (*SpliceInitResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Splice_Init not implemented")
+}
+func (UnimplementedNodeServer) Splice_Signed(context.Context, *SpliceSignedRequest) (*SpliceSignedResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Splice_Signed not implemented")
+}
+func (UnimplementedNodeServer) Splice_Update(context.Context, *SpliceUpdateRequest) (*SpliceUpdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Splice_Update not implemented")
+}
+func (UnimplementedNodeServer) UnreserveInputs(context.Context, *UnreserveinputsRequest) (*UnreserveinputsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnreserveInputs not implemented")
+}
+func (UnimplementedNodeServer) UpgradeWallet(context.Context, *UpgradewalletRequest) (*UpgradewalletResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpgradeWallet not implemented")
+}
 func (UnimplementedNodeServer) WaitBlockHeight(context.Context, *WaitblockheightRequest) (*WaitblockheightResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WaitBlockHeight not implemented")
 }
 func (UnimplementedNodeServer) Wait(context.Context, *WaitRequest) (*WaitResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Wait not implemented")
 }
+func (UnimplementedNodeServer) ListConfigs(context.Context, *ListconfigsRequest) (*ListconfigsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListConfigs not implemented")
+}
 func (UnimplementedNodeServer) Stop(context.Context, *StopRequest) (*StopResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Stop not implemented")
+}
+func (UnimplementedNodeServer) Help(context.Context, *HelpRequest) (*HelpResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Help not implemented")
 }
 func (UnimplementedNodeServer) PreApproveKeysend(context.Context, *PreapprovekeysendRequest) (*PreapprovekeysendResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PreApproveKeysend not implemented")
@@ -936,8 +1765,50 @@ func (UnimplementedNodeServer) PreApproveInvoice(context.Context, *Preapproveinv
 func (UnimplementedNodeServer) StaticBackup(context.Context, *StaticbackupRequest) (*StaticbackupResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StaticBackup not implemented")
 }
+func (UnimplementedNodeServer) BkprChannelsApy(context.Context, *BkprchannelsapyRequest) (*BkprchannelsapyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BkprChannelsApy not implemented")
+}
+func (UnimplementedNodeServer) BkprDumpIncomeCsv(context.Context, *BkprdumpincomecsvRequest) (*BkprdumpincomecsvResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BkprDumpIncomeCsv not implemented")
+}
+func (UnimplementedNodeServer) BkprInspect(context.Context, *BkprinspectRequest) (*BkprinspectResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BkprInspect not implemented")
+}
+func (UnimplementedNodeServer) BkprListAccountEvents(context.Context, *BkprlistaccounteventsRequest) (*BkprlistaccounteventsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BkprListAccountEvents not implemented")
+}
+func (UnimplementedNodeServer) BkprListBalances(context.Context, *BkprlistbalancesRequest) (*BkprlistbalancesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BkprListBalances not implemented")
+}
 func (UnimplementedNodeServer) BkprListIncome(context.Context, *BkprlistincomeRequest) (*BkprlistincomeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BkprListIncome not implemented")
+}
+func (UnimplementedNodeServer) BlacklistRune(context.Context, *BlacklistruneRequest) (*BlacklistruneResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BlacklistRune not implemented")
+}
+func (UnimplementedNodeServer) CheckRune(context.Context, *CheckruneRequest) (*CheckruneResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckRune not implemented")
+}
+func (UnimplementedNodeServer) CreateRune(context.Context, *CreateruneRequest) (*CreateruneResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateRune not implemented")
+}
+func (UnimplementedNodeServer) ShowRunes(context.Context, *ShowrunesRequest) (*ShowrunesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ShowRunes not implemented")
+}
+func (UnimplementedNodeServer) SubscribeBlockAdded(*StreamBlockAddedRequest, Node_SubscribeBlockAddedServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeBlockAdded not implemented")
+}
+func (UnimplementedNodeServer) SubscribeChannelOpenFailed(*StreamChannelOpenFailedRequest, Node_SubscribeChannelOpenFailedServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeChannelOpenFailed not implemented")
+}
+func (UnimplementedNodeServer) SubscribeChannelOpened(*StreamChannelOpenedRequest, Node_SubscribeChannelOpenedServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeChannelOpened not implemented")
+}
+func (UnimplementedNodeServer) SubscribeConnect(*StreamConnectRequest, Node_SubscribeConnectServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeConnect not implemented")
+}
+func (UnimplementedNodeServer) SubscribeCustomMsg(*StreamCustomMsgRequest, Node_SubscribeCustomMsgServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeCustomMsg not implemented")
 }
 func (UnimplementedNodeServer) mustEmbedUnimplementedNodeServer() {}
 
@@ -1060,6 +1931,24 @@ func _Node_AddGossip_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Node_AddPsbtOutput_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddpsbtoutputRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).AddPsbtOutput(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/AddPsbtOutput",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).AddPsbtOutput(ctx, req.(*AddpsbtoutputRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Node_AutoCleanInvoice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AutocleaninvoiceRequest)
 	if err := dec(in); err != nil {
@@ -1074,6 +1963,42 @@ func _Node_AutoCleanInvoice_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NodeServer).AutoCleanInvoice(ctx, req.(*AutocleaninvoiceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_AutoCleanOnce_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AutocleanonceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).AutoCleanOnce(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/AutoCleanOnce",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).AutoCleanOnce(ctx, req.(*AutocleanonceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_AutoCleanStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AutocleanstatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).AutoCleanStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/AutoCleanStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).AutoCleanStatus(ctx, req.(*AutocleanstatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1222,24 +2147,6 @@ func _Node_DelDatastore_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Node_DelExpiredInvoice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DelexpiredinvoiceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServer).DelExpiredInvoice(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/cln.Node/DelExpiredInvoice",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServer).DelExpiredInvoice(ctx, req.(*DelexpiredinvoiceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Node_DelInvoice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DelinvoiceRequest)
 	if err := dec(in); err != nil {
@@ -1258,6 +2165,78 @@ func _Node_DelInvoice_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Node_DevForgetChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DevforgetchannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).DevForgetChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/DevForgetChannel",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).DevForgetChannel(ctx, req.(*DevforgetchannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_EmergencyRecover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EmergencyrecoverRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).EmergencyRecover(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/EmergencyRecover",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).EmergencyRecover(ctx, req.(*EmergencyrecoverRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_Recover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecoverRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).Recover(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/Recover",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).Recover(ctx, req.(*RecoverRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_RecoverChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecoverchannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).RecoverChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/RecoverChannel",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).RecoverChannel(ctx, req.(*RecoverchannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Node_Invoice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(InvoiceRequest)
 	if err := dec(in); err != nil {
@@ -1272,6 +2251,60 @@ func _Node_Invoice_Handler(srv interface{}, ctx context.Context, dec func(interf
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NodeServer).Invoice(ctx, req.(*InvoiceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_CreateInvoiceRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InvoicerequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).CreateInvoiceRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/CreateInvoiceRequest",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).CreateInvoiceRequest(ctx, req.(*InvoicerequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_DisableInvoiceRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DisableinvoicerequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).DisableInvoiceRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/DisableInvoiceRequest",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).DisableInvoiceRequest(ctx, req.(*DisableinvoicerequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_ListInvoiceRequests_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListinvoicerequestsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).ListInvoiceRequests(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/ListInvoiceRequests",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).ListInvoiceRequests(ctx, req.(*ListinvoicerequestsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1362,6 +2395,24 @@ func _Node_ListTransactions_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NodeServer).ListTransactions(ctx, req.(*ListtransactionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_MakeSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MakesecretRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).MakeSecret(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/MakeSecret",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).MakeSecret(ctx, req.(*MakesecretRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1708,6 +2759,60 @@ func _Node_Decode_Handler(srv interface{}, ctx context.Context, dec func(interfa
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Node_DelPay_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DelpayRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).DelPay(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/DelPay",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).DelPay(ctx, req.(*DelpayRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_DelForward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DelforwardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).DelForward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/DelForward",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).DelForward(ctx, req.(*DelforwardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_DisableOffer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DisableofferRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).DisableOffer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/DisableOffer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).DisableOffer(ctx, req.(*DisableofferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Node_Disconnect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DisconnectRequest)
 	if err := dec(in); err != nil {
@@ -1762,6 +2867,42 @@ func _Node_FetchInvoice_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Node_FundChannel_Cancel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FundchannelCancelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).FundChannel_Cancel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/FundChannel_Cancel",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).FundChannel_Cancel(ctx, req.(*FundchannelCancelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_FundChannel_Complete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FundchannelCompleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).FundChannel_Complete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/FundChannel_Complete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).FundChannel_Complete(ctx, req.(*FundchannelCompleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Node_FundChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(FundchannelRequest)
 	if err := dec(in); err != nil {
@@ -1776,6 +2917,60 @@ func _Node_FundChannel_Handler(srv interface{}, ctx context.Context, dec func(in
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NodeServer).FundChannel(ctx, req.(*FundchannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_FundChannel_Start_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FundchannelStartRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).FundChannel_Start(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/FundChannel_Start",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).FundChannel_Start(ctx, req.(*FundchannelStartRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_GetLog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetlogRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).GetLog(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/GetLog",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).GetLog(ctx, req.(*GetlogRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_FunderUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FunderupdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).FunderUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/FunderUpdate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).FunderUpdate(ctx, req.(*FunderupdateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1870,6 +3065,42 @@ func _Node_ListHtlcs_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Node_MultiFundChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MultifundchannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).MultiFundChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/MultiFundChannel",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).MultiFundChannel(ctx, req.(*MultifundchannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_MultiWithdraw_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MultiwithdrawRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).MultiWithdraw(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/MultiWithdraw",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).MultiWithdraw(ctx, req.(*MultiwithdrawRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Node_Offer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(OfferRequest)
 	if err := dec(in); err != nil {
@@ -1884,6 +3115,96 @@ func _Node_Offer_Handler(srv interface{}, ctx context.Context, dec func(interfac
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NodeServer).Offer(ctx, req.(*OfferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_OpenChannel_Abort_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenchannelAbortRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).OpenChannel_Abort(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/OpenChannel_Abort",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).OpenChannel_Abort(ctx, req.(*OpenchannelAbortRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_OpenChannel_Bump_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenchannelBumpRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).OpenChannel_Bump(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/OpenChannel_Bump",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).OpenChannel_Bump(ctx, req.(*OpenchannelBumpRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_OpenChannel_Init_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenchannelInitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).OpenChannel_Init(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/OpenChannel_Init",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).OpenChannel_Init(ctx, req.(*OpenchannelInitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_OpenChannel_Signed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenchannelSignedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).OpenChannel_Signed(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/OpenChannel_Signed",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).OpenChannel_Signed(ctx, req.(*OpenchannelSignedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_OpenChannel_Update_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenchannelUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).OpenChannel_Update(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/OpenChannel_Update",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).OpenChannel_Update(ctx, req.(*OpenchannelUpdateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1906,6 +3227,78 @@ func _Node_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Node_Plugin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PluginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).Plugin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/Plugin",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).Plugin(ctx, req.(*PluginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_RenePayStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenepaystatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).RenePayStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/RenePayStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).RenePayStatus(ctx, req.(*RenepaystatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_RenePay_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenepayRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).RenePay(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/RenePay",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).RenePay(ctx, req.(*RenepayRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_ReserveInputs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReserveinputsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).ReserveInputs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/ReserveInputs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).ReserveInputs(ctx, req.(*ReserveinputsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Node_SendCustomMsg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SendcustommsgRequest)
 	if err := dec(in); err != nil {
@@ -1924,6 +3317,42 @@ func _Node_SendCustomMsg_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Node_SendInvoice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendinvoiceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).SendInvoice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/SendInvoice",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).SendInvoice(ctx, req.(*SendinvoiceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_SendOnionMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendonionmessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).SendOnionMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/SendOnionMessage",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).SendOnionMessage(ctx, req.(*SendonionmessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Node_SetChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetchannelRequest)
 	if err := dec(in); err != nil {
@@ -1938,6 +3367,42 @@ func _Node_SetChannel_Handler(srv interface{}, ctx context.Context, dec func(int
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NodeServer).SetChannel(ctx, req.(*SetchannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_SetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetconfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).SetConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/SetConfig",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).SetConfig(ctx, req.(*SetconfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_SetPsbtVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetpsbtversionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).SetPsbtVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/SetPsbtVersion",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).SetPsbtVersion(ctx, req.(*SetpsbtversionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1978,6 +3443,96 @@ func _Node_SignMessage_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Node_Splice_Init_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SpliceInitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).Splice_Init(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/Splice_Init",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).Splice_Init(ctx, req.(*SpliceInitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_Splice_Signed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SpliceSignedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).Splice_Signed(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/Splice_Signed",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).Splice_Signed(ctx, req.(*SpliceSignedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_Splice_Update_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SpliceUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).Splice_Update(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/Splice_Update",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).Splice_Update(ctx, req.(*SpliceUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_UnreserveInputs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnreserveinputsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).UnreserveInputs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/UnreserveInputs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).UnreserveInputs(ctx, req.(*UnreserveinputsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_UpgradeWallet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpgradewalletRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).UpgradeWallet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/UpgradeWallet",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).UpgradeWallet(ctx, req.(*UpgradewalletRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Node_WaitBlockHeight_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(WaitblockheightRequest)
 	if err := dec(in); err != nil {
@@ -2014,6 +3569,24 @@ func _Node_Wait_Handler(srv interface{}, ctx context.Context, dec func(interface
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Node_ListConfigs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListconfigsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).ListConfigs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/ListConfigs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).ListConfigs(ctx, req.(*ListconfigsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Node_Stop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StopRequest)
 	if err := dec(in); err != nil {
@@ -2028,6 +3601,24 @@ func _Node_Stop_Handler(srv interface{}, ctx context.Context, dec func(interface
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NodeServer).Stop(ctx, req.(*StopRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_Help_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HelpRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).Help(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/Help",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).Help(ctx, req.(*HelpRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2086,6 +3677,96 @@ func _Node_StaticBackup_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Node_BkprChannelsApy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BkprchannelsapyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).BkprChannelsApy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/BkprChannelsApy",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).BkprChannelsApy(ctx, req.(*BkprchannelsapyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_BkprDumpIncomeCsv_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BkprdumpincomecsvRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).BkprDumpIncomeCsv(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/BkprDumpIncomeCsv",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).BkprDumpIncomeCsv(ctx, req.(*BkprdumpincomecsvRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_BkprInspect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BkprinspectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).BkprInspect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/BkprInspect",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).BkprInspect(ctx, req.(*BkprinspectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_BkprListAccountEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BkprlistaccounteventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).BkprListAccountEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/BkprListAccountEvents",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).BkprListAccountEvents(ctx, req.(*BkprlistaccounteventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_BkprListBalances_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BkprlistbalancesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).BkprListBalances(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/BkprListBalances",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).BkprListBalances(ctx, req.(*BkprlistbalancesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Node_BkprListIncome_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(BkprlistincomeRequest)
 	if err := dec(in); err != nil {
@@ -2102,6 +3783,183 @@ func _Node_BkprListIncome_Handler(srv interface{}, ctx context.Context, dec func
 		return srv.(NodeServer).BkprListIncome(ctx, req.(*BkprlistincomeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_BlacklistRune_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BlacklistruneRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).BlacklistRune(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/BlacklistRune",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).BlacklistRune(ctx, req.(*BlacklistruneRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_CheckRune_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckruneRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).CheckRune(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/CheckRune",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).CheckRune(ctx, req.(*CheckruneRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_CreateRune_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateruneRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).CreateRune(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/CreateRune",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).CreateRune(ctx, req.(*CreateruneRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_ShowRunes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ShowrunesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).ShowRunes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cln.Node/ShowRunes",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).ShowRunes(ctx, req.(*ShowrunesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Node_SubscribeBlockAdded_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamBlockAddedRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NodeServer).SubscribeBlockAdded(m, &nodeSubscribeBlockAddedServer{stream})
+}
+
+type Node_SubscribeBlockAddedServer interface {
+	Send(*BlockAddedNotification) error
+	grpc.ServerStream
+}
+
+type nodeSubscribeBlockAddedServer struct {
+	grpc.ServerStream
+}
+
+func (x *nodeSubscribeBlockAddedServer) Send(m *BlockAddedNotification) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _Node_SubscribeChannelOpenFailed_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamChannelOpenFailedRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NodeServer).SubscribeChannelOpenFailed(m, &nodeSubscribeChannelOpenFailedServer{stream})
+}
+
+type Node_SubscribeChannelOpenFailedServer interface {
+	Send(*ChannelOpenFailedNotification) error
+	grpc.ServerStream
+}
+
+type nodeSubscribeChannelOpenFailedServer struct {
+	grpc.ServerStream
+}
+
+func (x *nodeSubscribeChannelOpenFailedServer) Send(m *ChannelOpenFailedNotification) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _Node_SubscribeChannelOpened_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamChannelOpenedRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NodeServer).SubscribeChannelOpened(m, &nodeSubscribeChannelOpenedServer{stream})
+}
+
+type Node_SubscribeChannelOpenedServer interface {
+	Send(*ChannelOpenedNotification) error
+	grpc.ServerStream
+}
+
+type nodeSubscribeChannelOpenedServer struct {
+	grpc.ServerStream
+}
+
+func (x *nodeSubscribeChannelOpenedServer) Send(m *ChannelOpenedNotification) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _Node_SubscribeConnect_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamConnectRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NodeServer).SubscribeConnect(m, &nodeSubscribeConnectServer{stream})
+}
+
+type Node_SubscribeConnectServer interface {
+	Send(*PeerConnectNotification) error
+	grpc.ServerStream
+}
+
+type nodeSubscribeConnectServer struct {
+	grpc.ServerStream
+}
+
+func (x *nodeSubscribeConnectServer) Send(m *PeerConnectNotification) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _Node_SubscribeCustomMsg_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamCustomMsgRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NodeServer).SubscribeCustomMsg(m, &nodeSubscribeCustomMsgServer{stream})
+}
+
+type Node_SubscribeCustomMsgServer interface {
+	Send(*CustomMsgNotification) error
+	grpc.ServerStream
+}
+
+type nodeSubscribeCustomMsgServer struct {
+	grpc.ServerStream
+}
+
+func (x *nodeSubscribeCustomMsgServer) Send(m *CustomMsgNotification) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 // Node_ServiceDesc is the grpc.ServiceDesc for Node service.
@@ -2136,8 +3994,20 @@ var Node_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Node_AddGossip_Handler,
 		},
 		{
+			MethodName: "AddPsbtOutput",
+			Handler:    _Node_AddPsbtOutput_Handler,
+		},
+		{
 			MethodName: "AutoCleanInvoice",
 			Handler:    _Node_AutoCleanInvoice_Handler,
+		},
+		{
+			MethodName: "AutoCleanOnce",
+			Handler:    _Node_AutoCleanOnce_Handler,
+		},
+		{
+			MethodName: "AutoCleanStatus",
+			Handler:    _Node_AutoCleanStatus_Handler,
 		},
 		{
 			MethodName: "CheckMessage",
@@ -2172,16 +4042,40 @@ var Node_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Node_DelDatastore_Handler,
 		},
 		{
-			MethodName: "DelExpiredInvoice",
-			Handler:    _Node_DelExpiredInvoice_Handler,
-		},
-		{
 			MethodName: "DelInvoice",
 			Handler:    _Node_DelInvoice_Handler,
 		},
 		{
+			MethodName: "DevForgetChannel",
+			Handler:    _Node_DevForgetChannel_Handler,
+		},
+		{
+			MethodName: "EmergencyRecover",
+			Handler:    _Node_EmergencyRecover_Handler,
+		},
+		{
+			MethodName: "Recover",
+			Handler:    _Node_Recover_Handler,
+		},
+		{
+			MethodName: "RecoverChannel",
+			Handler:    _Node_RecoverChannel_Handler,
+		},
+		{
 			MethodName: "Invoice",
 			Handler:    _Node_Invoice_Handler,
+		},
+		{
+			MethodName: "CreateInvoiceRequest",
+			Handler:    _Node_CreateInvoiceRequest_Handler,
+		},
+		{
+			MethodName: "DisableInvoiceRequest",
+			Handler:    _Node_DisableInvoiceRequest_Handler,
+		},
+		{
+			MethodName: "ListInvoiceRequests",
+			Handler:    _Node_ListInvoiceRequests_Handler,
 		},
 		{
 			MethodName: "ListDatastore",
@@ -2202,6 +4096,10 @@ var Node_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListTransactions",
 			Handler:    _Node_ListTransactions_Handler,
+		},
+		{
+			MethodName: "MakeSecret",
+			Handler:    _Node_MakeSecret_Handler,
 		},
 		{
 			MethodName: "Pay",
@@ -2280,6 +4178,18 @@ var Node_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Node_Decode_Handler,
 		},
 		{
+			MethodName: "DelPay",
+			Handler:    _Node_DelPay_Handler,
+		},
+		{
+			MethodName: "DelForward",
+			Handler:    _Node_DelForward_Handler,
+		},
+		{
+			MethodName: "DisableOffer",
+			Handler:    _Node_DisableOffer_Handler,
+		},
+		{
 			MethodName: "Disconnect",
 			Handler:    _Node_Disconnect_Handler,
 		},
@@ -2292,8 +4202,28 @@ var Node_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Node_FetchInvoice_Handler,
 		},
 		{
+			MethodName: "FundChannel_Cancel",
+			Handler:    _Node_FundChannel_Cancel_Handler,
+		},
+		{
+			MethodName: "FundChannel_Complete",
+			Handler:    _Node_FundChannel_Complete_Handler,
+		},
+		{
 			MethodName: "FundChannel",
 			Handler:    _Node_FundChannel_Handler,
+		},
+		{
+			MethodName: "FundChannel_Start",
+			Handler:    _Node_FundChannel_Start_Handler,
+		},
+		{
+			MethodName: "GetLog",
+			Handler:    _Node_GetLog_Handler,
+		},
+		{
+			MethodName: "FunderUpdate",
+			Handler:    _Node_FunderUpdate_Handler,
 		},
 		{
 			MethodName: "GetRoute",
@@ -2316,20 +4246,80 @@ var Node_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Node_ListHtlcs_Handler,
 		},
 		{
+			MethodName: "MultiFundChannel",
+			Handler:    _Node_MultiFundChannel_Handler,
+		},
+		{
+			MethodName: "MultiWithdraw",
+			Handler:    _Node_MultiWithdraw_Handler,
+		},
+		{
 			MethodName: "Offer",
 			Handler:    _Node_Offer_Handler,
+		},
+		{
+			MethodName: "OpenChannel_Abort",
+			Handler:    _Node_OpenChannel_Abort_Handler,
+		},
+		{
+			MethodName: "OpenChannel_Bump",
+			Handler:    _Node_OpenChannel_Bump_Handler,
+		},
+		{
+			MethodName: "OpenChannel_Init",
+			Handler:    _Node_OpenChannel_Init_Handler,
+		},
+		{
+			MethodName: "OpenChannel_Signed",
+			Handler:    _Node_OpenChannel_Signed_Handler,
+		},
+		{
+			MethodName: "OpenChannel_Update",
+			Handler:    _Node_OpenChannel_Update_Handler,
 		},
 		{
 			MethodName: "Ping",
 			Handler:    _Node_Ping_Handler,
 		},
 		{
+			MethodName: "Plugin",
+			Handler:    _Node_Plugin_Handler,
+		},
+		{
+			MethodName: "RenePayStatus",
+			Handler:    _Node_RenePayStatus_Handler,
+		},
+		{
+			MethodName: "RenePay",
+			Handler:    _Node_RenePay_Handler,
+		},
+		{
+			MethodName: "ReserveInputs",
+			Handler:    _Node_ReserveInputs_Handler,
+		},
+		{
 			MethodName: "SendCustomMsg",
 			Handler:    _Node_SendCustomMsg_Handler,
 		},
 		{
+			MethodName: "SendInvoice",
+			Handler:    _Node_SendInvoice_Handler,
+		},
+		{
+			MethodName: "SendOnionMessage",
+			Handler:    _Node_SendOnionMessage_Handler,
+		},
+		{
 			MethodName: "SetChannel",
 			Handler:    _Node_SetChannel_Handler,
+		},
+		{
+			MethodName: "SetConfig",
+			Handler:    _Node_SetConfig_Handler,
+		},
+		{
+			MethodName: "SetPsbtVersion",
+			Handler:    _Node_SetPsbtVersion_Handler,
 		},
 		{
 			MethodName: "SignInvoice",
@@ -2340,6 +4330,26 @@ var Node_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Node_SignMessage_Handler,
 		},
 		{
+			MethodName: "Splice_Init",
+			Handler:    _Node_Splice_Init_Handler,
+		},
+		{
+			MethodName: "Splice_Signed",
+			Handler:    _Node_Splice_Signed_Handler,
+		},
+		{
+			MethodName: "Splice_Update",
+			Handler:    _Node_Splice_Update_Handler,
+		},
+		{
+			MethodName: "UnreserveInputs",
+			Handler:    _Node_UnreserveInputs_Handler,
+		},
+		{
+			MethodName: "UpgradeWallet",
+			Handler:    _Node_UpgradeWallet_Handler,
+		},
+		{
 			MethodName: "WaitBlockHeight",
 			Handler:    _Node_WaitBlockHeight_Handler,
 		},
@@ -2348,8 +4358,16 @@ var Node_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Node_Wait_Handler,
 		},
 		{
+			MethodName: "ListConfigs",
+			Handler:    _Node_ListConfigs_Handler,
+		},
+		{
 			MethodName: "Stop",
 			Handler:    _Node_Stop_Handler,
+		},
+		{
+			MethodName: "Help",
+			Handler:    _Node_Help_Handler,
 		},
 		{
 			MethodName: "PreApproveKeysend",
@@ -2364,10 +4382,72 @@ var Node_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Node_StaticBackup_Handler,
 		},
 		{
+			MethodName: "BkprChannelsApy",
+			Handler:    _Node_BkprChannelsApy_Handler,
+		},
+		{
+			MethodName: "BkprDumpIncomeCsv",
+			Handler:    _Node_BkprDumpIncomeCsv_Handler,
+		},
+		{
+			MethodName: "BkprInspect",
+			Handler:    _Node_BkprInspect_Handler,
+		},
+		{
+			MethodName: "BkprListAccountEvents",
+			Handler:    _Node_BkprListAccountEvents_Handler,
+		},
+		{
+			MethodName: "BkprListBalances",
+			Handler:    _Node_BkprListBalances_Handler,
+		},
+		{
 			MethodName: "BkprListIncome",
 			Handler:    _Node_BkprListIncome_Handler,
 		},
+		{
+			MethodName: "BlacklistRune",
+			Handler:    _Node_BlacklistRune_Handler,
+		},
+		{
+			MethodName: "CheckRune",
+			Handler:    _Node_CheckRune_Handler,
+		},
+		{
+			MethodName: "CreateRune",
+			Handler:    _Node_CreateRune_Handler,
+		},
+		{
+			MethodName: "ShowRunes",
+			Handler:    _Node_ShowRunes_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SubscribeBlockAdded",
+			Handler:       _Node_SubscribeBlockAdded_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SubscribeChannelOpenFailed",
+			Handler:       _Node_SubscribeChannelOpenFailed_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SubscribeChannelOpened",
+			Handler:       _Node_SubscribeChannelOpened_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SubscribeConnect",
+			Handler:       _Node_SubscribeConnect_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SubscribeCustomMsg",
+			Handler:       _Node_SubscribeCustomMsg_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "node.proto",
 }
