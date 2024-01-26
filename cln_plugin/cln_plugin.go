@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/breez/lspd/build"
 )
 
 const (
@@ -68,6 +70,7 @@ func NewClnPlugin(in, out *os.File) *ClnPlugin {
 // NOTE: The grpc server is started in the handleInit function.
 func (c *ClnPlugin) Start() {
 	c.setupLogging()
+	log.Printf(`Starting lspd cln_plugin, tag='%s', revision='%s'`, build.GetTag(), build.GetRevision())
 	go c.listenRequests()
 	<-c.done
 	s := c.server

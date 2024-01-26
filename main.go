@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/breez/lspd/build"
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/cln"
 	"github.com/breez/lspd/common"
@@ -38,6 +39,7 @@ func main() {
 		return
 	}
 
+	log.Printf(`Starting lspd, tag='%s', revision='%s'`, build.GetTag(), build.GetRevision())
 	n := os.Getenv("NODES")
 	var nodeConfigs []*config.NodeConfig
 	err := json.Unmarshal([]byte(n), &nodeConfigs)
