@@ -1,0 +1,188 @@
+name: Release build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  LSPD_GO_VERSION: 1.21.0
+  LND_GO_VERSION: 1.21.0
+  LND_REF: 0c939786ced78a981bd77c7da628bfcf86ada568
+  CLN_REF: v23.11.2
+
+jobs:
+  lspd:
+    name: Release lspd
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [
+          linux,
+          darwin,
+        ]
+        arch: [
+          arm64,
+          amd64,
+        ]
+    steps:
+      - name: git checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: setup go ${{ env.LSPD_GO_VERSION }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: '${{ env.LSPD_GO_VERSION }}'
+
+      - name: get tag
+        run: |
+          echo "TAG=$(git describe --tags --dirty)" >> $GITHUB_ENV
+
+      - name: build lspd
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+        run: make release-all
+
+      - name: zip lspd artifacts
+        run: tar -czvf lspd-${{ env.TAG }}-${{ matrix.os }}-${{ matrix.arch }}.tar.gz lspd lspd_cln_plugin
+
+      - name: upload lspd artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lspd-${{ env.TAG }}-${{ matrix.os }}-${{ matrix.arch }}
+          path: lspd-${{ env.TAG }}-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
+
+  lnd:
+    name: Release lnd
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [
+          linux,
+          darwin,
+        ]
+        arch: [
+          arm64,
+          amd64,
+        ]
+    steps:
+      - name: Checkout LND for LSP
+        uses: actions/checkout@v4
+        with:
+          repository: breez/lnd
+          ref: ${{ env.LND_REF }}
+          fetch-depth: 0
+
+      - name: Fetch upstream tags
+        run: |
+          git remote add upstream https://github.com/lightningnetwork/lnd
+          git fetch upstream --tags
+
+      - name: get commit id
+        run: |
+          echo "COMMIT=$(git describe --tags --dirty --match 'v*')" >> $GITHUB_ENV
+          echo "COMMIT_HASH=$(git rev-parse HEAD)" >> $GITHUB_ENV
+
+      - name: setup go ${{ env.LND_GO_VERSION }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: '${{ env.LND_GO_VERSION }}'
+
+      - name: build lnd release
+        env:
+          GOEXPERIMENT: loopvar
+          CGO_ENABLED: 0
+          GOARCH: ${{ matrix.arch }}
+          GOOS: ${{ matrix.os }}
+          PKG: github.com/lightningnetwork/lnd
+        run: |
+          go get ${PKG}/cmd/lnd
+          go get ${PKG}/cmd/lncli
+          go build -v -trimpath -ldflags="-s -w -X ${PKG}/build.Commit=${COMMIT} -X ${PKG}/build.CommitHash=${COMMIT_HASH}" -tags="submarineswaprpc chanreservedynamic routerrpc walletrpc chainrpc signrpc invoicesrpc" ${PKG}/cmd/lnd
+          go build -v -trimpath -ldflags="-s -w -X ${PKG}/build.Commit=${COMMIT} -X ${PKG}/build.CommitHash=${COMMIT_HASH}" -tags="submarineswaprpc chanreservedynamic routerrpc walletrpc chainrpc signrpc invoicesrpc" ${PKG}/cmd/lncli
+
+      - name: zip lnd artifacts
+        run: tar -czvf lnd-${{ env.COMMIT }}-${{ matrix.os }}-${{ matrix.arch }}.tar.gz lnd lncli
+
+      - name: upload lnd artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lnd-${{ env.COMMIT }}-${{ matrix.os }}-${{ matrix.arch }}
+          path: lnd-${{ env.COMMIT }}-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
+
+  release:
+    needs:
+      - lspd
+      - lnd
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: create release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: '**/*.gz'
+          generateReleaseNotes: true
+          draft: true
+      
+  # cln-macos:
+  #   name: Release lightningd
+  #   runs-on: ${{ matrix.os }}
+  #   strategy:
+  #     matrix:
+  #       os: [
+  #         macos-13,
+  #         macos-13-xlarge, # this is an arm64 version of macos
+  #       ]
+  #   steps:
+  #     - name: Checkout CLN for LSP
+  #       uses: actions/checkout@v4
+  #       with:
+  #         repository: ElementsProject/lightning
+  #         ref: ${{ env.CLN_REF }}
+
+  #     - name: Install dependencies
+  #       run: brew install autoconf automake libtool gnu-sed gettext libsodium
+
+  #     - name: Install Protoc
+  #       uses: arduino/setup-protoc@v2
+  #       with:
+  #         version: "23.4"
+  #         repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+  #     NOTE: This doesn't directly work, because the 
+  #     - name: Silicon env variables
+  #       if: ${{ matrix.os == 'macos-13-xlarge' }}
+  #       run: |
+  #         echo "CPATH=/opt/homebrew/include" >> $GITHUB_ENV
+  #         echo "LIBRARY_PATH=/opt/homebrew/lib" >> $GITHUB_ENV
+
+  #     - name: Setup Python 3.11
+  #       uses: actions/setup-python@v4
+  #       with:
+  #         python-version: 3.11
+
+  #     - name: Install Python dependencies
+  #       run: |
+  #         pip3 install --upgrade pip
+  #         pip3 install poetry mako
+
+  #     - name: Build lightningd
+  #       env:
+  #         HAVE_GOOD_LIBSODIUM: 0
+  #       run: |
+  #         poetry install
+  #         ./configure
+  #         poetry run make -j$(nproc)
+      
+  #     - name: upload cln artifacts
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: cln-${{ matrix.os }}
+  #         path: |
+  #           lightningd/lightningd
+  #           cli/lightning-cli
