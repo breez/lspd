@@ -8,7 +8,9 @@
 
 ### Installation
 #### CLN 
-Follow compilation steps for CLN [here](https://github.com/ElementsProject/lightning/blob/master/doc/getting-started/getting-started/installation.md) to enable developer mode.
+Download a precompiled binary of CLN [here](https://github.com/ElementsProject/lightning/releases).
+
+Or compile CLN yourself as described in the [installation documentation](https://github.com/ElementsProject/lightning/doc/getting-started/getting-started/installation.md).
 
 #### lspd
 Needs to be built from source:
