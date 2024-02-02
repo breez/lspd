@@ -59,16 +59,6 @@ func main() {
 		log.Fatalf("failed to create nodes service: %v", err)
 	}
 
-	mempoolUrl := os.Getenv("MEMPOOL_API_BASE_URL")
-	if mempoolUrl == "" {
-		log.Fatalf("No mempool url configured.")
-	}
-
-	feeEstimator, err := mempool.NewMempoolClient(mempoolUrl)
-	if err != nil {
-		log.Fatalf("failed to initialize mempool client: %v", err)
-	}
-
 	var feeStrategy chain.FeeStrategy
 	envFeeStrategy := os.Getenv("MEMPOOL_PRIORITY")
 	switch strings.ToLower(envFeeStrategy) {
@@ -85,7 +75,17 @@ func main() {
 	default:
 		feeStrategy = chain.FeeStrategyEconomy
 	}
-	log.Printf("using mempool api for fee estimation: %v, fee strategy: %v:%v", mempoolUrl, envFeeStrategy, feeStrategy)
+
+	var mempoolClient *mempool.MempoolClient
+	mempoolUrl := os.Getenv("MEMPOOL_API_BASE_URL")
+	if mempoolUrl != "" {
+		mempoolClient, err = mempool.NewMempoolClient(mempoolUrl)
+		if err != nil {
+			log.Fatalf("failed to initialize mempool client: %v", err)
+		}
+
+		log.Printf("using mempool api for fee estimation: %v, fee strategy: %v:%v", mempoolUrl, envFeeStrategy, feeStrategy)
+	}
 
 	databaseUrl := os.Getenv("DATABASE_URL")
 	pool, err := postgresql.PgConnect(databaseUrl)
@@ -111,6 +111,13 @@ func main() {
 	var interceptors []interceptor.HtlcInterceptor
 	for _, node := range nodes {
 		var htlcInterceptor interceptor.HtlcInterceptor
+		var feeEstimator chain.FeeEstimator
+		if mempoolClient == nil {
+			feeEstimator = chain.NewDefaultFeeEstimator(node.NodeConfig.TargetConf)
+		} else {
+			feeEstimator = mempoolClient
+		}
+
 		if node.NodeConfig.Lnd != nil {
 			client, err := lnd.NewLndClient(node.NodeConfig.Lnd)
 			if err != nil {

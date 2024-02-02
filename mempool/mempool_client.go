@@ -85,6 +85,6 @@ func (m *MempoolClient) EstimateFeeRate(
 	}
 
 	return &chain.FeeEstimation{
-		SatPerVByte: rate,
+		SatPerVByte: &rate,
 	}, nil
 }

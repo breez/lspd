@@ -3,7 +3,6 @@ package lsps2
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"log"
 	"math"
 	"strings"
@@ -414,23 +413,14 @@ func (i *Interceptor) ensureChannelOpen(payment *paymentState) {
 			return
 		}
 
-		var targetConf *uint32
-		confStr := "<nil>"
-		var feeEstimation *float64
-		feeStr := "<nil>"
-		if i.feeEstimator != nil {
-			fee, err := i.feeEstimator.EstimateFeeRate(
-				context.Background(),
-				i.config.FeeStrategy,
-			)
-			if err == nil {
-				feeEstimation = &fee.SatPerVByte
-				feeStr = fmt.Sprintf("%.5f", *feeEstimation)
-			} else {
-				log.Printf("Error estimating chain fee, fallback to target "+
-					"conf: %v", err)
-				targetConf = &i.config.TargetConf
-				confStr = fmt.Sprintf("%v", *targetConf)
+		fee, err := i.feeEstimator.EstimateFeeRate(
+			context.Background(),
+			i.config.FeeStrategy,
+		)
+		if err != nil || fee == nil {
+			log.Printf("Error estimating chain fee, fallback to target conf: %v", err)
+			fee = &chain.FeeEstimation{
+				TargetConf: &i.config.TargetConf,
 			}
 		}
 
@@ -439,11 +429,10 @@ func (i *Interceptor) ensureChannelOpen(payment *paymentState) {
 
 		log.Printf(
 			"LSPS2: Opening zero conf channel. Destination: %x, capacity: %v, "+
-				"fee: %s, targetConf: %s",
+				"fee: %s",
 			destination,
 			capacity,
-			feeStr,
-			confStr,
+			fee.String(),
 		)
 
 		channelPoint, err := i.client.OpenChannel(&lightning.OpenChannelRequest{
@@ -452,8 +441,8 @@ func (i *Interceptor) ensureChannelOpen(payment *paymentState) {
 			MinConfs:       i.config.MinConfs,
 			IsPrivate:      true,
 			IsZeroConf:     true,
-			FeeSatPerVByte: feeEstimation,
-			TargetConf:     targetConf,
+			FeeSatPerVByte: fee.SatPerVByte,
+			TargetConf:     fee.TargetConf,
 		})
 		if err != nil {
 			log.Printf(

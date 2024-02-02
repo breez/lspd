@@ -1,6 +1,9 @@
 package chain
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 type FeeStrategy int
 
@@ -13,7 +16,20 @@ const (
 )
 
 type FeeEstimation struct {
-	SatPerVByte float64
+	SatPerVByte *float64
+	TargetConf  *uint32
+}
+
+func (f *FeeEstimation) String() string {
+	feeStr := "<nil>"
+	confStr := "<nil>"
+	if f.SatPerVByte != nil {
+		feeStr = fmt.Sprintf("%.5f", *f.SatPerVByte)
+	}
+	if f.TargetConf != nil {
+		confStr = fmt.Sprintf("%v", *f.TargetConf)
+	}
+	return fmt.Sprintf("satPerVbyte %s, targetConf %s", feeStr, confStr)
 }
 
 type FeeEstimator interface {

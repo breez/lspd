@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"fmt"
 	"log"
 	"math/big"
 	"time"
@@ -354,32 +353,23 @@ func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmoun
 		capacity++
 	}
 
-	var targetConf *uint32
-	confStr := "<nil>"
-	var feeEstimation *float64
-	feeStr := "<nil>"
-	if i.feeEstimator != nil {
-		fee, err := i.feeEstimator.EstimateFeeRate(
-			context.Background(),
-			i.feeStrategy,
-		)
-		if err == nil {
-			feeEstimation = &fee.SatPerVByte
-			feeStr = fmt.Sprintf("%.5f", *feeEstimation)
-		} else {
-			log.Printf("Error estimating chain fee, fallback to target conf: %v", err)
-			targetConf = &i.config.TargetConf
-			confStr = fmt.Sprintf("%v", *targetConf)
+	fee, err := i.feeEstimator.EstimateFeeRate(
+		context.Background(),
+		i.feeStrategy,
+	)
+	if err != nil || fee == nil {
+		log.Printf("Error estimating chain fee, fallback to target conf: %v", err)
+		fee = &chain.FeeEstimation{
+			TargetConf: &i.config.TargetConf,
 		}
 	}
 
 	log.Printf(
-		"Opening zero conf channel. Paymenthash: %x, Destination: %x, capacity: %v, fee: %s, targetConf: %s",
+		"Opening zero conf channel. Paymenthash: %x, Destination: %x, capacity: %v, fee: %s",
 		paymentHash,
 		destination,
 		capacity,
-		feeStr,
-		confStr,
+		fee.String(),
 	)
 	channelPoint, err := i.client.OpenChannel(&lightning.OpenChannelRequest{
 		Destination:    destination,
@@ -387,8 +377,8 @@ func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmoun
 		MinConfs:       i.config.MinConfs,
 		IsPrivate:      true,
 		IsZeroConf:     true,
-		FeeSatPerVByte: feeEstimation,
-		TargetConf:     targetConf,
+		FeeSatPerVByte: fee.SatPerVByte,
+		TargetConf:     fee.TargetConf,
 	})
 	if err != nil {
 		log.Printf("paymenthash %x, client.OpenChannelSync(%x, %v) error: %v", paymentHash, destination, capacity, err)
