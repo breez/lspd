@@ -1,0 +1,28 @@
+ALTER INDEX public.channels_nodeid_idx RENAME TO channels_backup_nodeid_idx;
+ALTER TABLE public.channels RENAME TO channels_backup;
+ALTER INDEX public.forwarding_history_chanid_in_idx RENAME TO forwarding_history_backup_chanid_in_idx;
+ALTER INDEX public.forwarding_history_chanid_out_idx RENAME TO forwarding_history_backup_chanid_out_idx;
+ALTER TABLE public.forwarding_history RENAME TO forwarding_history_backup;
+
+DROP INDEX lsps2_bought_channels_registration_id_funding_tx_idx;
+DROP INDEX payments_funding_tx_idx;
+DROP TABLE public.cln_forwarding_history_offsets;
+DROP INDEX forwarding_history_nodeid_chanid_out_idx;
+DROP INDEX forwarding_history_nodeid_chanid_in_idx;
+DROP INDEX forwarding_history_resolved_time_idx;
+DROP INDEX forwarding_history_nodeid_resolved_time_idx;
+DROP INDEX forwarding_history_nodeid_idx;
+DROP TABLE public.forwarding_history;
+DROP INDEX channels_confirmed_scid_idx;
+DROP INDEX channels_alias_scid_idx;
+DROP INDEX channels_nodeid_funding_tx_idx;
+DROP INDEX channels_funding_tx_idx;
+DROP INDEX channels_peerid_idx;
+DROP INDEX channels_nodeid_idx;
+DROP TABLE public.channels;
+
+ALTER TABLE public.forwarding_history_backup RENAME TO forwarding_history;
+ALTER INDEX public.forwarding_history_backup_chanid_out_idx RENAME TO forwarding_history_chanid_out_idx;
+ALTER INDEX public.forwarding_history_backup_chanid_in_idx RENAME TO forwarding_history_chanid_in_idx;
+ALTER TABLE public.channels_backup RENAME TO channels;
+ALTER INDEX public.channels_backup_nodeid_idx RENAME TO channels_nodeid_idx;
