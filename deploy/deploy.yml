@@ -231,7 +231,7 @@ Resources:
             bitcoin-retry-timeout=3600
             alias="${LSPName}"
             wallet=postgres://lightning:$LIGHTNING_DB_PASSWORD@localhost:5432/lightning
-            plugin=/home/lightning/.lightning/plugins/lspd_plugin
+            plugin=/home/lightning/.lightning/plugins/lspd_cln_plugin
             lsp-listen=127.0.0.1:12312
             max-concurrent-htlcs=30
             dev-allowdustreserve=true
@@ -273,13 +273,10 @@ Resources:
             cd /opt/lspd
             source /etc/bash.bashrc
             export PATH=$PATH:/usr/local/go/bin
-            sudo env "PATH=$PATH" go get
-            sudo env "PATH=$PATH" go get github.com/breez/lspd/cln_plugin
-            sudo env "PATH=$PATH" go build .
-            sudo env "PATH=$PATH" go build -o lspd_plugin ./cln_plugin/cmd
+            sudo env "PATH=$PATH" make release-all
             sudo cp lspd /usr/local/bin/
             sudo mkdir /home/lightning/.lightning/plugins
-            sudo cp lspd_plugin /home/lightning/.lightning/plugins/
+            sudo cp lspd_cln_plugin /home/lightning/.lightning/plugins/
 
             cat <<EOL | sudo tee /etc/systemd/system/lspd.service
             [Unit]

@@ -23,4 +23,4 @@ runs:
         name: build-artifacts
         path: |
           lspd
-          lspd_plugin
+          lspd_cln_plugin

@@ -17,9 +17,9 @@ Needs to be built from source:
 ```
 git clone https://github.com/breez/lspd 
 cd lspd
-go build .                                # compile lspd
-go build -o lspd_plugin ./cln_plugin/cmd  # compile lspd cln plugin
+make release-all
 ```
+This will create two binaries, `lspd` and `lspd_cln_plugin`
 
 #### Postgresql
 Lspd supports postgresql backend. To create database and new role to access it on your postgres server use:
@@ -64,11 +64,11 @@ In order to run lspd on top of CLN, you need to run the lspd process and run cln
 
 1. Run cln with the following options set:
     - `--developer`: to allow passing the `--dev-allowdustreserve` flag
-    - `--plugin=/path/to/lspd_plugin`: to use lspd as plugin
+    - `--plugin=/path/to/lspd_cln_plugin`: to use lspd as plugin
     - `--max-concurrent-htlcs=30`: In order to use zero reserve channels on the client side, (local max_accepted_htlcs + remote max_accepted_htlcs + 2) * dust limit must be lower than the channel capacity. Reduce max-concurrent-htlcs or increase channel capacity accordingly.
     - `--dev-allowdustreserve=true`: In order to allow zero reserve on the client side (requires developer mode turned on)
     - `--allow-deprecated-apis=true`: lspd currently uses a deprecated api, so needs this flag set.
-    - `--lsp-listen=127.0.0.1:<port>`: Set on which port the lspd_plugin will listen for lspd communication, must be the same port that is used in pluginAddress parameter in NODES env variable.
+    - `--lsp-listen=127.0.0.1:<port>`: Set on which port the lspd_cln_plugin will listen for lspd communication, must be the same port that is used in pluginAddress parameter in NODES env variable.
 1. Run lspd
 
 ### Final step

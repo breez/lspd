@@ -34,8 +34,8 @@ In order to run the integration tests, you need:
 - lnd v0.16.4 breez client version https://github.com/breez/lnd/commit/3c0854adcfc924a6d759a6ee4640c41266b9f8b4
 - bitcoind (tested with v23.0)
 - bitcoin-cli (tested with v23.0)
-- build of lspd (go build .)
-- build of lspd cln plugin (go build -o lspd_plugin cln_plugin/cmd)
+- build of lspd (`make release-lspd`)
+- build of lspd cln plugin (`make release-plugin`)
 
 To run the integration tests, run the following command from the lspd root directory (replacing the appropriate paths). 
 
@@ -44,7 +44,7 @@ go test -timeout 20m -v ./itest \
   --lightningdexec /full/path/to/lightningd \
   --lndexec /full/path/to/lnd \
   --lndmobileexec /full/path/to/lnd \
-  --clnpluginexec /full/path/to/lspd_plugin \
+  --clnpluginexec /full/path/to/lspd_cln_plugin \
   --lspdexec /full/path/to/lspd \
   --lspdmigrationsdir /full/path/to/lspd/postgresql/migrations
 ```

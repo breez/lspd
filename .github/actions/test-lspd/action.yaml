@@ -37,7 +37,7 @@ runs:
     - name: Set permissions
       run: |
         chmod 755 lspd
-        chmod 755 lspd_plugin
+        chmod 755 lspd_cln_plugin
       shell: bash
 
     - name: Cache LND client
@@ -126,7 +126,7 @@ runs:
           --lightningdexec ${{ github.workspace }}/lightning_git/lightningd/lightningd \
           --lndexec ~/go_lnd_lsp/bin/lnd \
           --lndmobileexec ~/go_lnd_client/bin/lnd \
-          --clnpluginexec ${{ github.workspace }}/lspd_plugin \
+          --clnpluginexec ${{ github.workspace }}/lspd_cln_plugin \
           --lspdexec ${{ github.workspace }}/lspd \
           --lspdmigrationsdir ${{ github.workspace }}/postgresql/migrations \
           --preservelogs \
