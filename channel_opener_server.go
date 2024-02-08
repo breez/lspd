@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -136,7 +137,8 @@ func (s *channelOpenerServer) RegisterPayment(
 			return nil, fmt.Errorf("invalid opening_fee_params")
 		}
 	} else {
-		log.Printf("DEPRECATED: RegisterPayment with deprecated fee mechanism.")
+		tokenHash := sha256.Sum256([]byte(token))
+		log.Printf("DEPRECATED: RegisterPayment with deprecated fee mechanism. sha256 hash of token used: %x", tokenHash)
 		pi.OpeningFeeParams = &lspdrpc.OpeningFeeParams{
 			MinMsat:              uint64(node.NodeConfig.ChannelMinimumFeeMsat),
 			Proportional:         uint32(node.NodeConfig.ChannelFeePermyriad * 100),
