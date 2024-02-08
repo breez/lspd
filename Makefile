@@ -4,12 +4,12 @@ TAG := $(shell git describe --tags --dirty)
 release-all: release-lspd release-plugin
 
 release-lspd:
-	go get $(PKG)
-	go build -v -trimpath -o lspd -ldflags "-s -w -X $(PKG)/build.tag=$(TAG)" $(PKG)
+	go get $(PKG)/cmd/lspd
+	go build -v -trimpath -o lspd -ldflags "-s -w -X $(PKG)/build.tag=$(TAG)" $(PKG)/cmd/lspd
 
 release-plugin:
-	go get $(PKG)/cln_plugin/cmd
-	go build -v -trimpath -o lspd_cln_plugin -ldflags="-s -w -X $(PKG)/build.tag=$(TAG)" $(PKG)/cln_plugin/cmd
+	go get $(PKG)/cmd/lspd_cln_plugin
+	go build -v -trimpath -o lspd_cln_plugin -ldflags="-s -w -X $(PKG)/build.tag=$(TAG)" $(PKG)/cmd/lspd_cln_plugin
 
 clean:
 	rm -f lspd
