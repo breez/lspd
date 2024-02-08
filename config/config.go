@@ -42,11 +42,8 @@ type NodeConfig struct {
 	// have.
 	MinConfs *uint32 `json:"minConfs,string"`
 
-	// Smallest htlc amount routed over channels opened with the OpenChannel
-	// rpc call.
-	//
-	// Deprecated: This config option is part of the OpenChannel rpc, which is
-	// deprecated.
+	// Smallest htlc amount routed over channels a channel. It is configured on
+	// the node itself, but this value is returned in the ChannelInformation rpc.
 	MinHtlcMsat uint64 `json:"minHtlcMsat,string"`
 
 	// The base fee for routing payments over the channel. It is configured on
@@ -62,11 +59,15 @@ type NodeConfig struct {
 
 	// Fee for opening a zero conf channel in satoshi per 10000 satoshi based
 	// on the incoming payment amount.
+	// This field is for legacy support for clients that don't support
+	// OpeningFeeParams.
 	ChannelFeePermyriad int64 `json:"channelFeePermyriad,string"`
 
 	// Minimum fee for opening a zero conf channel in millisatoshi. If the fee
 	// using ChannelFeePermyriad is less than this amount, this amount is the
 	// actual fee to be paid.
+	// This field is for legacy support for clients that don't support
+	// OpeningFeeParams.
 	ChannelMinimumFeeMsat int64 `json:"channelMinimumFeeMsat,string"`
 
 	// Channel capacity that is added on top of the incoming payment amount
@@ -75,6 +76,8 @@ type NodeConfig struct {
 
 	// The channel can be closed if not used this duration in seconds. This is
 	// not enforced by lspd, but gives an indication to clients.
+	// This field is for legacy support for clients that don't support
+	// OpeningFeeParams.
 	MaxInactiveDuration uint64 `json:"maxInactiveDuration,string"`
 
 	// The maximum time to hold a htlc after sending a notification when the
