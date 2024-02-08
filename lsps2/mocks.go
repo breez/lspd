@@ -138,9 +138,6 @@ func (c *mockLightningClient) GetChannel(peerID []byte, channelPoint wire.OutPoi
 func (c *mockLightningClient) GetPeerId(scid *lightning.ShortChannelID) ([]byte, error) {
 	return nil, ErrNotImplemented
 }
-func (c *mockLightningClient) GetNodeChannelCount(nodeID []byte) (int, error) {
-	return 0, ErrNotImplemented
-}
 func (c *mockLightningClient) GetClosedChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error) {
 	return nil, ErrNotImplemented
 }

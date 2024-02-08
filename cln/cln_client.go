@@ -131,12 +131,7 @@ func (c *ClnClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoi
 		m := uint16(*req.MinConfs)
 		minConfs = &m
 	}
-	var minDepth *uint16
-	if req.IsZeroConf {
-		var d uint16 = 0
-		minDepth = &d
-	}
-
+	var minDepth uint16 = 0
 	var rate *glightning.FeeRate
 	if req.FeeSatPerVByte != nil {
 		rate = &glightning.FeeRate{
@@ -163,10 +158,10 @@ func (c *ClnClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoi
 		pubkey,
 		glightning.NewSat(int(req.CapacitySat)),
 		rate,
-		!req.IsPrivate,
+		false,
 		minConfs,
 		glightning.NewMsat(0),
-		minDepth,
+		&minDepth,
 		glightning.NewMsat(0),
 	)
 
@@ -231,30 +226,6 @@ func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 
 	log.Printf("No channel found: getChannel(%v, %v)", pubkey, fundingTxID)
 	return nil, fmt.Errorf("no channel found")
-}
-
-func (c *ClnClient) GetNodeChannelCount(nodeID []byte) (int, error) {
-	client, err := c.getClient()
-	if err != nil {
-		return 0, err
-	}
-
-	pubkey := hex.EncodeToString(nodeID)
-	channels, err := client.GetPeerChannels(pubkey)
-	if err != nil {
-		log.Printf("CLN: client.GetPeer(%s) error: %v", pubkey, err)
-		return 0, err
-	}
-
-	count := 0
-	openPendingStatuses := append(OPEN_STATUSES, PENDING_STATUSES...)
-	for _, c := range channels {
-		if slices.Contains(openPendingStatuses, c.State) {
-			count++
-		}
-	}
-
-	return count, nil
 }
 
 func (c *ClnClient) GetClosedChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error) {

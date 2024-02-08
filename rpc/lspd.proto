@@ -10,7 +10,6 @@ package lspd;
 service ChannelOpener {
   rpc ChannelInformation(ChannelInformationRequest)
       returns (ChannelInformationReply) {}
-  rpc OpenChannel(OpenChannelRequest) returns (OpenChannelReply) {}
   rpc RegisterPayment (RegisterPaymentRequest) returns (RegisterPaymentReply) {}
   rpc CheckChannels(Encrypted) returns (Encrypted) {}
 }
@@ -68,18 +67,6 @@ message OpeningFeeParams {
   uint32 max_idle_time = 4;
   uint32 max_client_to_self_delay = 5;
   string promise = 6;
-}
-
-message OpenChannelRequest {
-  /// The identity pubkey of the Lightning node
-  string pubkey = 1 [ json_name = "pubkey" ];
-}
-
-message OpenChannelReply {
-  /// The transaction hash
-  string tx_hash = 1 [ json_name = "tx_hash" ];
-  /// The output index
-  uint32 output_index = 2 [ json_name = "output_index"];
 }
 
 message RegisterPaymentRequest {

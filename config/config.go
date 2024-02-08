@@ -35,19 +35,6 @@ type NodeConfig struct {
 	// running lspd.
 	PublicChannelAmount int64 `json:"publicChannelAmount,string,omitempty"`
 
-	// The capacity of opened channels through the OpenChannel rpc.
-	//
-	// Deprecated: This config option is part of the OpenChannel rpc, which is
-	// deprecated.
-	ChannelAmount uint64 `json:"channelAmount,string,omitempty"`
-
-	// Value indicating whether channels opened through the OpenChannel rpc
-	// should be private.
-	//
-	// Deprecated: This config option is part of the OpenChannel rpc, which is
-	// deprecated.
-	ChannelPrivate bool `json:"channelPrivate"`
-
 	// Number of blocks after which an opened channel is considered confirmed.
 	TargetConf uint32 `json:"targetConf,string"`
 

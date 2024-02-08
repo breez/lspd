@@ -6,8 +6,6 @@
 - [lspd.proto](#lspd.proto)
     - [ChannelInformationReply](#lspd.ChannelInformationReply)
     - [ChannelInformationRequest](#lspd.ChannelInformationRequest)
-    - [OpenChannelReply](#lspd.OpenChannelReply)
-    - [OpenChannelRequest](#lspd.OpenChannelRequest)
     - [PaymentInformation](#lspd.PaymentInformation)
     - [RegisterPaymentReply](#lspd.RegisterPaymentReply)
     - [RegisterPaymentRequest](#lspd.RegisterPaymentRequest)
@@ -63,36 +61,6 @@
 | ----- | ---- | ----- | ----------- |
 | pubkey | [string](#string) |  | The identity pubkey of the Lightning node |
 
-
-
-
-
-
-<a name="lspd.OpenChannelReply"></a>
-
-### OpenChannelReply
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| tx_hash | [string](#string) |  | The transaction hash |
-| output_index | [uint32](#uint32) |  | The output index |
-
-
-
-
-
-
-<a name="lspd.OpenChannelRequest"></a>
-
-### OpenChannelRequest
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| pubkey | [string](#string) |  | The identity pubkey of the Lightning node |
 
 
 
@@ -157,7 +125,6 @@
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
 | ChannelInformation | [ChannelInformationRequest](#lspd.ChannelInformationRequest) | [ChannelInformationReply](#lspd.ChannelInformationReply) |  |
-| OpenChannel | [OpenChannelRequest](#lspd.OpenChannelRequest) | [OpenChannelReply](#lspd.OpenChannelReply) |  |
 | RegisterPayment | [RegisterPaymentRequest](#lspd.RegisterPaymentRequest) | [RegisterPaymentReply](#lspd.RegisterPaymentReply) |  |
 
  

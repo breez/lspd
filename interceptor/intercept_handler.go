@@ -375,8 +375,6 @@ func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmoun
 		Destination:    destination,
 		CapacitySat:    uint64(capacity),
 		MinConfs:       i.config.MinConfs,
-		IsPrivate:      true,
-		IsZeroConf:     true,
 		FeeSatPerVByte: fee.SatPerVByte,
 		TargetConf:     fee.TargetConf,
 	})

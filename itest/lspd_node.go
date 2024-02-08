@@ -106,8 +106,6 @@ func newLspd(h *lntest.TestHarness, mem *mempoolApi, name string, nodeConfig *co
 		Tokens:                    []string{"hello"},
 		Host:                      "host:port",
 		PublicChannelAmount:       1000183,
-		ChannelAmount:             100000,
-		ChannelPrivate:            false,
 		TargetConf:                6,
 		MinConfs:                  &minConfs,
 		MinHtlcMsat:               600,

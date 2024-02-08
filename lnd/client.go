@@ -249,9 +249,9 @@ func (c *LndClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoi
 		NodePubkey:         req.Destination,
 		LocalFundingAmount: int64(req.CapacitySat),
 		PushSat:            0,
-		Private:            req.IsPrivate,
+		Private:            true,
 		CommitmentType:     lnrpc.CommitmentType_ANCHORS,
-		ZeroConf:           req.IsZeroConf,
+		ZeroConf:           true,
 	}
 
 	if req.MinConfs != nil {
@@ -314,34 +314,6 @@ func (c *LndClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 	}
 	log.Printf("No channel found: getChannel(%x)", peerID)
 	return nil, fmt.Errorf("no channel found")
-}
-
-func (c *LndClient) GetNodeChannelCount(nodeID []byte) (int, error) {
-	nodeIDStr := hex.EncodeToString(nodeID)
-	listResponse, err := c.client.ListChannels(context.Background(), &lnrpc.ListChannelsRequest{})
-	if err != nil {
-		return 0, err
-	}
-
-	pendingResponse, err := c.client.PendingChannels(context.Background(), &lnrpc.PendingChannelsRequest{})
-	if err != nil {
-		return 0, err
-	}
-
-	count := 0
-	for _, channel := range listResponse.Channels {
-		if channel.RemotePubkey == nodeIDStr {
-			count++
-		}
-	}
-
-	for _, p := range pendingResponse.PendingOpenChannels {
-		if p.Channel.RemoteNodePub == nodeIDStr {
-			count++
-		}
-	}
-
-	return count, nil
 }
 
 func (c *LndClient) GetClosedChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error) {

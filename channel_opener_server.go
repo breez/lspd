@@ -11,7 +11,6 @@ import (
 	"github.com/breez/lspd/btceclegacy"
 	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/interceptor"
-	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
 	lspdrpc "github.com/breez/lspd/rpc"
 	ecies "github.com/ecies/go/v2"
@@ -19,7 +18,6 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/lnwire"
 )
 
@@ -167,50 +165,6 @@ func (s *channelOpenerServer) RegisterPayment(
 		return nil, fmt.Errorf("RegisterPayment() error: %w", err)
 	}
 	return &lspdrpc.RegisterPaymentReply{}, nil
-}
-
-func (s *channelOpenerServer) OpenChannel(ctx context.Context, in *lspdrpc.OpenChannelRequest) (*lspdrpc.OpenChannelReply, error) {
-	node, _, err := lspdrpc.GetNode(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	r, err, _ := node.OpenChannelReqGroup.Do(in.Pubkey, func() (interface{}, error) {
-		pubkey, err := hex.DecodeString(in.Pubkey)
-		if err != nil {
-			return nil, err
-		}
-
-		channelCount, err := node.Client.GetNodeChannelCount(pubkey)
-		if err != nil {
-			return nil, err
-		}
-
-		var outPoint *wire.OutPoint
-		if channelCount == 0 {
-			outPoint, err = node.Client.OpenChannel(&lightning.OpenChannelRequest{
-				CapacitySat: node.NodeConfig.ChannelAmount,
-				Destination: pubkey,
-				TargetConf:  &node.NodeConfig.TargetConf,
-				MinHtlcMsat: node.NodeConfig.MinHtlcMsat,
-				IsPrivate:   node.NodeConfig.ChannelPrivate,
-			})
-
-			if err != nil {
-				log.Printf("Error in OpenChannel: %v", err)
-				return nil, err
-			}
-
-			log.Printf("Response from OpenChannel: (TX: %v)", outPoint.String())
-		}
-
-		return &lspdrpc.OpenChannelReply{TxHash: outPoint.Hash.String(), OutputIndex: outPoint.Index}, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	return r.(*lspdrpc.OpenChannelReply), err
 }
 
 func getSignedEncryptedData(n *common.Node, in *lspdrpc.Encrypted) (string, []byte, bool, error) {
