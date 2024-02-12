@@ -31,7 +31,7 @@ In order to run the integration tests, you need:
 - python3 installed
 - A development build of lightningd v23.11
 - lnd v0.17.2 lsp version https://github.com/breez/lnd/commit/0c939786ced78a981bd77c7da628bfcf86ada568
-- lnd v0.16.4 breez client version https://github.com/breez/lnd/commit/3c0854adcfc924a6d759a6ee4640c41266b9f8b4
+- lnd v0.16.4 breez client version https://github.com/breez/lnd/commit/b9b7d37852321146dd7171809d673141fe1137bf
 - bitcoind (tested with v23.0)
 - bitcoin-cli (tested with v23.0)
 - build of lspd (`make release-lspd`)
