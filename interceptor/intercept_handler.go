@@ -255,7 +255,28 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 				}})
 				if err != nil {
 					// Don't break here, this is not critical.
-					log.Printf("paymentHash: %s, failed to insert newly opened channel in history store. %v", reqPaymentHashStr, channelPoint.String())
+					log.Printf("paymentHash: %s, failed to insert newly opened channel in history store. %v: %v", reqPaymentHashStr, channelPoint.String(), err)
+				}
+
+				err = i.historyStore.AddOpenChannelHtlc(context.TODO(), &history.OpenChannelHtlc{
+					NodeId:             i.nodeid,
+					PeerId:             destination,
+					ChannelPoint:       channelPoint,
+					OriginalAmountMsat: req.OutgoingAmountMsat,
+					ForwardAmountMsat:  uint64(amt),
+					IncomingAmountMsat: req.IncomingAmountMsat,
+					ForwardTime:        time.Now(),
+				})
+				if err != nil {
+					// Don't break here, this is not critical.
+					log.Printf(
+						"paymentHash: %s, failed to insert htlc used for channel open in history store: channel: %v,"+
+							" original amount: %v, forward amount: %v",
+						reqPaymentHashStr,
+						channelPoint.String(),
+						req.OutgoingAmountMsat,
+						amt,
+					)
 				}
 
 				useLegacyOnionBlob := slices.Contains(i.config.LegacyOnionTokens, token)

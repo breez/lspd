@@ -345,3 +345,29 @@ func (s *HistoryStore) SetClnForwardOffsets(
 	)
 	return err
 }
+
+func (s *HistoryStore) AddOpenChannelHtlc(ctx context.Context, htlc *history.OpenChannelHtlc) error {
+	// TODO: Find an identifier equal to the forwarding_history identifier.
+	_, err := s.pool.Exec(ctx, `
+	INSERT INTO open_channel_htlcs (
+		nodeid
+	,	peerid
+	,	funding_tx_id
+	,	funding_tx_outnum
+	,	forward_amt_msat
+	,	original_amt_msat
+	,   incoming_amt_msat
+	,   forward_time
+	) VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`,
+		htlc.NodeId,
+		htlc.PeerId,
+		htlc.ChannelPoint.Hash[:],
+		htlc.ChannelPoint.Index,
+		int64(htlc.ForwardAmountMsat),
+		int64(htlc.OriginalAmountMsat),
+		int64(htlc.IncomingAmountMsat),
+		htlc.ForwardTime.UnixNano(),
+	)
+	return err
+}

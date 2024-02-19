@@ -26,6 +26,16 @@ type Forward struct {
 	ResolvedTime time.Time
 }
 
+type OpenChannelHtlc struct {
+	NodeId             []byte
+	PeerId             []byte
+	ChannelPoint       *wire.OutPoint
+	OriginalAmountMsat uint64
+	ForwardAmountMsat  uint64
+	IncomingAmountMsat uint64
+	ForwardTime        time.Time
+}
+
 type Store interface {
 	UpdateChannels(ctx context.Context, updates []*ChannelUpdate) error
 	InsertForwards(ctx context.Context, forwards []*Forward, nodeId []byte) error
@@ -33,4 +43,5 @@ type Store interface {
 	FetchClnForwardOffsets(ctx context.Context, nodeId []byte) (uint64, uint64, error)
 	SetClnForwardOffsets(ctx context.Context, nodeId []byte, created uint64, updated uint64) error
 	FetchLndForwardOffset(ctx context.Context, nodeId []byte) (*time.Time, error)
+	AddOpenChannelHtlc(ctx context.Context, htlc *OpenChannelHtlc) error
 }

@@ -625,8 +625,22 @@ func (i *Interceptor) handlePaymentChanOpened(event *paymentChanOpenedEvent) {
 		resolution.part.resolution <- resolution.resolution
 	}
 
+	now := time.Now()
 	payment.registration.IsComplete = true
-	go i.store.SetCompleted(context.TODO(), payment.registration.Id)
+	go func() {
+		i.store.SetCompleted(context.TODO(), payment.registration.Id)
+		for _, resolution := range resolutions {
+			i.historyStore.AddOpenChannelHtlc(context.TODO(), &history.OpenChannelHtlc{
+				NodeId:             i.config.NodeId,
+				PeerId:             destination,
+				ChannelPoint:       event.channelPoint,
+				OriginalAmountMsat: resolution.part.req.OutgoingAmountMsat,
+				ForwardAmountMsat:  resolution.resolution.AmountMsat,
+				IncomingAmountMsat: resolution.part.req.IncomingAmountMsat,
+				ForwardTime:        now,
+			})
+		}
+	}()
 	delete(i.inflightPayments, event.paymentId)
 }
 
