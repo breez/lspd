@@ -22,6 +22,7 @@ func main() {
 	}
 	app.Commands = []cli.Command{
 		exportForwardsCommand,
+		revenueCommand,
 	}
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
