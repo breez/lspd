@@ -43,6 +43,8 @@ func defaultOpeningFeeParams() common.OpeningFeeParams {
 		ValidUntil:           time.Now().UTC().Add(5 * time.Hour).Format(lsps0.TIME_FORMAT),
 		MinLifetime:          1000,
 		MaxClientToSelfDelay: 2016,
+		MinPaymentSizeMsat:   1000,
+		MaxPaymentSizeMsat:   4_000_000_000,
 		Promise:              "fake",
 	}
 }

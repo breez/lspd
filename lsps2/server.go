@@ -26,8 +26,6 @@ type GetInfoRequest struct {
 
 type GetInfoResponse struct {
 	OpeningFeeParamsMenu []*OpeningFeeParams `json:"opening_fee_params_menu"`
-	MinPaymentSizeMsat   uint64              `json:"min_payment_size_msat,string"`
-	MaxPaymentSizeMsat   uint64              `json:"max_payment_size_msat,string"`
 }
 
 type OpeningFeeParams struct {
@@ -36,6 +34,8 @@ type OpeningFeeParams struct {
 	ValidUntil           string `json:"valid_until"`
 	MinLifetime          uint32 `json:"min_lifetime"`
 	MaxClientToSelfDelay uint32 `json:"max_client_to_self_delay"`
+	MinPaymentSizeMsat   uint64 `json:"min_payment_size_msat,string"`
+	MaxPaymentSizeMsat   uint64 `json:"max_payment_size_msat,string"`
 	Promise              string `json:"promise"`
 }
 
@@ -149,13 +149,13 @@ func (s *server) GetInfo(
 			ValidUntil:           p.ValidUntil,
 			MinLifetime:          p.MinLifetime,
 			MaxClientToSelfDelay: p.MaxClientToSelfDelay,
+			MinPaymentSizeMsat:   p.MinPaymentSizeMsat,
+			MaxPaymentSizeMsat:   p.MaxPaymentSizeMsat,
 			Promise:              p.Promise,
 		})
 	}
 	return &GetInfoResponse{
 		OpeningFeeParamsMenu: menu,
-		MinPaymentSizeMsat:   node.NodeConfig.MinPaymentSizeMsat,
-		MaxPaymentSizeMsat:   node.NodeConfig.MaxPaymentSizeMsat,
 	}, nil
 }
 
@@ -173,6 +173,8 @@ func (s *server) Buy(
 		ValidUntil:           request.OpeningFeeParams.ValidUntil,
 		MinLifetime:          request.OpeningFeeParams.MinLifetime,
 		MaxClientToSelfDelay: request.OpeningFeeParams.MaxClientToSelfDelay,
+		MinPaymentSizeMsat:   request.OpeningFeeParams.MinPaymentSizeMsat,
+		MaxPaymentSizeMsat:   request.OpeningFeeParams.MaxPaymentSizeMsat,
 		Promise:              request.OpeningFeeParams.Promise,
 	}
 	paramsValid := s.openingService.ValidateOpeningFeeParams(

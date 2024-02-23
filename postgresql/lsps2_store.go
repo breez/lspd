@@ -59,10 +59,12 @@ func (s *Lsps2Store) RegisterBuy(
 		 ,  params_valid_until
 		 ,  params_min_lifetime
 		 ,  params_max_client_to_self_delay
+		 ,  params_min_payment_size_msat
+		 ,  params_max_payment_size_msat
 		 ,  params_promise
 		 ,  token
 		 )
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
 		uuid,
 		req.LspId,
 		req.PeerId,
@@ -74,6 +76,8 @@ func (s *Lsps2Store) RegisterBuy(
 		req.OpeningFeeParams.ValidUntil,
 		req.OpeningFeeParams.MinLifetime,
 		req.OpeningFeeParams.MaxClientToSelfDelay,
+		req.OpeningFeeParams.MinPaymentSizeMsat,
+		req.OpeningFeeParams.MaxPaymentSizeMsat,
 		req.OpeningFeeParams.Promise,
 		token,
 	)
@@ -102,6 +106,8 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 		,       r.params_valid_until
 		,       r.params_min_lifetime
 		,       r.params_max_client_to_self_delay
+		,       r.params_min_payment_size_msat
+		,       r.params_max_payment_size_msat
 		,       r.params_promise
 		,       r.token
 		,       c.funding_tx_id
@@ -123,6 +129,8 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 	var db_params_valid_until string
 	var db_params_min_lifetime uint32
 	var db_params_max_client_to_self_delay uint32
+	var db_params_min_payment_size_msat int64
+	var db_params_max_payment_size_msat int64
 	var db_params_promise string
 	var db_token string
 	var db_funding_tx_id *[]byte
@@ -140,6 +148,8 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 		&db_params_valid_until,
 		&db_params_min_lifetime,
 		&db_params_max_client_to_self_delay,
+		&db_params_min_payment_size_msat,
+		&db_params_max_payment_size_msat,
 		&db_params_promise,
 		&db_token,
 		&db_funding_tx_id,
@@ -183,6 +193,8 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 			ValidUntil:           db_params_valid_until,
 			MinLifetime:          db_params_min_lifetime,
 			MaxClientToSelfDelay: db_params_max_client_to_self_delay,
+			MinPaymentSizeMsat:   uint64(db_params_min_payment_size_msat),
+			MaxPaymentSizeMsat:   uint64(db_params_max_payment_size_msat),
 			Promise:              db_params_promise,
 		},
 		PaymentSizeMsat: paymentSizeMsat,

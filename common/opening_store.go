@@ -13,6 +13,8 @@ type OpeningFeeParams struct {
 	ValidUntil           string `json:"valid_until"`
 	MinLifetime          uint32 `json:"max_idle_time"`
 	MaxClientToSelfDelay uint32 `json:"max_client_to_self_delay"`
+	MinPaymentSizeMsat   uint64 `json:"min_payment_size_msat,string"`
+	MaxPaymentSizeMsat   uint64 `json:"max_payment_size_msat,string"`
 	Promise              string `json:"promise"`
 }
 

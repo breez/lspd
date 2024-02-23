@@ -239,6 +239,9 @@ func (i *Interceptor) processPart(payment *paymentState, part *partState) {
 		payment.paymentSizeMsat = part.req.OutgoingAmountMsat
 
 		// Make sure the minimum and maximum are not exceeded.
+		// TODO: Take min/max values for below checks from OpeningFeeParams
+		// This can be done when all clients have upgraded, or by creating
+		// a different paramsHash for LSPS2 than for the grpc version.
 		if payment.paymentSizeMsat > i.config.MaxPaymentSizeMsat ||
 			payment.paymentSizeMsat < i.config.MinPaymentSizeMsat {
 			i.failPart(payment, part, common.FAILURE_UNKNOWN_NEXT_PEER)

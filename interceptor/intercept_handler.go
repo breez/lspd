@@ -178,6 +178,8 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 					ValidUntil:           time.Now().UTC().Add(time.Duration(time.Hour * 24)).Format(lsps0.TIME_FORMAT),
 					MinLifetime:          uint32(i.config.MaxInactiveDuration / 600),
 					MaxClientToSelfDelay: uint32(10000),
+					MinPaymentSizeMsat:   i.config.MinPaymentSizeMsat,
+					MaxPaymentSizeMsat:   i.config.MaxPaymentSizeMsat,
 				}
 			}
 

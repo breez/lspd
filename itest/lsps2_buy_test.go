@@ -48,13 +48,13 @@ func testLsps2Buy(p *testParams) {
 		ValidUntil           string `json:"valid_until"`
 		MinLifetime          uint32 `json:"min_lifetime"`
 		MaxClientToSelfDelay uint32 `json:"max_client_to_self_delay"`
+		MinPaymentSizeMsat   uint64 `json:"min_payment_size_msat,string"`
+		MaxPaymentSizeMsat   uint64 `json:"max_payment_size_msat,string"`
 		Promise              string `json:"promise"`
 	}
 	data := new(struct {
 		Result struct {
-			Menu       []params `json:"opening_fee_params_menu"`
-			MinPayment uint64   `json:"min_payment_size_msat,string"`
-			MaxPayment uint64   `json:"max_payment_size_msat,string"`
+			Menu []params `json:"opening_fee_params_menu"`
 		} `json:"result"`
 	})
 	err := json.Unmarshal(resp.Data[:], &data)

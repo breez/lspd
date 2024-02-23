@@ -208,8 +208,8 @@ func (l *lspBase) Initialize() error {
 		l.harness.Ctx,
 		`INSERT INTO new_channel_params (validity, params, token)
 		 VALUES 
-		  (3600, '{"min_msat": "1000000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432}', 'hello'),
-		  (259200, '{"min_msat": "1100000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432}', 'hello');`,
+		  (3600, '{"min_msat": "1000000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432, "min_payment_size_msat": "1000", "max_payment_size_msat": "4000000000"}', 'hello'),
+		  (259200, '{"min_msat": "1100000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432, "min_payment_size_msat": "1000", "max_payment_size_msat": "4000000000"}', 'hello');`,
 	)
 	if err != nil {
 		lntest.PerformCleanup(cleanups)
@@ -345,7 +345,7 @@ func SetFeeParams(l LspNode, settings []*FeeParamSetting) error {
 		}
 
 		query += fmt.Sprintf(
-			`(%d, '{"min_msat": "%d", "proportional": %d, "max_idle_time": 4320, "max_client_to_self_delay": 432}', 'hello')`,
+			`(%d, '{"min_msat": "%d", "proportional": %d, "max_idle_time": 4320, "max_client_to_self_delay": 432, "min_payment_size_msat": "1000", "max_payment_size_msat": "4000000000"}', 'hello')`,
 			int64(setting.Validity.Seconds()),
 			setting.MinMsat,
 			setting.Proportional,

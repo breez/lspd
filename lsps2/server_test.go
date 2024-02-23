@@ -68,8 +68,6 @@ func Test_GetInfo_EmptyMenu(t *testing.T) {
 
 	assert.Nil(t, err)
 	assert.Equal(t, []*OpeningFeeParams{}, resp.OpeningFeeParamsMenu)
-	assert.Equal(t, node.NodeConfig.MinPaymentSizeMsat, resp.MinPaymentSizeMsat)
-	assert.Equal(t, node.NodeConfig.MaxPaymentSizeMsat, resp.MaxPaymentSizeMsat)
 }
 
 func Test_GetInfo_PopulatedMenu_Ordered(t *testing.T) {
@@ -82,14 +80,18 @@ func Test_GetInfo_PopulatedMenu_Ordered(t *testing.T) {
 			ValidUntil:           "a",
 			MinLifetime:          3,
 			MaxClientToSelfDelay: 4,
+			MinPaymentSizeMsat:   5,
+			MaxPaymentSizeMsat:   6,
 			Promise:              "b",
 		},
 		{
-			MinFeeMsat:           5,
-			Proportional:         6,
+			MinFeeMsat:           7,
+			Proportional:         8,
 			ValidUntil:           "c",
-			MinLifetime:          7,
-			MaxClientToSelfDelay: 8,
+			MinLifetime:          9,
+			MaxClientToSelfDelay: 10,
+			MinPaymentSizeMsat:   11,
+			MaxPaymentSizeMsat:   12,
 			Promise:              "d",
 		},
 	}}
@@ -108,17 +110,18 @@ func Test_GetInfo_PopulatedMenu_Ordered(t *testing.T) {
 	assert.Equal(t, "a", resp.OpeningFeeParamsMenu[0].ValidUntil)
 	assert.Equal(t, uint32(3), resp.OpeningFeeParamsMenu[0].MinLifetime)
 	assert.Equal(t, uint32(4), resp.OpeningFeeParamsMenu[0].MaxClientToSelfDelay)
+	assert.Equal(t, uint64(5), resp.OpeningFeeParamsMenu[0].MinPaymentSizeMsat)
+	assert.Equal(t, uint64(6), resp.OpeningFeeParamsMenu[0].MaxPaymentSizeMsat)
 	assert.Equal(t, "b", resp.OpeningFeeParamsMenu[0].Promise)
 
-	assert.Equal(t, uint64(5), resp.OpeningFeeParamsMenu[1].MinFeeMsat)
-	assert.Equal(t, uint32(6), resp.OpeningFeeParamsMenu[1].Proportional)
+	assert.Equal(t, uint64(7), resp.OpeningFeeParamsMenu[1].MinFeeMsat)
+	assert.Equal(t, uint32(8), resp.OpeningFeeParamsMenu[1].Proportional)
 	assert.Equal(t, "c", resp.OpeningFeeParamsMenu[1].ValidUntil)
-	assert.Equal(t, uint32(7), resp.OpeningFeeParamsMenu[1].MinLifetime)
-	assert.Equal(t, uint32(8), resp.OpeningFeeParamsMenu[1].MaxClientToSelfDelay)
+	assert.Equal(t, uint32(9), resp.OpeningFeeParamsMenu[1].MinLifetime)
+	assert.Equal(t, uint32(10), resp.OpeningFeeParamsMenu[1].MaxClientToSelfDelay)
+	assert.Equal(t, uint64(11), resp.OpeningFeeParamsMenu[1].MinPaymentSizeMsat)
+	assert.Equal(t, uint64(12), resp.OpeningFeeParamsMenu[1].MaxPaymentSizeMsat)
 	assert.Equal(t, "d", resp.OpeningFeeParamsMenu[1].Promise)
-
-	assert.Equal(t, node.NodeConfig.MinPaymentSizeMsat, resp.MinPaymentSizeMsat)
-	assert.Equal(t, node.NodeConfig.MaxPaymentSizeMsat, resp.MaxPaymentSizeMsat)
 }
 
 func Test_Buy_UnsupportedVersion(t *testing.T) {
@@ -151,6 +154,8 @@ func Test_Buy_InvalidFeeParams(t *testing.T) {
 			ValidUntil:           "2023-08-18T13:39:00.000Z",
 			MinLifetime:          3,
 			MaxClientToSelfDelay: 4,
+			MinPaymentSizeMsat:   5,
+			MaxPaymentSizeMsat:   6,
 			Promise:              "fake",
 		},
 	})
@@ -241,6 +246,8 @@ func Test_Buy_PaymentSize(t *testing.T) {
 						ValidUntil:           "2023-08-18T13:39:00.000Z",
 						MinLifetime:          3,
 						MaxClientToSelfDelay: 4,
+						MinPaymentSizeMsat:   5,
+						MaxPaymentSizeMsat:   6,
 						Promise:              "fake",
 					},
 					PaymentSizeMsat: &c.paymentSize,
@@ -276,6 +283,8 @@ func Test_Buy_Registered(t *testing.T) {
 			ValidUntil:           "2023-08-18T13:39:00.000Z",
 			MinLifetime:          3,
 			MaxClientToSelfDelay: 4,
+			MinPaymentSizeMsat:   5,
+			MaxPaymentSizeMsat:   6,
 			Promise:              "fake",
 		},
 		PaymentSizeMsat: &paymentSize,

@@ -55,6 +55,8 @@ func (s *openingService) GetFeeParamsMenu(token string, privateKey *btcec.Privat
 			ValidUntil:           validUntil.Format(lsps0.TIME_FORMAT),
 			MinLifetime:          setting.Params.MinLifetime,
 			MaxClientToSelfDelay: setting.Params.MaxClientToSelfDelay,
+			MinPaymentSizeMsat:   setting.Params.MinPaymentSizeMsat,
+			MaxPaymentSizeMsat:   setting.Params.MaxPaymentSizeMsat,
 		}
 
 		promise, err := createPromise(privateKey, params)
@@ -133,6 +135,9 @@ func createPromise(lspPrivateKey *btcec.PrivateKey, params *OpeningFeeParams) (*
 }
 
 func paramsHash(params *OpeningFeeParams) ([]byte, error) {
+	// TODO: Include MinPaymentSizeMsat and MaxPaymentSizeMsat in the hash once all clients
+	// have upgraded.
+
 	// First hash all the values in the params in a fixed order.
 	items := []interface{}{
 		params.MinFeeMsat,

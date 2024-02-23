@@ -57,6 +57,8 @@ func (s *channelOpenerServer) ChannelInformation(ctx context.Context, in *lspdrp
 			ValidUntil:           p.ValidUntil,
 			MaxIdleTime:          p.MinLifetime,
 			MaxClientToSelfDelay: p.MaxClientToSelfDelay,
+			MinPaymentSizeMsat:   p.MinPaymentSizeMsat,
+			MaxPaymentSizeMsat:   p.MaxPaymentSizeMsat,
 			Promise:              p.Promise,
 		})
 	}
@@ -129,6 +131,8 @@ func (s *channelOpenerServer) RegisterPayment(
 				ValidUntil:           pi.OpeningFeeParams.ValidUntil,
 				MinLifetime:          pi.OpeningFeeParams.MaxIdleTime,
 				MaxClientToSelfDelay: pi.OpeningFeeParams.MaxClientToSelfDelay,
+				MinPaymentSizeMsat:   pi.OpeningFeeParams.MinPaymentSizeMsat,
+				MaxPaymentSizeMsat:   pi.OpeningFeeParams.MaxPaymentSizeMsat,
 				Promise:              pi.OpeningFeeParams.Promise,
 			},
 			node.PublicKey,
@@ -145,6 +149,8 @@ func (s *channelOpenerServer) RegisterPayment(
 			ValidUntil:           time.Now().UTC().Add(time.Duration(time.Hour * 24)).Format(lsps0.TIME_FORMAT),
 			MaxIdleTime:          uint32(node.NodeConfig.MaxInactiveDuration / 600),
 			MaxClientToSelfDelay: uint32(10000),
+			MinPaymentSizeMsat:   node.NodeConfig.MinPaymentSizeMsat,
+			MaxPaymentSizeMsat:   node.NodeConfig.MaxPaymentSizeMsat,
 		}
 	}
 
@@ -159,6 +165,8 @@ func (s *channelOpenerServer) RegisterPayment(
 		ValidUntil:           pi.OpeningFeeParams.ValidUntil,
 		MinLifetime:          pi.OpeningFeeParams.MaxIdleTime,
 		MaxClientToSelfDelay: pi.OpeningFeeParams.MaxClientToSelfDelay,
+		MinPaymentSizeMsat:   pi.OpeningFeeParams.MinPaymentSizeMsat,
+		MaxPaymentSizeMsat:   pi.OpeningFeeParams.MaxPaymentSizeMsat,
 		Promise:              pi.OpeningFeeParams.Promise,
 	}
 	err = s.store.RegisterPayment(token, params, pi.Destination, pi.PaymentHash, pi.PaymentSecret, pi.IncomingAmountMsat, pi.OutgoingAmountMsat, pi.Tag)

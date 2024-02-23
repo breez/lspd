@@ -86,10 +86,16 @@ type NodeConfig struct {
 
 	// The minimum payment size accepted in LSPS2 forwards that need a channel
 	// open.
+	//
+	// Deprecated: MinPaymentSizeMsat is now part of the OpeningFeeParams
+	// settings.
 	MinPaymentSizeMsat uint64 `json:"minPaymentSizeMsat,string"`
 
 	// The maximum payment size accepted in LSPS2 forwards that need a channel
 	// open.
+	//
+	// Deprecated: MaxPaymentSizeMsat is now part of the OpeningFeeParams
+	// settings.
 	MaxPaymentSizeMsat uint64 `json:"maxPaymentSizeMsat,string"`
 
 	// Set this field to connect to an LND node.

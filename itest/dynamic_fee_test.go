@@ -66,6 +66,8 @@ func testDynamicFeeFlow(p *testParams) {
 			ValidUntil:           params.ValidUntil,
 			MaxIdleTime:          params.MaxIdleTime,
 			MaxClientToSelfDelay: params.MaxClientToSelfDelay,
+			MinPaymentSizeMsat:   params.MinPaymentSizeMsat,
+			MaxPaymentSizeMsat:   params.MaxPaymentSizeMsat,
 			Promise:              params.Promise,
 		},
 	}, true)
@@ -83,6 +85,8 @@ func testDynamicFeeFlow(p *testParams) {
 			ValidUntil:           params.ValidUntil,
 			MaxIdleTime:          params.MaxIdleTime,
 			MaxClientToSelfDelay: params.MaxClientToSelfDelay,
+			MinPaymentSizeMsat:   params.MinPaymentSizeMsat,
+			MaxPaymentSizeMsat:   params.MaxPaymentSizeMsat,
 			// Modify promise
 			Promise: params.Promise + "aa",
 		},
