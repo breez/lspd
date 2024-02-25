@@ -76,6 +76,27 @@ func (s *NotificationsStore) GetRegistrations(
 	return result, nil
 }
 
+func (s *NotificationsStore) Unsubscribe(
+	ctx context.Context,
+	pubkey string,
+	url string,
+) error {
+	pk, err := hex.DecodeString(pubkey)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.pool.Exec(
+		ctx,
+		`DELETE FROM public.notification_subscriptions
+		 WHERE pubkey = $1 AND url = $2`,
+		pk,
+		url,
+	)
+
+	return nil
+}
+
 func (s *NotificationsStore) RemoveExpired(
 	ctx context.Context,
 	before time.Time,

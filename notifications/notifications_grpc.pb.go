@@ -23,6 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type NotificationsClient interface {
 	SubscribeNotifications(ctx context.Context, in *EncryptedNotificationRequest, opts ...grpc.CallOption) (*SubscribeNotificationsReply, error)
+	UnsubscribeNotifications(ctx context.Context, in *EncryptedNotificationRequest, opts ...grpc.CallOption) (*UnsubscribeNotificationsReply, error)
 }
 
 type notificationsClient struct {
@@ -42,11 +43,21 @@ func (c *notificationsClient) SubscribeNotifications(ctx context.Context, in *En
 	return out, nil
 }
 
+func (c *notificationsClient) UnsubscribeNotifications(ctx context.Context, in *EncryptedNotificationRequest, opts ...grpc.CallOption) (*UnsubscribeNotificationsReply, error) {
+	out := new(UnsubscribeNotificationsReply)
+	err := c.cc.Invoke(ctx, "/notifications.Notifications/UnsubscribeNotifications", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NotificationsServer is the server API for Notifications service.
 // All implementations must embed UnimplementedNotificationsServer
 // for forward compatibility
 type NotificationsServer interface {
 	SubscribeNotifications(context.Context, *EncryptedNotificationRequest) (*SubscribeNotificationsReply, error)
+	UnsubscribeNotifications(context.Context, *EncryptedNotificationRequest) (*UnsubscribeNotificationsReply, error)
 	mustEmbedUnimplementedNotificationsServer()
 }
 
@@ -56,6 +67,9 @@ type UnimplementedNotificationsServer struct {
 
 func (UnimplementedNotificationsServer) SubscribeNotifications(context.Context, *EncryptedNotificationRequest) (*SubscribeNotificationsReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubscribeNotifications not implemented")
+}
+func (UnimplementedNotificationsServer) UnsubscribeNotifications(context.Context, *EncryptedNotificationRequest) (*UnsubscribeNotificationsReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnsubscribeNotifications not implemented")
 }
 func (UnimplementedNotificationsServer) mustEmbedUnimplementedNotificationsServer() {}
 
@@ -88,6 +102,24 @@ func _Notifications_SubscribeNotifications_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Notifications_UnsubscribeNotifications_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EncryptedNotificationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NotificationsServer).UnsubscribeNotifications(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/notifications.Notifications/UnsubscribeNotifications",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NotificationsServer).UnsubscribeNotifications(ctx, req.(*EncryptedNotificationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Notifications_ServiceDesc is the grpc.ServiceDesc for Notifications service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -98,6 +130,10 @@ var Notifications_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubscribeNotifications",
 			Handler:    _Notifications_SubscribeNotifications_Handler,
+		},
+		{
+			MethodName: "UnsubscribeNotifications",
+			Handler:    _Notifications_UnsubscribeNotifications_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
