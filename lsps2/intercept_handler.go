@@ -22,8 +22,6 @@ type InterceptorConfig struct {
 	MinConfs                     *uint32
 	TargetConf                   uint32
 	FeeStrategy                  chain.FeeStrategy
-	MinPaymentSizeMsat           uint64
-	MaxPaymentSizeMsat           uint64
 	TimeLockDelta                uint32
 	HtlcMinimumMsat              uint64
 	MppTimeout                   time.Duration
@@ -32,7 +30,7 @@ type InterceptorConfig struct {
 type Interceptor struct {
 	store               Lsps2Store
 	historyStore        history.Store
-	openingService      common.OpeningService
+	openingService      OpeningService
 	client              lightning.Client
 	feeEstimator        chain.FeeEstimator
 	config              *InterceptorConfig
@@ -47,7 +45,7 @@ type Interceptor struct {
 func NewInterceptHandler(
 	store Lsps2Store,
 	historyStore history.Store,
-	openingService common.OpeningService,
+	openingService OpeningService,
 	client lightning.Client,
 	feeEstimator chain.FeeEstimator,
 	config *InterceptorConfig,
@@ -239,8 +237,8 @@ func (i *Interceptor) processPart(payment *paymentState, part *partState) {
 		payment.paymentSizeMsat = part.req.OutgoingAmountMsat
 
 		// Make sure the minimum and maximum are not exceeded.
-		if payment.paymentSizeMsat > i.config.MaxPaymentSizeMsat ||
-			payment.paymentSizeMsat < i.config.MinPaymentSizeMsat {
+		if payment.paymentSizeMsat > payment.registration.OpeningFeeParams.MaxPaymentSizeMsat ||
+			payment.paymentSizeMsat < payment.registration.OpeningFeeParams.MinPaymentSizeMsat {
 			i.failPart(payment, part, common.FAILURE_UNKNOWN_NEXT_PEER)
 			return
 		}
@@ -402,6 +400,7 @@ func (i *Interceptor) ensureChannelOpen(payment *paymentState) {
 		// they're not cheaper now, fail the payment.
 		if time.Now().After(validUntil) &&
 			!i.openingService.IsCurrentChainFeeCheaper(
+				context.TODO(),
 				payment.registration.Token,
 				&payment.registration.OpeningFeeParams,
 			) {

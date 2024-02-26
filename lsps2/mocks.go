@@ -31,29 +31,31 @@ func (m *mockNodesService) GetNodes() []*common.Node {
 }
 
 type mockOpeningService struct {
-	menu                     []*common.OpeningFeeParams
+	menu                     []*OpeningFeeParams
 	err                      error
 	invalid                  bool
 	isCurrentChainFeeCheaper bool
 }
 
 func (m *mockOpeningService) GetFeeParamsMenu(
+	ctx context.Context,
 	token string,
 	privateKey *btcec.PrivateKey,
-) ([]*common.OpeningFeeParams, error) {
+) ([]*OpeningFeeParams, error) {
 	return m.menu, m.err
 }
 
 func (m *mockOpeningService) ValidateOpeningFeeParams(
-	params *common.OpeningFeeParams,
+	params *OpeningFeeParams,
 	publicKey *btcec.PublicKey,
 ) bool {
 	return !m.invalid
 }
 
 func (m *mockOpeningService) IsCurrentChainFeeCheaper(
+	ctx context.Context,
 	token string,
-	params *common.OpeningFeeParams,
+	params *OpeningFeeParams,
 ) bool {
 	return m.isCurrentChainFeeCheaper
 }
@@ -95,6 +97,9 @@ func (s *mockLsps2Store) SavePromises(ctx context.Context, req *SavePromises) er
 
 func (s *mockLsps2Store) RemoveUnusedExpired(ctx context.Context, before time.Time) error {
 	return nil
+}
+func (s *mockLsps2Store) GetFeeParamsSettings(ctx context.Context, token string) ([]*OpeningFeeParamsSetting, error) {
+	return nil, ErrNotImplemented
 }
 
 type mockHistoryStore struct{}

@@ -106,6 +106,7 @@ func main() {
 	notificationService := notifications.NewNotificationService(notificationsStore)
 	go notificationService.Start(ctx)
 	openingService := common.NewOpeningService(openingStore, nodesService)
+	lsps2OpeningService := lsps2.NewOpeningService(openingStore)
 	lsps2CleanupService := lsps2.NewCleanupService(lsps2Store)
 	go lsps2CleanupService.Start(ctx)
 	notificationCleanupService := notifications.NewCleanupService(notificationsStore)
@@ -149,14 +150,12 @@ func main() {
 			forwardSync := cln.NewForwardSync(node.NodeId, client, historyStore)
 			go forwardSync.ForwardsSynchronize(ctx)
 			legacyHandler := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, feeStrategy, notificationService)
-			lsps2Handler := lsps2.NewInterceptHandler(lsps2Store, historyStore, openingService, client, feeEstimator, &lsps2.InterceptorConfig{
+			lsps2Handler := lsps2.NewInterceptHandler(lsps2Store, historyStore, lsps2OpeningService, client, feeEstimator, &lsps2.InterceptorConfig{
 				NodeId:                       node.NodeId,
 				AdditionalChannelCapacitySat: uint64(node.NodeConfig.AdditionalChannelCapacity),
 				MinConfs:                     node.NodeConfig.MinConfs,
 				TargetConf:                   node.NodeConfig.TargetConf,
 				FeeStrategy:                  feeStrategy,
-				MinPaymentSizeMsat:           node.NodeConfig.MinPaymentSizeMsat,
-				MaxPaymentSizeMsat:           node.NodeConfig.MaxPaymentSizeMsat,
 				TimeLockDelta:                node.NodeConfig.TimeLockDelta,
 				HtlcMinimumMsat:              node.NodeConfig.MinHtlcMsat,
 				MppTimeout:                   time.Second * 90,
@@ -172,7 +171,7 @@ func main() {
 			go msgClient.Start()
 			msgServer := lsps0.NewServer()
 			protocolServer := lsps0.NewProtocolServer([]uint32{2})
-			lsps2Server := lsps2.NewLsps2Server(openingService, nodesService, node, lsps2Store)
+			lsps2Server := lsps2.NewLsps2Server(lsps2OpeningService, nodesService, node, lsps2Store)
 			lsps0.RegisterProtocolServer(msgServer, protocolServer)
 			lsps2.RegisterLsps2Server(msgServer, lsps2Server)
 			msgClient.WaitStarted()

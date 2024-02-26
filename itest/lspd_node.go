@@ -116,8 +116,6 @@ func newLspd(h *lntest.TestHarness, mem *mempoolApi, name string, nodeConfig *co
 		ChannelMinimumFeeMsat:     2000000,
 		AdditionalChannelCapacity: 100000,
 		MaxInactiveDuration:       3888000,
-		MinPaymentSizeMsat:        600,
-		MaxPaymentSizeMsat:        4000000000,
 		Lnd:                       lnd,
 		Cln:                       cln,
 	}
@@ -206,10 +204,18 @@ func (l *lspBase) Initialize() error {
 
 	_, err = l.postgresBackend.Pool().Exec(
 		l.harness.Ctx,
-		`INSERT INTO new_channel_params (validity, params, token)
+		`INSERT INTO new_channel_params (
+			token
+		,   validity
+		,   min_fee_msat
+		,   proportional
+		,   min_lifetime
+		,   max_client_to_self_delay
+		,   min_payment_size_msat
+		,   max_payment_size_msat)
 		 VALUES 
-		  (3600, '{"min_msat": "1000000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432}', 'hello'),
-		  (259200, '{"min_msat": "1100000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432}', 'hello');`,
+		  ('hello', 3600, 1000000, 7500, 4320, 432, 1000, 4000000000),
+		  ('hello', 259200, 1100000, 7500, 4320, 432, 1000, 4000000000);`,
 	)
 	if err != nil {
 		lntest.PerformCleanup(cleanups)
@@ -337,7 +343,15 @@ func SetFeeParams(l LspNode, settings []*FeeParamSetting) error {
 		return nil
 	}
 
-	query := `INSERT INTO new_channel_params (validity, params, token) VALUES `
+	query := `INSERT INTO new_channel_params (
+		token
+	,   validity
+	,   min_fee_msat
+	,   proportional
+	,   min_lifetime
+	,   max_client_to_self_delay
+	,   min_payment_size_msat
+	,   max_payment_size_msat) VALUES `
 	first := true
 	for _, setting := range settings {
 		if !first {
@@ -345,7 +359,7 @@ func SetFeeParams(l LspNode, settings []*FeeParamSetting) error {
 		}
 
 		query += fmt.Sprintf(
-			`(%d, '{"min_msat": "%d", "proportional": %d, "max_idle_time": 4320, "max_client_to_self_delay": 432}', 'hello')`,
+			`('hello', %d, %d, %d, 4320, 432, 1000, 4000000000)`,
 			int64(setting.Validity.Seconds()),
 			setting.MinMsat,
 			setting.Proportional,

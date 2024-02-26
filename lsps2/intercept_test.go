@@ -36,13 +36,15 @@ var defaultChanResult = &lightning.GetChannelResult{
 	ConfirmedScid:   (*lightning.ShortChannelID)(&defaultChannelScid),
 }
 
-func defaultOpeningFeeParams() common.OpeningFeeParams {
-	return common.OpeningFeeParams{
+func defaultOpeningFeeParams() OpeningFeeParams {
+	return OpeningFeeParams{
 		MinFeeMsat:           1000,
 		Proportional:         1000,
 		ValidUntil:           time.Now().UTC().Add(5 * time.Hour).Format(lsps0.TIME_FORMAT),
 		MinLifetime:          1000,
 		MaxClientToSelfDelay: 2016,
+		MinPaymentSizeMsat:   1000,
+		MaxPaymentSizeMsat:   4_000_000_000,
 		Promise:              "fake",
 	}
 }
@@ -96,8 +98,6 @@ func defaultConfig() *InterceptorConfig {
 		MinConfs:                     &minConfs,
 		TargetConf:                   6,
 		FeeStrategy:                  chain.FeeStrategyEconomy,
-		MinPaymentSizeMsat:           1_000,
-		MaxPaymentSizeMsat:           4_000_000_000,
 		TimeLockDelta:                144,
 		HtlcMinimumMsat:              100,
 	}
@@ -295,7 +295,7 @@ func Test_NoMpp_AmtAtMaximum(t *testing.T) {
 	defer cancel()
 	i := setupInterceptor(ctx, nil)
 
-	res := i.Intercept(createPart(&part{amt: defaultConfig().MaxPaymentSizeMsat}))
+	res := i.Intercept(createPart(&part{amt: defaultOpeningFeeParams().MaxPaymentSizeMsat}))
 	assert.Equal(t, common.INTERCEPT_RESUME_WITH_ONION, res.Action)
 	assertEmpty(t, i)
 }
@@ -307,7 +307,7 @@ func Test_NoMpp_AmtAboveMaximum(t *testing.T) {
 	defer cancel()
 	i := setupInterceptor(ctx, nil)
 
-	res := i.Intercept(createPart(&part{amt: defaultConfig().MaxPaymentSizeMsat + 1}))
+	res := i.Intercept(createPart(&part{amt: defaultOpeningFeeParams().MaxPaymentSizeMsat + 1}))
 	assert.Equal(t, common.INTERCEPT_FAIL_HTLC_WITH_CODE, res.Action)
 	assert.Equal(t, common.FAILURE_UNKNOWN_NEXT_PEER, res.FailureCode)
 	assertEmpty(t, i)

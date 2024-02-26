@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/GoWebProd/uuid7"
-	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/lsps2"
@@ -59,10 +58,12 @@ func (s *Lsps2Store) RegisterBuy(
 		 ,  params_valid_until
 		 ,  params_min_lifetime
 		 ,  params_max_client_to_self_delay
+		 ,  params_min_payment_size_msat
+		 ,  params_max_payment_size_msat
 		 ,  params_promise
 		 ,  token
 		 )
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
 		uuid,
 		req.LspId,
 		req.PeerId,
@@ -74,6 +75,8 @@ func (s *Lsps2Store) RegisterBuy(
 		req.OpeningFeeParams.ValidUntil,
 		req.OpeningFeeParams.MinLifetime,
 		req.OpeningFeeParams.MaxClientToSelfDelay,
+		int64(req.OpeningFeeParams.MinPaymentSizeMsat),
+		int64(req.OpeningFeeParams.MaxPaymentSizeMsat),
 		req.OpeningFeeParams.Promise,
 		token,
 	)
@@ -102,6 +105,8 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 		,       r.params_valid_until
 		,       r.params_min_lifetime
 		,       r.params_max_client_to_self_delay
+		,       r.params_min_payment_size_msat
+		,       r.params_max_payment_size_msat
 		,       r.params_promise
 		,       r.token
 		,       c.funding_tx_id
@@ -123,6 +128,8 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 	var db_params_valid_until string
 	var db_params_min_lifetime uint32
 	var db_params_max_client_to_self_delay uint32
+	var db_params_min_payment_size_msat int64
+	var db_params_max_payment_size_msat int64
 	var db_params_promise string
 	var db_token string
 	var db_funding_tx_id *[]byte
@@ -140,6 +147,8 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 		&db_params_valid_until,
 		&db_params_min_lifetime,
 		&db_params_max_client_to_self_delay,
+		&db_params_min_payment_size_msat,
+		&db_params_max_payment_size_msat,
 		&db_params_promise,
 		&db_token,
 		&db_funding_tx_id,
@@ -177,12 +186,14 @@ func (s *Lsps2Store) GetBuyRegistration(ctx context.Context, scid lightning.Shor
 		LspId:  db_lsp_id,
 		PeerId: db_peer_id,
 		Scid:   lightning.ShortChannelID(uint64(db_scid)),
-		OpeningFeeParams: common.OpeningFeeParams{
+		OpeningFeeParams: lsps2.OpeningFeeParams{
 			MinFeeMsat:           uint64(db_params_min_fee_msat),
 			Proportional:         db_params_proportional,
 			ValidUntil:           db_params_valid_until,
 			MinLifetime:          db_params_min_lifetime,
 			MaxClientToSelfDelay: db_params_max_client_to_self_delay,
+			MinPaymentSizeMsat:   uint64(db_params_min_payment_size_msat),
+			MaxPaymentSizeMsat:   uint64(db_params_max_payment_size_msat),
 			Promise:              db_params_promise,
 		},
 		PaymentSizeMsat: paymentSizeMsat,
@@ -306,4 +317,61 @@ func (s *Lsps2Store) RemoveUnusedExpired(
 	}
 
 	return tx.Commit(ctx)
+}
+
+func (s *Lsps2Store) GetFeeParamsSettings(
+	ctx context.Context,
+	token string,
+) ([]*lsps2.OpeningFeeParamsSetting, error) {
+	rows, err := s.pool.Query(context.Background(),
+		`SELECT validity
+		 ,      min_fee_msat
+		 ,      proportional
+		 ,      min_lifetime
+		 ,      max_client_to_self_delay
+		 ,      min_payment_size_msat
+		 ,      max_payment_size_msat
+		 FROM lsps2.opening_settings 
+		 WHERE token=$1 AND validity>0`, token)
+	if err != nil {
+		log.Printf("GetFeeParamsSettings(%v) error: %v", token, err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var settings []*lsps2.OpeningFeeParamsSetting
+	for rows.Next() {
+		var validity int64
+		var min_fee_msat int64
+		var proportional uint32
+		var min_lifetime uint32
+		var max_client_to_self_delay uint32
+		var min_payment_size_msat int64
+		var max_payment_size_msat int64
+		err = rows.Scan(
+			&validity,
+			&min_fee_msat,
+			&proportional,
+			&min_lifetime,
+			&max_client_to_self_delay,
+			&min_payment_size_msat,
+			&max_payment_size_msat,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		duration := time.Second * time.Duration(validity)
+		settings = append(settings, &lsps2.OpeningFeeParamsSetting{
+			Validity:             duration,
+			MinFeeMsat:           uint64(min_fee_msat),
+			Proportional:         proportional,
+			MinLifetime:          min_lifetime,
+			MaxClientToSelfDelay: max_client_to_self_delay,
+			MinPaymentSizeMsat:   uint64(min_payment_size_msat),
+			MaxPaymentSizeMsat:   uint64(max_payment_size_msat),
+		})
+	}
+
+	return settings, nil
 }
