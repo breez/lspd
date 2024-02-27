@@ -358,7 +358,7 @@ func (s *HistoryStore) AddOpenChannelHtlc(ctx context.Context, htlc *history.Ope
 	,	original_amt_msat
 	,   incoming_amt_msat
 	,   forward_time
-	) VALUES ($1, $2, $3, $4, $5, $6, $7)
+	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`,
 		htlc.NodeId,
 		htlc.PeerId,
