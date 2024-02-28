@@ -297,3 +297,43 @@ func testOfflineNotificationZeroConfChannel(p *testParams) {
 	actualheight := p.Miner().GetBlockHeight()
 	assert.Equal(p.t, expectedheight, actualheight)
 }
+
+func testNotificationsUnsubscribe(p *testParams) {
+	url := "http://127.0.0.1/api/v1/notify"
+	pubkey := hex.EncodeToString(p.BreezClient().Node().PrivateKey().PubKey().SerializeCompressed())
+
+	log.Printf("Client pubkey: %s", pubkey)
+
+	count_subscriptions := func() (uint64, error) {
+		row := p.lsp.PostgresBackend().Pool().QueryRow(
+			p.h.Ctx,
+			`SELECT COUNT(*)
+		 	 FROM public.notification_subscriptions
+		 	 WHERE pubkey = $1 AND url = $2`,
+			pubkey,
+			url,
+		)
+
+		var count uint64
+		if err := row.Scan(&count); err != nil {
+			p.h.T.Fatalf("Failed to query subscriptions: %v", err)
+			return 0, err
+		}
+
+		return count, nil
+	}
+
+	SubscribeNotifications(p.lsp, p.BreezClient(), url, false)
+
+	// Verify that we have subscribed to the webhook
+	count, err := count_subscriptions()
+	assert.Nil(p.h.T, err)
+	assert.Equal(p.h.T, count, 1)
+
+	UnsubscribeNotifications(p.lsp, p.BreezClient(), url, false)
+
+	// Verify that we have unsubscribed from the webhook
+	count, err = count_subscriptions()
+	assert.Nil(p.h.T, err)
+	assert.Equal(p.h.T, count, 0)
+}
