@@ -186,6 +186,10 @@ var allTestCases = []*testCase{
 		test: testOfflineNotificationZeroConfChannel,
 	},
 	{
+		name: "testNotificationsUnsubscribe",
+		test: testNotificationsUnsubscribe,
+	},
+	{
 		name:    "testLsps0GetProtocolVersions",
 		test:    testLsps0GetProtocolVersions,
 		isLsps2: true,

@@ -321,6 +321,38 @@ func SubscribeNotifications(l LspNode, b BreezClient, url string, continueOnErro
 	return err
 }
 
+func UnsubscribeNotifications(l LspNode, b BreezClient, url string, continueOnError bool) error {
+	msg := append(lightning.SignedMsgPrefix, []byte(url)...)
+	first := sha256.Sum256([]byte(msg))
+	second := sha256.Sum256(first[:])
+	sig, err := ecdsa.SignCompact(b.Node().PrivateKey(), second[:], true)
+	assert.NoError(b.Harness().T, err)
+	request := notifications.UnsubscribeNotificationsRequest{
+		Url:       url,
+		Signature: zbase32.EncodeToString(sig),
+	}
+	serialized, err := proto.Marshal(&request)
+	lntest.CheckError(l.Harness().T, err)
+
+	encrypted, err := ecies.Encrypt(l.EciesPublicKey(), serialized)
+	lntest.CheckError(l.Harness().T, err)
+
+	ctx := metadata.AppendToOutgoingContext(l.Harness().Ctx, "authorization", "Bearer hello")
+	log.Printf("Removing notification subscription")
+	_, err = l.NotificationsRpc().UnsubscribeNotifications(
+		ctx,
+		&notifications.EncryptedNotificationRequest{
+			Blob: encrypted,
+		},
+	)
+
+	if !continueOnError {
+		lntest.CheckError(l.Harness().T, err)
+	}
+
+	return nil
+}
+
 type FeeParamSetting struct {
 	Validity     time.Duration
 	MinMsat      uint64
