@@ -27,6 +27,8 @@ func testLsps2ZeroConfUtxo(p *testParams) {
 
 	tempaddr := lsp.LightningNode().GetNewAddress()
 	p.m.SendToAddress(tempaddr, 210000)
+	reserveaddr := lsp.LightningNode().GetNewAddress()
+	p.m.SendToAddress(reserveaddr, 50000)
 	p.m.MineBlocks(6)
 	lsp.LightningNode().WaitForSync()
 
