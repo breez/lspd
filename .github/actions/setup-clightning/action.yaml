@@ -12,7 +12,7 @@ runs:
   steps:
     - name: Cache Core Lightning
       id: cache-core-lightning
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           lightning_git/lightningd/lightning_hsmd
@@ -94,7 +94,7 @@ runs:
 
     - name: Checkout and build lightning
       if: steps.cache-core-lightning.outputs.cache-hit != 'true'
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: ElementsProject/lightning
         ref: ${{ inputs.checkout-version }}

@@ -16,10 +16,10 @@ concurrency:
 jobs:
 
   setup-bitcoin-core:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Bitcoin Core
         uses: ./.github/actions/setup-bitcoin
@@ -27,10 +27,10 @@ jobs:
           bitcoin-version: ${{ env.BITCOIN_VERSION }}
   
   setup-lnd-lsp:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up LND LSP
         uses: ./.github/actions/setup-lnd-lsp
@@ -39,10 +39,10 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
   setup-lnd-client:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up LND client
         uses: ./.github/actions/setup-lnd-client
@@ -51,10 +51,10 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
   setup-cln:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Core Lightning
         uses: ./.github/actions/setup-clightning
@@ -62,24 +62,24 @@ jobs:
           checkout-version: ${{ env.CLN_VERSION }}
 
   build-lspd:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Build LSPD and Upload Artifacts
         uses: ./.github/actions/build-lspd
 
   setup-itest:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup itest
         uses: ./.github/actions/setup-itest
 
 
   run-test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs:
       - setup-itest
       - setup-bitcoin-core
@@ -122,7 +122,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run and Process Test State
         uses: ./.github/actions/test-lspd
@@ -137,7 +137,7 @@ jobs:
           timeout: 6m
   
   run-lsps2-test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs:
       - setup-itest
       - setup-bitcoin-core
@@ -164,7 +164,7 @@ jobs:
         ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run and Process Test State
         uses: ./.github/actions/test-lspd
@@ -179,11 +179,11 @@ jobs:
           timeout: 6m
 
   run-unit-tests:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     name: Run unit tests
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Get dependencies
         run: |

@@ -17,7 +17,7 @@ runs:
   steps:
     - name: Cache LND LSP
       id: cache-lnd-lsp
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/go_lnd_lsp/bin/lnd
@@ -31,7 +31,7 @@ runs:
 
     - name: Checkout LND for LSP
       if: steps.cache-lnd-lsp.outputs.cache-hit != 'true'
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: breez/lnd
         ref: ${{ inputs.lsp-ref }}

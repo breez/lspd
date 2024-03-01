@@ -9,7 +9,7 @@ runs:
   steps:
     - name: Cache Bitcoin Core
       id: cache-bitcoin
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}/bin/bitcoind

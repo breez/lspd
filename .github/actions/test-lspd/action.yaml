@@ -41,19 +41,19 @@ runs:
       shell: bash
 
     - name: Cache LND client
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/go_lnd_client/bin/lnd
         key: go_lnd_client-${{ inputs.CLIENT_REF }}-${{ inputs.GO_VERSION }}
 
     - name: Cache LND LSP
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/go_lnd_lsp/bin/lnd
         key: go_lnd_lsp-${{ inputs.LSP_REF }}-${{ inputs.GO_VERSION }}
 
     - name: Cache Core Lightning
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           lightning_git/lightningd/lightning_hsmd
@@ -99,7 +99,7 @@ runs:
         key: core-lightning-${{ inputs.CLN_VERSION }}
 
     - name: Cache Bitcoin Core
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/bitcoin-core-${{ inputs.bitcoin-version }}/bitcoin-${{ inputs.bitcoin-version }}/bin/bitcoind
@@ -108,7 +108,7 @@ runs:
 
     - name: Cache itest
       id: cache-itest
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/go
