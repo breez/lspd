@@ -166,7 +166,6 @@ plugin=/home/lightning/.lightning/plugins/lspd_cln_plugin
 lsp-listen=127.0.0.1:12312
 max-concurrent-htlcs=30
 dev-allowdustreserve=true
-allow-deprecated-apis=true
 log-file=/var/log/lightningd/lightningd.log
 EOL
 chmod 755 /etc/lightningd/
