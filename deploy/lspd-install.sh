@@ -172,7 +172,7 @@ EOL
 chmod 755 /etc/lightningd/
 git clone https://github.com/ElementsProject/lightning.git /opt/lightning
 cd /opt/lightning
-git checkout v23.11
+git checkout v24.02
 ./configure
 make
 make install
