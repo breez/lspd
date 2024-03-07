@@ -271,11 +271,12 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 					// Don't break here, this is not critical.
 					log.Printf(
 						"paymentHash: %s, failed to insert htlc used for channel open in history store: channel: %v,"+
-							" original amount: %v, forward amount: %v",
+							" original amount: %v, forward amount: %v, error: %v",
 						reqPaymentHashStr,
 						channelPoint.String(),
 						req.OutgoingAmountMsat,
 						amt,
+						err,
 					)
 				}
 
