@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/breez/lntest"
 	"github.com/breez/lspd/config"
@@ -157,6 +158,7 @@ func (c *ClnLspNode) Start() {
 		},
 	})
 
+	<-time.After(time.Second)
 	conn, err := grpc.Dial(
 		c.lspBase.grpcAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
