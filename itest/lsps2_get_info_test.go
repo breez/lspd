@@ -62,12 +62,16 @@ func testLsps2GetInfo(p *testParams) {
 		ValidUntil           string `json:"valid_until"`
 		MinLifetime          uint32 `json:"min_lifetime"`
 		MaxClientToSelfDelay uint32 `json:"max_client_to_self_delay"`
+		MinPaymentSizeMsat   uint64 `json:"min_payment_size_msat,string"`
+		MaxPaymentSizeMsat   uint64 `json:"max_payment_size_msat,string"`
 		Promise              string `json:"promise"`
 	}{}
 	err = json.Unmarshal(result["opening_fee_params_menu"], &menu)
 	lntest.CheckError(p.t, err)
 
-	assert.Len(p.t, menu, 2)
+	if !assert.Len(p.t, menu, 2) {
+		return
+	}
 	assert.Equal(p.t, uint64(2000000), menu[0].MinFeeMsat)
 	assert.Equal(p.t, uint64(3000000), menu[1].MinFeeMsat)
 }

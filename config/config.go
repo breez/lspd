@@ -84,14 +84,6 @@ type NodeConfig struct {
 	// peer is offline. Defaults to 1m.
 	NotificationTimeout string `json:"notificationTimeout,string"`
 
-	// The minimum payment size accepted in LSPS2 forwards that need a channel
-	// open.
-	MinPaymentSizeMsat uint64 `json:"minPaymentSizeMsat,string"`
-
-	// The maximum payment size accepted in LSPS2 forwards that need a channel
-	// open.
-	MaxPaymentSizeMsat uint64 `json:"maxPaymentSizeMsat,string"`
-
 	// Set this field to connect to an LND node.
 	Lnd *LndConfig `json:"lnd,omitempty"`
 

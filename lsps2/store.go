@@ -7,14 +7,13 @@ import (
 	"time"
 
 	"github.com/GoWebProd/uuid7"
-	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
 	"github.com/btcsuite/btcd/wire"
 )
 
 type SavePromises struct {
-	Menu  []*common.OpeningFeeParams
+	Menu  []*OpeningFeeParams
 	Token string
 }
 
@@ -22,7 +21,7 @@ type RegisterBuy struct {
 	LspId            string
 	PeerId           string
 	Scid             lightning.ShortChannelID
-	OpeningFeeParams common.OpeningFeeParams
+	OpeningFeeParams OpeningFeeParams
 	PaymentSizeMsat  *uint64
 	Mode             OpeningMode
 }
@@ -33,11 +32,21 @@ type BuyRegistration struct {
 	PeerId           string // TODO: Make peerId in the registration a byte array.
 	Token            string
 	Scid             lightning.ShortChannelID
-	OpeningFeeParams common.OpeningFeeParams
+	OpeningFeeParams OpeningFeeParams
 	PaymentSizeMsat  *uint64
 	Mode             OpeningMode
 	ChannelPoint     *wire.OutPoint
 	IsComplete       bool
+}
+
+type OpeningFeeParamsSetting struct {
+	Validity             time.Duration
+	MinFeeMsat           uint64
+	Proportional         uint32
+	MinLifetime          uint32
+	MaxClientToSelfDelay uint32
+	MinPaymentSizeMsat   uint64
+	MaxPaymentSizeMsat   uint64
 }
 
 func (b *BuyRegistration) IsExpired() bool {
@@ -65,6 +74,7 @@ var ErrScidExists = errors.New("scid exists")
 var ErrNotFound = errors.New("not found")
 
 type Lsps2Store interface {
+	GetFeeParamsSettings(ctx context.Context, token string) ([]*OpeningFeeParamsSetting, error)
 	SavePromises(ctx context.Context, req *SavePromises) error
 	RegisterBuy(ctx context.Context, req *RegisterBuy) error
 	GetBuyRegistration(ctx context.Context, scid lightning.ShortChannelID) (*BuyRegistration, error)

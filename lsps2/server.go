@@ -26,8 +26,6 @@ type GetInfoRequest struct {
 
 type GetInfoResponse struct {
 	OpeningFeeParamsMenu []*OpeningFeeParams `json:"opening_fee_params_menu"`
-	MinPaymentSizeMsat   uint64              `json:"min_payment_size_msat,string"`
-	MaxPaymentSizeMsat   uint64              `json:"max_payment_size_msat,string"`
 }
 
 type OpeningFeeParams struct {
@@ -36,6 +34,8 @@ type OpeningFeeParams struct {
 	ValidUntil           string `json:"valid_until"`
 	MinLifetime          uint32 `json:"min_lifetime"`
 	MaxClientToSelfDelay uint32 `json:"max_client_to_self_delay"`
+	MinPaymentSizeMsat   uint64 `json:"min_payment_size_msat,string"`
+	MaxPaymentSizeMsat   uint64 `json:"max_payment_size_msat,string"`
 	Promise              string `json:"promise"`
 }
 
@@ -57,7 +57,7 @@ type Lsps2Server interface {
 	Buy(ctx context.Context, request *BuyRequest) (*BuyResponse, error)
 }
 type server struct {
-	openingService common.OpeningService
+	openingService OpeningService
 	nodesService   common.NodesService
 	node           *common.Node
 	store          Lsps2Store
@@ -71,7 +71,7 @@ const (
 )
 
 func NewLsps2Server(
-	openingService common.OpeningService,
+	openingService OpeningService,
 	nodesService common.NodesService,
 	node *common.Node,
 	store Lsps2Store,
@@ -123,7 +123,7 @@ func (s *server) GetInfo(
 		return nil, status.New(codes.Code(2), "unrecognized_or_stale_token").Err()
 	}
 
-	m, err := s.openingService.GetFeeParamsMenu(*request.Token, node.PrivateKey)
+	menu, err := s.openingService.GetFeeParamsMenu(ctx, *request.Token, node.PrivateKey)
 	if err == common.ErrNodeNotFound {
 		return nil, status.New(codes.Code(2), "unrecognized_or_stale_token").Err()
 	}
@@ -133,29 +133,16 @@ func (s *server) GetInfo(
 	}
 
 	err = s.store.SavePromises(ctx, &SavePromises{
-		Menu:  m,
+		Menu:  menu,
 		Token: *request.Token,
 	})
 	if err != nil {
-		log.Printf("Lsps2Server.GetInfo: store.SavePromises(%+v, %s) err: %v", m, *request.Token, err)
+		log.Printf("Lsps2Server.GetInfo: store.SavePromises(%+v, %s) err: %v", menu, *request.Token, err)
 		return nil, status.New(codes.InternalError, "internal error").Err()
 	}
 
-	menu := []*OpeningFeeParams{}
-	for _, p := range m {
-		menu = append(menu, &OpeningFeeParams{
-			MinFeeMsat:           p.MinFeeMsat,
-			Proportional:         p.Proportional,
-			ValidUntil:           p.ValidUntil,
-			MinLifetime:          p.MinLifetime,
-			MaxClientToSelfDelay: p.MaxClientToSelfDelay,
-			Promise:              p.Promise,
-		})
-	}
 	return &GetInfoResponse{
 		OpeningFeeParamsMenu: menu,
-		MinPaymentSizeMsat:   node.NodeConfig.MinPaymentSizeMsat,
-		MaxPaymentSizeMsat:   node.NodeConfig.MaxPaymentSizeMsat,
 	}, nil
 }
 
@@ -167,16 +154,8 @@ func (s *server) Buy(
 		return nil, status.New(codes.Code(1), "unsupported_version").Err()
 	}
 
-	params := &common.OpeningFeeParams{
-		MinFeeMsat:           request.OpeningFeeParams.MinFeeMsat,
-		Proportional:         request.OpeningFeeParams.Proportional,
-		ValidUntil:           request.OpeningFeeParams.ValidUntil,
-		MinLifetime:          request.OpeningFeeParams.MinLifetime,
-		MaxClientToSelfDelay: request.OpeningFeeParams.MaxClientToSelfDelay,
-		Promise:              request.OpeningFeeParams.Promise,
-	}
 	paramsValid := s.openingService.ValidateOpeningFeeParams(
-		params,
+		&request.OpeningFeeParams,
 		s.node.PublicKey,
 	)
 	if !paramsValid {
@@ -188,10 +167,10 @@ func (s *server) Buy(
 		mode = OpeningMode_NoMppVarInvoice
 	} else {
 		mode = OpeningMode_MppFixedInvoice
-		if *request.PaymentSizeMsat < s.node.NodeConfig.MinPaymentSizeMsat {
+		if *request.PaymentSizeMsat < request.OpeningFeeParams.MinPaymentSizeMsat {
 			return nil, status.New(codes.Code(3), "payment_size_too_small").Err()
 		}
-		if *request.PaymentSizeMsat > s.node.NodeConfig.MaxPaymentSizeMsat {
+		if *request.PaymentSizeMsat > request.OpeningFeeParams.MaxPaymentSizeMsat {
 			return nil, status.New(codes.Code(4), "payment_size_too_large").Err()
 		}
 
@@ -245,7 +224,7 @@ func (s *server) Buy(
 		LspId:            s.node.NodeConfig.NodePubkey,
 		PeerId:           peerId,
 		Scid:             *scid,
-		OpeningFeeParams: *params,
+		OpeningFeeParams: request.OpeningFeeParams,
 		PaymentSizeMsat:  request.PaymentSizeMsat,
 		Mode:             mode,
 	})

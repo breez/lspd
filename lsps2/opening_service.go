@@ -1,6 +1,7 @@
-package common
+package lsps2
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -9,42 +10,31 @@ import (
 	"sort"
 	"time"
 
+	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/lsps0"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 )
 
-type OpeningFeeParams struct {
-	MinFeeMsat           uint64 `json:"min_msat,string"`
-	Proportional         uint32 `json:"proportional"`
-	ValidUntil           string `json:"valid_until"`
-	MinLifetime          uint32 `json:"max_idle_time"`
-	MaxClientToSelfDelay uint32 `json:"max_client_to_self_delay"`
-	Promise              string `json:"promise"`
-}
-
 type OpeningService interface {
-	GetFeeParamsMenu(token string, privateKey *btcec.PrivateKey) ([]*OpeningFeeParams, error)
+	GetFeeParamsMenu(ctx context.Context, token string, privateKey *btcec.PrivateKey) ([]*OpeningFeeParams, error)
 	ValidateOpeningFeeParams(params *OpeningFeeParams, publicKey *btcec.PublicKey) bool
-	IsCurrentChainFeeCheaper(token string, params *OpeningFeeParams) bool
+	IsCurrentChainFeeCheaper(ctx context.Context, token string, params *OpeningFeeParams) bool
 }
 
 type openingService struct {
-	store        OpeningStore
-	nodesService NodesService
+	store common.OpeningStore
 }
 
 func NewOpeningService(
-	store OpeningStore,
-	nodesService NodesService,
+	store common.OpeningStore,
 ) OpeningService {
 	return &openingService{
-		store:        store,
-		nodesService: nodesService,
+		store: store,
 	}
 }
 
-func (s *openingService) GetFeeParamsMenu(token string, privateKey *btcec.PrivateKey) ([]*OpeningFeeParams, error) {
+func (s *openingService) GetFeeParamsMenu(ctx context.Context, token string, privateKey *btcec.PrivateKey) ([]*OpeningFeeParams, error) {
 	var menu []*OpeningFeeParams
 	settings, err := s.store.GetFeeParamsSettings(token)
 	if err != nil {
@@ -53,7 +43,7 @@ func (s *openingService) GetFeeParamsMenu(token string, privateKey *btcec.Privat
 	}
 
 	if len(settings) == 0 {
-		log.Printf("No fee params setings found in the db [token=%v]", token)
+		log.Printf("No fee params settings found in the db [token=%v]", token)
 	}
 
 	for _, setting := range settings {
@@ -64,6 +54,8 @@ func (s *openingService) GetFeeParamsMenu(token string, privateKey *btcec.Privat
 			ValidUntil:           validUntil.Format(lsps0.TIME_FORMAT),
 			MinLifetime:          setting.MinLifetime,
 			MaxClientToSelfDelay: setting.MaxClientToSelfDelay,
+			MinPaymentSizeMsat:   setting.MinPaymentSizeMsat,
+			MaxPaymentSizeMsat:   setting.MaxPaymentSizeMsat,
 		}
 
 		promise, err := createPromise(privateKey, params)
@@ -110,7 +102,7 @@ func (s *openingService) ValidateOpeningFeeParams(params *OpeningFeeParams, publ
 	return true
 }
 
-func (s *openingService) IsCurrentChainFeeCheaper(token string, params *OpeningFeeParams) bool {
+func (s *openingService) IsCurrentChainFeeCheaper(ctx context.Context, token string, params *OpeningFeeParams) bool {
 	settings, err := s.store.GetFeeParamsSettings(token)
 	if err != nil {
 		log.Printf("Failed to get fee params settings: %v", err)
@@ -149,6 +141,8 @@ func paramsHash(params *OpeningFeeParams) ([]byte, error) {
 		params.ValidUntil,
 		params.MinLifetime,
 		params.MaxClientToSelfDelay,
+		params.MinPaymentSizeMsat,
+		params.MaxPaymentSizeMsat,
 	}
 	blob, err := json.Marshal(items)
 	if err != nil {

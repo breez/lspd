@@ -14,6 +14,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type extendedParams struct {
+	Token  string                  `json:"token"`
+	Params common.OpeningFeeParams `json:"fees_params"`
+}
+
 type PostgresInterceptStore struct {
 	pool *pgxpool.Pool
 }
