@@ -14,6 +14,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/elementsproject/glightning/glightning"
 	"github.com/elementsproject/glightning/jrpc2"
+	"github.com/lightningnetwork/lnd/lnwire"
 	"golang.org/x/exp/slices"
 )
 
@@ -87,10 +88,34 @@ func (c *ClnClient) GetInfo() (*lightning.GetInfoResult, error) {
 		return nil, err
 	}
 
+	initFeatures, err := hex.DecodeString(info.OurFeatures.Init)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode init features: %w", err)
+	}
+
+	supportsSplicing := supportsSplicing(initFeatures)
 	return &lightning.GetInfoResult{
-		Alias:  info.Alias,
-		Pubkey: info.Id,
+		Alias:            info.Alias,
+		Pubkey:           info.Id,
+		SupportsSplicing: supportsSplicing,
 	}, nil
+}
+
+func hasFeature(features []byte, bit int) bool {
+	if len(features)*8-1 < bit {
+		return false
+	}
+
+	byteIndex := bit / 8
+	bitIndex := bit % 8
+	return (features[len(features)-byteIndex-1]>>bitIndex)&1 == 1
+}
+
+func supportsSplicing(features []byte) bool {
+	return hasFeature(features, 62) ||
+		hasFeature(features, 63) ||
+		hasFeature(features, 162) ||
+		hasFeature(features, 163)
 }
 
 func (c *ClnClient) IsConnected(destination []byte) (bool, error) {
@@ -132,27 +157,7 @@ func (c *ClnClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoi
 		minConfs = &m
 	}
 	var minDepth uint16 = 0
-	var rate *glightning.FeeRate
-	if req.FeeSatPerVByte != nil {
-		rate = &glightning.FeeRate{
-			Rate:  uint(*req.FeeSatPerVByte * 1000),
-			Style: glightning.PerKb,
-		}
-	} else if req.TargetConf != nil {
-		if *req.TargetConf < 3 {
-			rate = &glightning.FeeRate{
-				Directive: glightning.Urgent,
-			}
-		} else if *req.TargetConf < 30 {
-			rate = &glightning.FeeRate{
-				Directive: glightning.Normal,
-			}
-		} else {
-			rate = &glightning.FeeRate{
-				Directive: glightning.Slow,
-			}
-		}
-	}
+	rate := mapFeeRate(req.FeeSatPerVByte, req.TargetConf)
 
 	fundResult, err := client.FundChannelExt(
 		pubkey,
@@ -174,15 +179,8 @@ func (c *ClnClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoi
 		return nil, err
 	}
 
-	fundingTxId, err := chainhash.NewHashFromStr(fundResult.FundingTxId)
+	channelPoint, err := toOutpoint(fundResult.FundingTxId, uint32(fundResult.FundingTxOutputNum))
 	if err != nil {
-		log.Printf("CLN: chainhash.NewHashFromStr(%s) error: %v", fundResult.FundingTxId, err)
-		return nil, err
-	}
-
-	channelPoint, err := lightning.NewOutPoint(fundingTxId[:], uint32(fundResult.FundingTxOutputNum))
-	if err != nil {
-		log.Printf("CLN: NewOutPoint(%s, %d) error: %v", fundingTxId.String(), fundResult.FundingTxOutputNum, err)
 		return nil, err
 	}
 
@@ -293,6 +291,50 @@ func (c *ClnClient) GetPeerId(scid *lightning.ShortChannelID) ([]byte, error) {
 	return hex.DecodeString(*dest)
 }
 
+func (c *ClnClient) GetPeerInfo(peerID []byte) (*lightning.PeerInfo, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+
+	peerHex := hex.EncodeToString(peerID)
+	peerChannels, err := client.GetPeerChannels(peerHex)
+	if err != nil {
+		return nil, err
+	}
+
+	peer, err := client.GetPeer(peerHex)
+	if err != nil {
+		return nil, err
+	}
+
+	supportsSplicing := supportsSplicing(peer.Features.Raw)
+	channels := make([]*lightning.PeerChannel, len(peerChannels))
+	for i, peerChannel := range peerChannels {
+		outpoint, err := toOutpoint(peerChannel.FundingTxId, peerChannel.FundingOutnum)
+		if err != nil {
+			return nil, err
+		}
+
+		var confirmedScid *lightning.ShortChannelID
+		if peerChannel.ShortChannelId != "" {
+			confirmedScid, _ = lightning.NewShortChannelIDFromString(peerChannel.ShortChannelId)
+		}
+
+		isZeroFeeHtlcTx := slices.Contains(peerChannel.Features, "option_anchors_zero_fee_htlc_tx")
+		channels[i] = &lightning.PeerChannel{
+			FundingOutpoint: outpoint,
+			ConfirmedScid:   confirmedScid,
+			IsZeroFeeHtlcTx: isZeroFeeHtlcTx,
+		}
+	}
+
+	return &lightning.PeerInfo{
+		SupportsSplicing: supportsSplicing,
+		Channels:         channels,
+	}, nil
+}
+
 var pollingInterval = 400 * time.Millisecond
 
 func (c *ClnClient) WaitOnline(peerID []byte, deadline time.Time) error {
@@ -358,6 +400,75 @@ func (c *ClnClient) ListChannels() ([]*lightning.Channel, error) {
 	return result, nil
 }
 
+func (c *ClnClient) SpliceIn(
+	req *lightning.SpliceInRequest,
+) (*wire.OutPoint, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+
+	t := true
+	channelid := lnwire.NewChanIDFromOutPoint(req.ChannelOutpoint).String()
+	psbtResp, err := client.FundPSBT(&glightning.FundPSBTRequest{
+		Satoshi:        glightning.NewSat64(req.AdditionalCapacitySat).RawString(),
+		Feerate:        mapFeeRate(req.FeeSatPerVByte, req.TargetConf).String(),
+		MinConf:        req.MinConfs,
+		ExcessAsChange: &t,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to fund psbt: %w", err)
+	}
+
+	psbt := psbtResp.PSBT
+	initResp, err := client.SpliceInit(&glightning.SpliceInitRequest{
+		ChannelId:      channelid,
+		RelativeAmount: int64(req.AdditionalCapacitySat),
+		FeeratePerKw:   psbtResp.FeeratePerKw,
+		InitialPsbt:    psbt,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to init splice: %w", err)
+	}
+	psbt = initResp.Psbt
+	for {
+		// TODO: Make sure this loop cannot get stuck forever.
+		updateResp, err := client.SpliceUpdate(&glightning.SpliceUpdateRequest{
+			ChannelId: channelid,
+			Psbt:      psbt,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed while waiting for splice update: %w", err)
+		}
+		psbt = updateResp.Psbt
+		if updateResp.CommitmentsSecured {
+			break
+		}
+		<-time.After(time.Millisecond * 50)
+	}
+
+	signed, err := client.SignPSBT(psbt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign psbt '%s': %w", initResp.Psbt, err)
+	}
+	psbt = signed.SignedPSBT
+
+	resp, err := client.SpliceSigned(&glightning.SpliceSignedRequest{
+		ChannelId: channelid,
+		Psbt:      psbt,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("splice signed failed: %w", err)
+	}
+
+	// TODO: Get the actual output index
+	outpoint, err := toOutpoint(resp.Txid, 0)
+	if err != nil {
+		return nil, err
+	}
+	return outpoint, nil
+}
+
 func mapScidsFromChannel(c *glightning.PeerChannel) (*lightning.ShortChannelID, *lightning.ShortChannelID, error) {
 	var confirmedScid *lightning.ShortChannelID
 	var aliasScid *lightning.ShortChannelID
@@ -377,4 +488,44 @@ func mapScidsFromChannel(c *glightning.PeerChannel) (*lightning.ShortChannelID, 
 	}
 
 	return aliasScid, confirmedScid, nil
+}
+
+func toOutpoint(txId string, outputIndex uint32) (*wire.OutPoint, error) {
+	fundingTxId, err := chainhash.NewHashFromStr(txId)
+	if err != nil {
+		return nil, fmt.Errorf("NewHashFromStr(%s) err: %w", txId, err)
+	}
+
+	outpoint, err := lightning.NewOutPoint(fundingTxId[:], outputIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	return outpoint, nil
+}
+
+func mapFeeRate(feeSatPerVByte *float64, targetConf *uint32) *glightning.FeeRate {
+	var rate *glightning.FeeRate
+	if feeSatPerVByte != nil {
+		rate = &glightning.FeeRate{
+			Rate:  uint(*feeSatPerVByte * 1000),
+			Style: glightning.PerKb,
+		}
+	} else if targetConf != nil {
+		if *targetConf < 3 {
+			rate = &glightning.FeeRate{
+				Directive: glightning.Urgent,
+			}
+		} else if *targetConf < 30 {
+			rate = &glightning.FeeRate{
+				Directive: glightning.Normal,
+			}
+		} else {
+			rate = &glightning.FeeRate{
+				Directive: glightning.Slow,
+			}
+		}
+	}
+
+	return rate
 }

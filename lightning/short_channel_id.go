@@ -52,3 +52,27 @@ func (c *ShortChannelID) ToString() string {
 	outputIndex := u & 0xFFFF
 	return fmt.Sprintf("%dx%dx%d", blockHeight, txIndex, outputIndex)
 }
+
+func (c *ShortChannelID) BlockHeight() uint32 {
+	if c == nil {
+		return 0
+	}
+
+	return uint32((*c >> 40) & 0xFFFFFF)
+}
+
+func (c *ShortChannelID) TxIndex() uint32 {
+	if c == nil {
+		return 0
+	}
+
+	return uint32((*c >> 16) & 0xFFFFFF)
+}
+
+func (c *ShortChannelID) OutputIndex() uint16 {
+	if c == nil {
+		return 0
+	}
+
+	return uint16(*c & 0xFFFF)
+}
