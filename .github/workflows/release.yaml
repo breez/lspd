@@ -9,7 +9,7 @@ env:
   LSPD_GO_VERSION: 1.21.0
   LND_GO_VERSION: 1.21.0
   LND_REF: 0c939786ced78a981bd77c7da628bfcf86ada568
-  CLN_REF: v24.02
+  CLN_REF: v24.02.1
 
 jobs:
   lspd:
