@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"sync"
 	"time"
 
+	"github.com/breez/lspd/cln/rpc"
 	"github.com/breez/lspd/cln_plugin/proto"
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lightning"
@@ -160,12 +162,18 @@ func (c *CustomMsgClient) Send(msg *lightning.CustomMessage) error {
 	var t [2]byte
 	binary.BigEndian.PutUint16(t[:], uint16(msg.Type))
 
-	m := hex.EncodeToString(t[:]) + hex.EncodeToString(msg.Data)
-	client, err := c.client.getClient()
+	peerid, err := hex.DecodeString(msg.PeerId)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to decode peer id %s: %w", msg.PeerId, err)
 	}
-	_, err = client.SendCustomMessage(msg.PeerId, m)
+
+	_, err = c.client.client.SendCustomMsg(
+		context.Background(),
+		&rpc.SendcustommsgRequest{
+			NodeId: peerid,
+			Msg:    append(t[:], msg.Data...),
+		},
+	)
 	return err
 }
 

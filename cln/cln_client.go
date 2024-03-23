@@ -1,115 +1,120 @@
 package cln
 
 import (
+	"bytes"
+	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"log"
-	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/breez/lspd/cln/rpc"
+	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lightning"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/elementsproject/glightning/glightning"
-	"github.com/elementsproject/glightning/jrpc2"
 	"golang.org/x/exp/slices"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 )
 
 type ClnClient struct {
-	socketPath string
-	client     *glightning.Lightning
-	mtx        sync.Mutex
+	client rpc.NodeClient
 }
 
 var (
-	OPEN_STATUSES    = []string{"CHANNELD_NORMAL"}
-	PENDING_STATUSES = []string{"OPENINGD", "CHANNELD_AWAITING_LOCKIN"}
-	CLOSING_STATUSES = []string{"CHANNELD_SHUTTING_DOWN", "CLOSINGD_SIGEXCHANGE", "CLOSINGD_COMPLETE", "AWAITING_UNILATERAL", "FUNDING_SPEND_SEEN", "ONCHAIN"}
-	CLOSED_STATUSES  = []string{"CLOSED"}
+	OPEN_STATUSES = []int32{
+		int32(rpc.ListpeerchannelsChannels_CHANNELD_NORMAL),
+	}
+	PENDING_STATUSES = []int32{
+		int32(rpc.ListpeerchannelsChannels_OPENINGD),
+		int32(rpc.ListpeerchannelsChannels_CHANNELD_AWAITING_LOCKIN),
+		int32(rpc.ListpeerchannelsChannels_DUALOPEND_OPEN_INIT),
+		int32(rpc.ListpeerchannelsChannels_DUALOPEND_AWAITING_LOCKIN),
+		int32(rpc.ListpeerchannelsChannels_CHANNELD_AWAITING_SPLICE),
+		int32(rpc.ListpeerchannelsChannels_DUALOPEND_OPEN_COMMITTED),
+		int32(rpc.ListpeerchannelsChannels_DUALOPEND_OPEN_COMMIT_READY),
+	}
+	CLOSING_STATUSES = []int32{
+		int32(rpc.ListpeerchannelsChannels_CHANNELD_SHUTTING_DOWN),
+		int32(rpc.ListpeerchannelsChannels_CLOSINGD_SIGEXCHANGE),
+		int32(rpc.ListpeerchannelsChannels_CLOSINGD_COMPLETE),
+		int32(rpc.ListpeerchannelsChannels_AWAITING_UNILATERAL),
+		int32(rpc.ListpeerchannelsChannels_FUNDING_SPEND_SEEN),
+		int32(rpc.ListpeerchannelsChannels_ONCHAIN),
+	}
 )
 
-func NewClnClient(socketPath string) (*ClnClient, error) {
-	client, err := newGlightningClient(socketPath)
-	if err != nil {
-		return nil, err
+func NewClnClient(config *config.ClnConfig) (*ClnClient, error) {
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM([]byte(config.CaCert)) {
+		return nil, fmt.Errorf("failed to add grpc server CA's certificate")
 	}
+
+	clientCert, err := tls.X509KeyPair(
+		[]byte(config.ClientCert),
+		[]byte(config.ClientKey),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create X509 key pair: %w", err)
+	}
+
+	tlsConfig := &tls.Config{
+		RootCAs:      certPool,
+		Certificates: []tls.Certificate{clientCert},
+	}
+
+	tlsCredentials := credentials.NewTLS(tlsConfig)
+
+	conn, err := grpc.Dial(
+		config.GrpcAddress,
+		grpc.WithTransportCredentials(tlsCredentials),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to CLN gRPC: %w", err)
+	}
+
+	client := rpc.NewNodeClient(conn)
 	return &ClnClient{
-		socketPath: socketPath,
-		client:     client,
+		client: client,
 	}, nil
 }
 
-func newGlightningClient(socketPath string) (*glightning.Lightning, error) {
-	rpcFile := filepath.Base(socketPath)
-	if rpcFile == "" || rpcFile == "." {
-		return nil, fmt.Errorf("invalid socketPath '%s'", socketPath)
-	}
-	lightningDir := filepath.Dir(socketPath)
-	if lightningDir == "" || lightningDir == "." {
-		return nil, fmt.Errorf("invalid socketPath '%s'", socketPath)
-	}
-
-	client := glightning.NewLightning()
-	client.SetTimeout(60)
-	err := client.StartUp(rpcFile, lightningDir)
-	return client, err
-}
-
-func (c *ClnClient) getClient() (*glightning.Lightning, error) {
-	c.mtx.Lock()
-	defer c.mtx.Unlock()
-	if c.client.IsUp() {
-		return c.client, nil
-	}
-
-	var err error
-	c.client, err = newGlightningClient(c.socketPath)
-	if err != nil {
-		return nil, err
-	}
-	if c.client.IsUp() {
-		return c.client, nil
-	}
-
-	return nil, fmt.Errorf("cln is not accessible")
-}
-
 func (c *ClnClient) GetInfo() (*lightning.GetInfoResult, error) {
-	client, err := c.getClient()
-	if err != nil {
-		return nil, err
-	}
-	info, err := client.GetInfo()
+	info, err := c.client.Getinfo(context.Background(), &rpc.GetinfoRequest{})
 	if err != nil {
 		log.Printf("CLN: client.GetInfo() error: %v", err)
 		return nil, err
 	}
 
+	var alias string
+	if info.Alias != nil {
+		alias = *info.Alias
+	}
 	return &lightning.GetInfoResult{
-		Alias:  info.Alias,
-		Pubkey: info.Id,
+		Alias:  alias,
+		Pubkey: hex.EncodeToString(info.Id),
 	}, nil
 }
 
 func (c *ClnClient) IsConnected(destination []byte) (bool, error) {
-	client, err := c.getClient()
-	if err != nil {
-		return false, err
-	}
-
 	pubKey := hex.EncodeToString(destination)
-	peer, err := client.GetPeer(pubKey)
+	peers, err := c.client.ListPeers(context.Background(), &rpc.ListpeersRequest{
+		Id: destination,
+	})
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			return false, nil
-		}
-
-		log.Printf("CLN: client.GetPeer(%v) error: %v", pubKey, err)
-		return false, fmt.Errorf("CLN: client.GetPeer(%v) error: %w", pubKey, err)
+		log.Printf("CLN: client.ListPeers(%v) error: %v", pubKey, err)
+		return false, fmt.Errorf("CLN: client.ListPeers(%v) error: %w", pubKey, err)
 	}
 
+	if len(peers.Peers) == 0 {
+		return false, nil
+	}
+
+	peer := peers.Peers[0]
 	if peer.Connected {
 		log.Printf("CLN: destination online: %x", destination)
 		return true, nil
@@ -120,69 +125,72 @@ func (c *ClnClient) IsConnected(destination []byte) (bool, error) {
 }
 
 func (c *ClnClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoint, error) {
-	client, err := c.getClient()
-	if err != nil {
-		return nil, err
-	}
-
-	pubkey := hex.EncodeToString(req.Destination)
-	var minConfs *uint16
-	if req.MinConfs != nil {
-		m := uint16(*req.MinConfs)
-		minConfs = &m
-	}
-	var minDepth uint16 = 0
-	var rate *glightning.FeeRate
+	var minDepth uint32 = 0
+	announce := false
+	var rate *rpc.Feerate
 	if req.FeeSatPerVByte != nil {
-		rate = &glightning.FeeRate{
-			Rate:  uint(*req.FeeSatPerVByte * 1000),
-			Style: glightning.PerKb,
+		rate = &rpc.Feerate{
+			Style: &rpc.Feerate_Perkb{
+				Perkb: uint32(*req.FeeSatPerVByte * 1000),
+			},
 		}
 	} else if req.TargetConf != nil {
 		if *req.TargetConf < 3 {
-			rate = &glightning.FeeRate{
-				Directive: glightning.Urgent,
+			rate = &rpc.Feerate{
+				Style: &rpc.Feerate_Urgent{
+					Urgent: true,
+				},
 			}
 		} else if *req.TargetConf < 30 {
-			rate = &glightning.FeeRate{
-				Directive: glightning.Normal,
+			rate = &rpc.Feerate{
+				Style: &rpc.Feerate_Normal{
+					Normal: true,
+				},
 			}
 		} else {
-			rate = &glightning.FeeRate{
-				Directive: glightning.Slow,
+			rate = &rpc.Feerate{
+				Style: &rpc.Feerate_Slow{
+					Slow: true,
+				},
 			}
 		}
 	}
 
-	fundResult, err := client.FundChannelExt(
-		pubkey,
-		glightning.NewSat(int(req.CapacitySat)),
-		rate,
-		false,
-		minConfs,
-		glightning.NewMsat(0),
-		&minDepth,
-		glightning.NewMsat(0),
+	fundResult, err := c.client.FundChannel(
+		context.Background(),
+		&rpc.FundchannelRequest{
+			Id: req.Destination,
+			Amount: &rpc.AmountOrAll{
+				Value: &rpc.AmountOrAll_Amount{
+					Amount: &rpc.Amount{
+						Msat: req.CapacitySat * 1000,
+					},
+				},
+			},
+			Feerate:  rate,
+			Announce: &announce,
+			Minconf:  req.MinConfs,
+			Mindepth: &minDepth,
+			Reserve: &rpc.Amount{
+				Msat: 0,
+			},
+		},
 	)
 
 	if err != nil {
-		log.Printf("CLN: client.FundChannelExt(%v, %v) error: %v", pubkey, req.CapacitySat, err)
-		rpcError, ok := err.(*jrpc2.RpcError)
-		if ok && rpcError.Code == 301 {
-			return nil, fmt.Errorf("not enough funds: %w", err)
+		log.Printf("CLN: client.FundChannel(%x, %v) error: %v", req.Destination, req.CapacitySat, err)
+		if e, ok := status.FromError(err); ok {
+			if strings.Contains(e.Message(), "code: Some(301)") {
+				return nil, fmt.Errorf("not enough funds: %w", err)
+			}
 		}
 		return nil, err
 	}
 
-	fundingTxId, err := chainhash.NewHashFromStr(fundResult.FundingTxId)
+	channelPoint, err := lightning.NewOutPoint(reverseBytes(fundResult.Txid), fundResult.Outnum)
 	if err != nil {
-		log.Printf("CLN: chainhash.NewHashFromStr(%s) error: %v", fundResult.FundingTxId, err)
-		return nil, err
-	}
-
-	channelPoint, err := lightning.NewOutPoint(fundingTxId[:], uint32(fundResult.FundingTxOutputNum))
-	if err != nil {
-		log.Printf("CLN: NewOutPoint(%s, %d) error: %v", fundingTxId.String(), fundResult.FundingTxOutputNum, err)
+		log.Printf("CLN: NewOutPoint(%x, %d) error: %v", fundResult.Txid,
+			fundResult.Outnum, err)
 		return nil, err
 	}
 
@@ -190,22 +198,30 @@ func (c *ClnClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoi
 }
 
 func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*lightning.GetChannelResult, error) {
-	client, err := c.getClient()
-	if err != nil {
-		return nil, err
-	}
-
 	pubkey := hex.EncodeToString(peerID)
-	channels, err := client.GetPeerChannels(pubkey)
+	channels, err := c.client.ListPeerChannels(
+		context.Background(),
+		&rpc.ListpeerchannelsRequest{
+			Id: peerID,
+		},
+	)
 	if err != nil {
-		log.Printf("CLN: client.GetPeerChannels(%s) error: %v", pubkey, err)
+		log.Printf("CLN: client.ListPeerChannels(%s) error: %v", pubkey, err)
 		return nil, err
 	}
 
-	fundingTxID := channelPoint.Hash.String()
-	for _, c := range channels {
-		log.Printf("getChannel destination: %s, Short channel id: %v, local alias: %v , FundingTxID:%v, State:%v ", pubkey, c.ShortChannelId, c.Alias.Local, c.FundingTxId, c.State)
-		if slices.Contains(OPEN_STATUSES, c.State) && c.FundingTxId == fundingTxID {
+	for _, c := range channels.Channels {
+		if c.State == nil {
+			log.Printf("Channel '%+v' with peer '%x' doesn't have a state (yet).",
+				c.ShortChannelId, c.PeerId)
+			continue
+		}
+		state := int32(*c.State)
+		log.Printf("getChannel destination: %s, scid: %+v, local alias: %+v, "+
+			"FundingTxID:%x, State:%+v ", pubkey, c.ShortChannelId,
+			c.Alias.Local, c.FundingTxid, c.State)
+		if slices.Contains(OPEN_STATUSES, state) &&
+			bytes.Equal(reverseBytes(c.FundingTxid), channelPoint.Hash[:]) {
 
 			aliasScid, confirmedScid, err := mapScidsFromChannel(c)
 			if err != nil {
@@ -214,44 +230,78 @@ func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 			return &lightning.GetChannelResult{
 				AliasScid:       aliasScid,
 				ConfirmedScid:   confirmedScid,
-				HtlcMinimumMsat: c.MinimumHtlcOutMsat.MSat(),
+				HtlcMinimumMsat: c.MinimumHtlcOutMsat.Msat,
 			}, nil
 		}
 	}
 
-	log.Printf("No channel found: getChannel(%v, %v)", pubkey, fundingTxID)
+	log.Printf("No channel found: getChannel(%v, %v)", pubkey,
+		channelPoint.Hash.String())
 	return nil, fmt.Errorf("no channel found")
 }
 
-func (c *ClnClient) GetClosedChannels(nodeID string, channelPoints map[string]uint64) (map[string]uint64, error) {
-	client, err := c.getClient()
-	if err != nil {
-		return nil, err
-	}
-
+func (c *ClnClient) GetClosedChannels(
+	nodeID string,
+	channelPoints map[string]uint64,
+) (map[string]uint64, error) {
 	r := make(map[string]uint64)
 	if len(channelPoints) == 0 {
 		return r, nil
 	}
 
-	channels, err := client.GetPeerChannels(nodeID)
+	nodeIDBytes, err := hex.DecodeString(nodeID)
 	if err != nil {
-		log.Printf("CLN: client.GetPeer(%s) error: %v", nodeID, err)
+		return nil, fmt.Errorf("failed to decode nodeid %s", nodeID)
+	}
+
+	channels, err := c.client.ListPeerChannels(
+		context.Background(),
+		&rpc.ListpeerchannelsRequest{
+			Id: nodeIDBytes,
+		},
+	)
+	if err != nil {
+		log.Printf("CLN: client.ListPeerChannels(%s) error: %v", nodeID, err)
 		return nil, err
 	}
 
 	lookup := make(map[string]uint64)
-	for _, c := range channels {
-		if slices.Contains(CLOSING_STATUSES, c.State) {
-			cid, err := lightning.NewShortChannelIDFromString(c.ShortChannelId)
+	for _, c := range channels.Channels {
+		if c.State == nil {
+			log.Printf("Channel '%+v' with peer '%x' doesn't have a state (yet).",
+				c.ShortChannelId, c.PeerId)
+			continue
+		}
+		state := int32(*c.State)
+
+		if slices.Contains(CLOSING_STATUSES, state) {
+			if c.ShortChannelId == nil {
+				log.Printf("CLN: GetClosedChannels. Channel does not have "+
+					"ShortChannelId. %x:%d", c.FundingTxid, c.FundingOutnum)
+				continue
+			}
+			scid, err := lightning.NewShortChannelIDFromString(*c.ShortChannelId)
 			if err != nil {
 				log.Printf("CLN: GetClosedChannels NewShortChannelIDFromString(%v) error: %v", c.ShortChannelId, err)
 				continue
 			}
 
-			outnum := uint64(*cid) & 0xFFFFFF
-			cp := fmt.Sprintf("%s:%d", c.FundingTxId, outnum)
-			lookup[cp] = uint64(*cid)
+			if c.FundingOutnum == nil {
+				log.Printf("CLN: GetClosedChannels. Channel does not have "+
+					"FundingOutnum. %s %x:%d", *c.ShortChannelId, c.FundingTxid,
+					c.FundingOutnum)
+				continue
+			}
+
+			cp, err := lightning.NewOutPoint(reverseBytes(c.FundingTxid), *c.FundingOutnum)
+			if err != nil {
+				log.Printf("CLN: GetClosedChannels lightning.NewOutPoint(%x, %d) error: %v",
+					c.FundingTxid,
+					c.FundingOutnum,
+					err)
+				continue
+			}
+			lookup[cp.String()] = uint64(*scid)
 		}
 	}
 
@@ -265,23 +315,24 @@ func (c *ClnClient) GetClosedChannels(nodeID string, channelPoints map[string]ui
 }
 
 func (c *ClnClient) GetPeerId(scid *lightning.ShortChannelID) ([]byte, error) {
-	client, err := c.getClient()
-	if err != nil {
-		return nil, err
-	}
-
 	scidStr := scid.ToString()
-	channels, err := client.ListPeerChannels()
+	channels, err := c.client.ListPeerChannels(
+		context.Background(),
+		&rpc.ListpeerchannelsRequest{},
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	var dest *string
-	for _, ch := range channels {
-		if (ch.Alias != nil && (ch.Alias.Local == scidStr ||
-			ch.Alias.Remote == scidStr)) ||
-			ch.ShortChannelId == scidStr {
-			dest = &ch.PeerId
+	var dest []byte
+	for _, ch := range channels.Channels {
+		if ch.ShortChannelId != nil && *ch.ShortChannelId == scidStr {
+			dest = ch.PeerId
+			break
+		}
+
+		if ch.Alias != nil && ch.Alias.Local != nil && *ch.Alias.Local == scidStr {
+			dest = ch.PeerId
 			break
 		}
 	}
@@ -290,21 +341,15 @@ func (c *ClnClient) GetPeerId(scid *lightning.ShortChannelID) ([]byte, error) {
 		return nil, nil
 	}
 
-	return hex.DecodeString(*dest)
+	return dest, nil
 }
 
 var pollingInterval = 400 * time.Millisecond
 
 func (c *ClnClient) WaitOnline(peerID []byte, deadline time.Time) error {
-	client, err := c.getClient()
-	if err != nil {
-		return err
-	}
-
-	peerIDStr := hex.EncodeToString(peerID)
 	for {
-		peer, err := client.GetPeer(peerIDStr)
-		if err == nil && peer.Connected {
+		connected, err := c.IsConnected(peerID)
+		if err == nil && connected {
 			return nil
 		}
 
@@ -317,31 +362,52 @@ func (c *ClnClient) WaitOnline(peerID []byte, deadline time.Time) error {
 }
 
 func (c *ClnClient) WaitChannelActive(peerID []byte, deadline time.Time) error {
-	return nil
+	for {
+		peer, err := c.client.ListPeerChannels(
+			context.Background(),
+			&rpc.ListpeerchannelsRequest{
+				Id: peerID,
+			},
+		)
+		if err == nil {
+			for _, c := range peer.Channels {
+				if c.State == nil {
+					continue
+				}
+
+				if slices.Contains(OPEN_STATUSES, int32(*c.State)) {
+					return nil
+				}
+			}
+		}
+
+		select {
+		case <-time.After(time.Until(deadline)):
+			return fmt.Errorf("timeout")
+		case <-time.After(pollingInterval):
+		}
+	}
 }
 
 func (c *ClnClient) ListChannels() ([]*lightning.Channel, error) {
-	channels, err := c.client.ListPeerChannels()
+	channels, err := c.client.ListPeerChannels(
+		context.Background(),
+		&rpc.ListpeerchannelsRequest{},
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]*lightning.Channel, len(channels))
-	for i, channel := range channels {
-		peerId, err := hex.DecodeString(channel.PeerId)
-		if err != nil {
-			log.Printf("cln.ListChannels returned channel without peer id: %+v", channel)
-			continue
-		}
+	result := make([]*lightning.Channel, len(channels.Channels))
+	for i, channel := range channels.Channels {
 		aliasScid, confirmedScid, err := mapScidsFromChannel(channel)
 		if err != nil {
 			return nil, err
 		}
 
 		var outpoint *wire.OutPoint
-		fundingTxId, err := hex.DecodeString(channel.FundingTxId)
-		if err == nil && fundingTxId != nil && len(fundingTxId) > 0 {
-			outpoint, _ = lightning.NewOutPoint(fundingTxId, channel.FundingOutnum)
+		if channel.FundingTxid != nil && len(channel.FundingTxid) > 0 && channel.FundingOutnum != nil {
+			outpoint, _ = lightning.NewOutPoint(reverseBytes(channel.FundingTxid), *channel.FundingOutnum)
 		}
 		if outpoint == nil {
 			log.Printf("cln.ListChannels returned channel without outpoint: %+v", channel)
@@ -351,30 +417,38 @@ func (c *ClnClient) ListChannels() ([]*lightning.Channel, error) {
 			AliasScid:     aliasScid,
 			ConfirmedScid: confirmedScid,
 			ChannelPoint:  outpoint,
-			PeerId:        peerId,
+			PeerId:        channel.PeerId,
 		}
 	}
 
 	return result, nil
 }
 
-func mapScidsFromChannel(c *glightning.PeerChannel) (*lightning.ShortChannelID, *lightning.ShortChannelID, error) {
+func mapScidsFromChannel(c *rpc.ListpeerchannelsChannels) (*lightning.ShortChannelID, *lightning.ShortChannelID, error) {
 	var confirmedScid *lightning.ShortChannelID
 	var aliasScid *lightning.ShortChannelID
 	var err error
-	if c.ShortChannelId != "" {
-		confirmedScid, err = lightning.NewShortChannelIDFromString(c.ShortChannelId)
+	if c.ShortChannelId != nil {
+		confirmedScid, err = lightning.NewShortChannelIDFromString(*c.ShortChannelId)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse scid '%s': %w", c.ShortChannelId, err)
+			return nil, nil, fmt.Errorf("failed to parse scid '%+v': %w", c.ShortChannelId, err)
 		}
 	}
 
-	if c.Alias != nil && c.Alias.Local != "" {
-		aliasScid, err = lightning.NewShortChannelIDFromString(c.Alias.Local)
+	if c.Alias != nil && c.Alias.Local != nil {
+		aliasScid, err = lightning.NewShortChannelIDFromString(*c.Alias.Local)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse scid '%s': %w", c.Alias.Local, err)
+			return nil, nil, fmt.Errorf("failed to parse scid '%+v': %w", c.Alias.Local, err)
 		}
 	}
 
 	return aliasScid, confirmedScid, nil
+}
+
+func reverseBytes(b []byte) []byte {
+	for i, j := 0, len(b)-1; i < j; i, j = i+1, j-1 {
+		b[i], b[j] = b[j], b[i]
+	}
+
+	return b
 }

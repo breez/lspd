@@ -141,7 +141,7 @@ func main() {
 		}
 
 		if node.NodeConfig.Cln != nil {
-			client, err := cln.NewClnClient(node.NodeConfig.Cln.SocketPath)
+			client, err := cln.NewClnClient(node.NodeConfig.Cln)
 			if err != nil {
 				log.Fatalf("failed to initialize CLN client: %v", err)
 			}
@@ -293,7 +293,7 @@ func initializeNodes(configs []*config.NodeConfig) ([]*common.Node, error) {
 		}
 
 		if config.Cln != nil {
-			node.Client, err = cln.NewClnClient(config.Cln.SocketPath)
+			node.Client, err = cln.NewClnClient(config.Cln)
 			if err != nil {
 				return nil, err
 			}
