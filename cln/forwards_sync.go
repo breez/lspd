@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/breez/lspd/cln/rpc"
 	"github.com/breez/lspd/history"
 	"github.com/breez/lspd/lightning"
-	"github.com/elementsproject/glightning/glightning"
 )
 
 type ForwardSync struct {
@@ -61,7 +61,8 @@ func (s *ForwardSync) forwardCreatedSynchronizeOnce(ctx context.Context) {
 		var forwards []*history.Forward
 		var newCreatedOffset uint64
 		var err error
-		forwards, newCreatedOffset, endReached, err = s.listForwards("created", s.createdOffset, limit)
+		forwards, newCreatedOffset, endReached, err = s.listForwards(
+			rpc.ListforwardsRequest_CREATED, s.createdOffset, limit)
 		if err != nil {
 			log.Printf("forwardCreatedSynchronizeOnce(%x)- ListForwards error: %v", s.nodeid, err)
 			return
@@ -100,7 +101,8 @@ func (s *ForwardSync) forwardUpdatedSynchronizeOnce(ctx context.Context) {
 		var forwards []*history.Forward
 		var newUpdatedOffset uint64
 		var err error
-		forwards, newUpdatedOffset, endReached, err = s.listForwards("updated", s.updatedOffset, limit)
+		forwards, newUpdatedOffset, endReached, err = s.listForwards(
+			rpc.ListforwardsRequest_UPDATED, s.updatedOffset, limit)
 		if err != nil {
 			log.Printf("forwardUpdatedSynchronizeOnce(%x)- ListForwards error: %v", s.nodeid, err)
 			return
@@ -129,22 +131,22 @@ func (s *ForwardSync) forwardUpdatedSynchronizeOnce(ctx context.Context) {
 	log.Printf("forwardUpdatedSynchronizeOnce(%x) - Done", s.nodeid)
 }
 
-func (s *ForwardSync) listForwards(index string, offset uint64, limit uint32) ([]*history.Forward, uint64, bool, error) {
-	var response struct {
-		Forwards []Forward `json:"forwards"`
-	}
-
-	client, err := s.client.getClient()
-	if err != nil {
-		return nil, 0, false, err
-	}
-
-	err = client.Request(&glightning.ListForwardsRequest{
-		Status: "settled",
-		Index:  index,
-		Start:  offset,
-		Limit:  limit * 2,
-	}, &response)
+func (s *ForwardSync) listForwards(
+	index rpc.ListforwardsRequest_ListforwardsIndex,
+	offset uint64,
+	limit uint32,
+) ([]*history.Forward, uint64, bool, error) {
+	rLimit := limit * 2
+	status := rpc.ListforwardsRequest_SETTLED
+	response, err := s.client.client.ListForwards(
+		context.Background(),
+		&rpc.ListforwardsRequest{
+			Status: &status,
+			Index:  &index,
+			Start:  &offset,
+			Limit:  &rLimit,
+		},
+	)
 	if err != nil {
 		return nil, 0, false, err
 	}
@@ -153,28 +155,41 @@ func (s *ForwardSync) listForwards(index string, offset uint64, limit uint32) ([
 	endReached := len(response.Forwards) < int(limit)
 	var lastIndex *uint64
 	for _, forward := range response.Forwards {
+		if forward.OutChannel == nil {
+			continue
+		}
+		if forward.CreatedIndex == nil {
+			continue
+		}
+		if forward.InMsat == nil {
+			continue
+		}
+		if forward.OutMsat == nil {
+			continue
+		}
+
 		in, err := lightning.NewShortChannelIDFromString(forward.InChannel)
 		if err != nil {
 			return nil, 0, false, fmt.Errorf("NewShortChannelIDFromString(%s) error: %w", forward.InChannel, err)
 		}
-		out, err := lightning.NewShortChannelIDFromString(forward.OutChannel)
+		out, err := lightning.NewShortChannelIDFromString(*forward.OutChannel)
 		if err != nil {
-			return nil, 0, false, fmt.Errorf("NewShortChannelIDFromString(%s) error: %w", forward.OutChannel, err)
+			return nil, 0, false, fmt.Errorf("NewShortChannelIDFromString(%s) error: %w", *forward.OutChannel, err)
 		}
 
-		sec, dec := math.Modf(forward.ResolvedTime)
+		sec, dec := math.Modf(forward.ReceivedTime)
 		result = append(result, &history.Forward{
-			Identifier:   strconv.FormatUint(forward.CreatedIndex, 10),
+			Identifier:   strconv.FormatUint(*forward.CreatedIndex, 10),
 			InChannel:    *in,
 			OutChannel:   *out,
-			InMsat:       forward.InMsat.MSat(),
-			OutMsat:      forward.OutMsat.MSat(),
+			InMsat:       forward.InMsat.Msat,
+			OutMsat:      forward.OutMsat.Msat,
 			ResolvedTime: time.Unix(int64(sec), int64(dec*(1e9))),
 		})
-		if index == "created" {
-			lastIndex = &forward.CreatedIndex
+		if index == rpc.ListforwardsRequest_CREATED {
+			lastIndex = forward.CreatedIndex
 		} else {
-			lastIndex = &forward.UpdatedIndex
+			lastIndex = forward.UpdatedIndex
 		}
 	}
 
@@ -185,17 +200,4 @@ func (s *ForwardSync) listForwards(index string, offset uint64, limit uint32) ([
 		newOffset = *lastIndex + 1
 	}
 	return result, newOffset, endReached, nil
-}
-
-type Forward struct {
-	CreatedIndex uint64            `json:"created_index"`
-	UpdatedIndex uint64            `json:"updated_index"`
-	InChannel    string            `json:"in_channel"`
-	OutChannel   string            `json:"out_channel"`
-	InMsat       glightning.Amount `json:"in_msat"`
-	OutMsat      glightning.Amount `json:"out_msat"`
-	Status       string            `json:"status"`
-	PaymentHash  string            `json:"payment_hash"`
-	ReceivedTime float64           `json:"received_time"`
-	ResolvedTime float64           `json:"resolved_time"`
 }

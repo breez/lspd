@@ -13,7 +13,6 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
 	github.com/docker/docker v20.10.27+incompatible
 	github.com/docker/go-connections v0.4.0
-	github.com/elementsproject/glightning v0.0.0-20230525134205-ef34d849f564
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/jackc/pgtype v1.14.0
 	github.com/jackc/pgx/v5 v5.4.3
@@ -37,6 +36,7 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/docker/go-units v0.5.0 // indirect
+	github.com/elementsproject/glightning v0.0.0-20230525134205-ef34d849f564 // indirect
 	github.com/ethereum/go-ethereum v1.13.5 // indirect
 	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

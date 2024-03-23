@@ -114,7 +114,15 @@ type ClnConfig struct {
 	// The address to the cln htlc acceptor grpc api shipped with lspd.
 	PluginAddress string `json:"pluginAddress"`
 
-	// File path to the cln lightning-roc socket file. Find the path in
-	// cln-dir/mainnet/lightning-rpc
-	SocketPath string `json:"socketPath"`
+	// The address to the cln grpc api.
+	GrpcAddress string `json:"grpcAddress"`
+
+	// Raw CA cert for grpc access. Typically contents of `ca.pem`.
+	CaCert string `json:"caCert"`
+
+	// Raw client cert for grpc access. Typically contents of `client.pem`.
+	ClientCert string `json:"clientCert"`
+
+	// Raw client key for grpc access. Typically contents of `client-key.pem`.
+	ClientKey string `json:"clientKey"`
 }
