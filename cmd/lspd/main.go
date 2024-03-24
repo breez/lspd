@@ -293,6 +293,15 @@ func initializeNodes(configs []*config.NodeConfig) ([]*common.Node, error) {
 		}
 
 		if config.Cln != nil {
+			if caCert, err := os.ReadFile(config.Cln.CaCert); err == nil {
+				config.Cln.CaCert = string(caCert)
+			}
+			if clientCert, err := os.ReadFile(config.Cln.ClientCert); err == nil {
+				config.Cln.ClientCert = string(clientCert)
+			}
+			if clientKey, err := os.ReadFile(config.Cln.ClientKey); err == nil {
+				config.Cln.ClientKey = string(clientKey)
+			}
 			node.Client, err = cln.NewClnClient(config.Cln)
 			if err != nil {
 				return nil, err
