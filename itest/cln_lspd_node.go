@@ -67,7 +67,10 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, nam
 	lightningNode := lntest.NewClnNode(h, m, name, args...)
 	cln := &config.ClnConfig{
 		PluginAddress: pluginAddress,
-		SocketPath:    filepath.Join(lightningNode.SocketDir(), lightningNode.SocketFile()),
+		GrpcAddress:   fmt.Sprintf("localhost:%d", lightningNode.GrpcPort()),
+		CaCert:        lightningNode.CaCertPath(),
+		ClientCert:    lightningNode.ClientCertPath(),
+		ClientKey:     lightningNode.ClientKeyPath(),
 	}
 	lspbase, err := newLspd(h, mem, name, nodeConfig, nil, cln)
 	if err != nil {
