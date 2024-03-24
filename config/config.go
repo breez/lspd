@@ -117,12 +117,15 @@ type ClnConfig struct {
 	// The address to the cln grpc api.
 	GrpcAddress string `json:"grpcAddress"`
 
-	// Raw CA cert for grpc access. Typically contents of `ca.pem`.
+	// CA cert for grpc access. Can either be a file path or the cert contents.
+	// Typically stored in `lightningd-dir/mainnet/ca.pem`.
 	CaCert string `json:"caCert"`
 
-	// Raw client cert for grpc access. Typically contents of `client.pem`.
+	// Client cert for grpc access. Can either be a file path or the cert
+	// contents. Typically stored in `lightningd-dir/{network}/client.pem`.
 	ClientCert string `json:"clientCert"`
 
-	// Raw client key for grpc access. Typically contents of `client-key.pem`.
+	// Client key for grpc access. Can either be a file path or the key
+	// contents. Typically stored in `lightningd-dir/{network}/client-key.pem`.
 	ClientKey string `json:"clientKey"`
 }
