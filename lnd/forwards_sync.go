@@ -59,7 +59,7 @@ func (s *ForwardSync) forwardsSynchronizeOnce(ctx context.Context) {
 
 	for {
 		forwardHistory, err := s.client.client.ForwardingHistory(context.Background(), &lnrpc.ForwardingHistoryRequest{
-			StartTime:    startTime,
+			StartTime:    startTime / 1_000_000_000,
 			NumMaxEvents: 10000,
 		})
 		if err != nil {
@@ -84,7 +84,7 @@ func (s *ForwardSync) forwardsSynchronizeOnce(ctx context.Context) {
 			}
 			startTime = f.TimestampNs
 		}
-		s.store.InsertForwards(ctx, forwards, s.nodeid)
+		err = s.store.InsertForwards(ctx, forwards, s.nodeid)
 		if err != nil {
 			log.Printf("forwardsSynchronizeOnce(%x) - store.InsertForwards() error: %v", s.nodeid, err)
 			return
