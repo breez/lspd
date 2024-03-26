@@ -56,7 +56,7 @@ ENV variables:
 
 Example of NODES variable:
 ```
-NODES='[ { "name": "${LSPName}", "nodePubkey": "$PUBKEY", "lspdPrivateKey": "$LSPD_PRIVATE_KEY", "token": "$TOKEN", "host": "$EXTERNAL_IP:8888", "publicChannelAmount": "1000183", "channelAmount": "100000", "channelPrivate": false, "targetConf": "6", "minConfs": "6", "minHtlcMsat": "600", "baseFeeMsat": "1000", "feeRate": "0.000001", "timeLockDelta": "144", "channelFeePermyriad": "40", "channelMinimumFeeMsat": "2000000", "additionalChannelCapacity": "100000", "maxInactiveDuration": "3888000",  "cln": { "pluginAddress": "127.0.0.1:12312", "socketPath": "/home/lightning/.lightning/bitcoin/lightning-rpc" } } ]'
+NODES='[ { "name": "${LSPName}", "nodePubkey": "$PUBKEY", "lspdPrivateKey": "$LSPD_PRIVATE_KEY", "tokens": ["$TOKEN"], "host": "$EXTERNAL_IP:8888", "targetConf": "6", "minConfs": "6", "minHtlcMsat": "600", "baseFeeMsat": "1000", "feeRate": "0.000001", "timeLockDelta": "144", "channelFeePermyriad": "40", "channelMinimumFeeMsat": "2000000", "additionalChannelCapacity": "100000", "maxInactiveDuration": "3888000",  "cln": { "pluginAddress": "127.0.0.1:12312", "socketPath": "/home/lightning/.lightning/bitcoin/lightning-rpc" } } ]'
 ```
 
 ### Running lspd on CLN
