@@ -56,7 +56,7 @@ ENV variables:
 
 Example of NODES variable:
 ```
-NODES='[ { "name": "${LSPName}", "nodePubkey": "$PUBKEY", "lspdPrivateKey": "$LSPD_PRIVATE_KEY", "tokens": ["$TOKEN"], "host": "$EXTERNAL_IP:9735", "targetConf": "6", "minConfs": "6", "minHtlcMsat": "600", "baseFeeMsat": "1000", "feeRate": "0.000001", "timeLockDelta": "144", "channelFeePermyriad": "40", "channelMinimumFeeMsat": "2000000", "additionalChannelCapacity": "100000", "maxInactiveDuration": "3888000",  "cln": { "pluginAddress": "127.0.0.1:12312", "socketPath": "/home/lightning/.lightning/bitcoin/lightning-rpc" } } ]'
+NODES='[ { "name": "${LSPName}", "nodePubkey": "$PUBKEY", "lspdPrivateKey": "$LSPD_PRIVATE_KEY", "tokens": ["$TOKEN"], "host": "$EXTERNAL_IP:9735", "targetConf": "6", "minConfs": "6", "minHtlcMsat": "600", "baseFeeMsat": "1000", "feeRate": "0.000001", "timeLockDelta": "144", "channelFeePermyriad": "40", "channelMinimumFeeMsat": "2000000", "additionalChannelCapacity": "100000", "maxInactiveDuration": "3888000",  "cln": { "pluginAddress": "127.0.0.1:12312", "grpcAddress": "127.0.0.1:12313", "caCert": "/home/lightning/.lightning/mainnet/ca.pem", "clientCert": "/home/lightning/.lightning/mainnet/client.pem", "clientKey": "/home/lightning/.lightning/mainnet/client-key.pem" } } ]'
 ```
 
 ### Running lspd on CLN
@@ -68,6 +68,7 @@ In order to run lspd on top of CLN, you need to run the lspd process and run cln
     - `--max-concurrent-htlcs=30`: In order to use zero reserve channels on the client side, (local max_accepted_htlcs + remote max_accepted_htlcs + 2) * dust limit must be lower than the channel capacity. Reduce max-concurrent-htlcs or increase channel capacity accordingly.
     - `--dev-allowdustreserve=true`: In order to allow zero reserve on the client side (requires developer mode turned on)
     - `--lsp-listen=127.0.0.1:<port>`: Set on which port the lspd_cln_plugin will listen for lspd communication, must be the same port that is used in pluginAddress parameter in NODES env variable.
+    - `--grpc-port=<grpc-port>`: Set on which port the cln grpc server will listen.
 1. Run lspd
 
 ### Final step
