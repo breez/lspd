@@ -3,13 +3,8 @@ package itest
 import (
 	"flag"
 	"fmt"
-	"log"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
-	"syscall"
-	"time"
 
 	"github.com/breez/lntest"
 	"github.com/breez/lspd/config"
@@ -31,15 +26,12 @@ type ClnLspNode struct {
 	lspBase       *lspBase
 	logFilePath   string
 	runtime       *clnLspNodeRuntime
-	isInitialized bool
 	mtx           sync.Mutex
 	pluginBinary  string
 	pluginAddress string
 }
 
 type clnLspNodeRuntime struct {
-	logFile         *os.File
-	cmd             *exec.Cmd
 	rpc             lspd.ChannelOpenerClient
 	notificationRpc notifications.NotificationsClient
 	cleanups        []*lntest.Cleanup
@@ -98,70 +90,7 @@ func (c *ClnLspNode) Start() {
 	defer c.mtx.Unlock()
 
 	var cleanups []*lntest.Cleanup
-	if !c.isInitialized {
-		err := c.lspBase.Initialize()
-		if err != nil {
-			c.harness.T.Fatalf("failed to initialize lsp: %v", err)
-		}
-		c.isInitialized = true
-		cleanups = append(cleanups, &lntest.Cleanup{
-			Name: fmt.Sprintf("%s: lsp base", c.lspBase.name),
-			Fn:   c.lspBase.Stop,
-		})
-	}
-
-	c.lightningNode.Start()
-	cleanups = append(cleanups, &lntest.Cleanup{
-		Name: fmt.Sprintf("%s: lightning node", c.lspBase.name),
-		Fn:   c.lightningNode.Stop,
-	})
-
-	cmd := exec.CommandContext(c.harness.Ctx, c.lspBase.scriptFilePath)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	logFile, err := os.Create(c.logFilePath)
-	if err != nil {
-		lntest.PerformCleanup(cleanups)
-		c.harness.T.Fatalf("failed create lsp logfile: %v", err)
-	}
-	cleanups = append(cleanups, &lntest.Cleanup{
-		Name: fmt.Sprintf("%s: logfile", c.lspBase.name),
-		Fn:   logFile.Close,
-	})
-
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
-
-	log.Printf("%s: starting lspd %s", c.lspBase.name, c.lspBase.scriptFilePath)
-	err = cmd.Start()
-	if err != nil {
-		lntest.PerformCleanup(cleanups)
-		c.harness.T.Fatalf("failed to start lspd: %v", err)
-	}
-	cleanups = append(cleanups, &lntest.Cleanup{
-		Name: fmt.Sprintf("%s: cmd", c.lspBase.name),
-		Fn: func() error {
-			proc := cmd.Process
-			if proc == nil {
-				return nil
-			}
-
-			syscall.Kill(-proc.Pid, syscall.SIGINT)
-
-			log.Printf("About to wait for lspd to exit")
-			status, err := proc.Wait()
-			if err != nil {
-				log.Printf("waiting for lspd process error: %v, status: %v", err, status)
-			}
-			err = cmd.Wait()
-			if err != nil {
-				log.Printf("waiting for lspd cmd error: %v", err)
-			}
-
-			return nil
-		},
-	})
-
-	<-time.After(time.Second)
+	c.lspBase.Start(c.lightningNode, func(nc *config.NodeConfig) {})
 	conn, err := grpc.Dial(
 		c.lspBase.grpcAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -179,8 +108,6 @@ func (c *ClnLspNode) Start() {
 	client := lspd.NewChannelOpenerClient(conn)
 	notif := notifications.NewNotificationsClient(conn)
 	c.runtime = &clnLspNodeRuntime{
-		logFile:         logFile,
-		cmd:             cmd,
 		rpc:             client,
 		notificationRpc: notif,
 		cleanups:        cleanups,
@@ -191,11 +118,10 @@ func (c *ClnLspNode) Stop() error {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 
-	if c.runtime == nil {
-		return nil
+	if c.runtime != nil {
+		lntest.PerformCleanup(c.runtime.cleanups)
 	}
-
-	lntest.PerformCleanup(c.runtime.cleanups)
+	c.lspBase.StopRuntime()
 	c.runtime = nil
 	return nil
 }

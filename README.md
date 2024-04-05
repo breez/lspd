@@ -46,7 +46,6 @@ go test -timeout 20m -v ./itest \
   --lndmobileexec /full/path/to/lnd \
   --clnpluginexec /full/path/to/lspd_cln_plugin \
   --lspdexec /full/path/to/lspd \
-  --lspdmigrationsdir /full/path/to/lspd/postgresql/migrations
 ```
 
 - Required: `--lightningdexec` Full path to lightningd development build executable. Defaults to `lightningd` in `$PATH`.
@@ -54,7 +53,6 @@ go test -timeout 20m -v ./itest \
 - Required: `--lndmobileexec` Full path to Breez mobile client LND executable. No default.
 - Required: `--lspdexec` Full path to `lspd` executable to test. Defaults to `lspd` in `$PATH`.
 - Required: `--clnpluginexec` Full path to the lspd cln plugin executable. No default.
-- Required: `--lspdmigrationsdir` Path to directory containing postgres migrations for lspd. (Should be `./postgresql/migrations`)
 - Recommended: `--bitcoindexec` Full path to `bitcoind`. Defaults to `bitcoind` in `$PATH`.
 - Recommended: `--bitcoincliexec` Full path to `bitcoin-cli`. Defaults to `bitcoin-cli` in `$PATH`.
 - Recommended: `--testdir` uses the testdir as root directory for test files. Recommended because the CLN `lightning-rpc` socket max path length is 104-108 characters. Defaults to a temp directory (which has a long path length usually).

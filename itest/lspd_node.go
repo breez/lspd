@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/breez/lntest"
@@ -32,9 +33,6 @@ import (
 var (
 	lspdExecutable = flag.String(
 		"lspdexec", "", "full path to lpsd plugin binary",
-	)
-	lspdMigrationsDir = flag.String(
-		"lspdmigrationsdir", "", "full path to lspd sql migrations directory",
 	)
 )
 
@@ -59,14 +57,26 @@ type LspNode interface {
 
 type lspBase struct {
 	harness         *lntest.TestHarness
+	conf            *config.NodeConfig
 	name            string
 	binary          string
 	env             []string
 	scriptFilePath  string
+	logFilePath     string
 	grpcAddress     string
 	pubkey          *secp256k1.PublicKey
 	eciesPubkey     *ecies.PublicKey
 	postgresBackend *PostgresContainer
+	isInitialized   bool
+	runtime         *lspBaseRuntime
+	cleanups        []*lntest.Cleanup
+}
+
+type lspBaseRuntime struct {
+	node     lntest.LightningNode
+	cmd      *exec.Cmd
+	logFile  *os.File
+	cleanups []*lntest.Cleanup
 }
 
 func newLspd(h *lntest.TestHarness, mem *mempoolApi, name string, nodeConfig *config.NodeConfig, lnd *config.LndConfig, cln *config.ClnConfig, envExt ...string) (*lspBase, error) {
@@ -132,12 +142,9 @@ func newLspd(h *lntest.TestHarness, mem *mempoolApi, name string, nodeConfig *co
 		}
 	}
 
-	log.Printf("%s: node config: %+v", name, conf)
-	confJson, _ := json.Marshal(conf)
-	nodes := fmt.Sprintf(`NODES='[%s]'`, string(confJson))
 	env := []string{
-		nodes,
 		fmt.Sprintf("DATABASE_URL=%s", postgresBackend.ConnectionString()),
+		"AUTO_MIGRATE_DATABASE=true",
 		fmt.Sprintf("LISTEN_ADDRESS=%s", grpcAddress),
 		fmt.Sprintf("MEMPOOL_API_BASE_URL=%s", mem.Address()),
 		"MEMPOOL_PRIORITY=economy",
@@ -146,13 +153,17 @@ func newLspd(h *lntest.TestHarness, mem *mempoolApi, name string, nodeConfig *co
 	env = append(env, envExt...)
 
 	scriptFilePath := filepath.Join(scriptDir, "start-lspd.sh")
+	logFilePath := filepath.Join(scriptDir, "lspd.log")
+	h.RegisterLogfile(logFilePath, fmt.Sprintf("lspd-%s", name))
 
 	l := &lspBase{
 		harness:         h,
+		conf:            conf,
 		name:            name,
 		env:             env,
 		binary:          lspdBinary,
 		scriptFilePath:  scriptFilePath,
+		logFilePath:     logFilePath,
 		grpcAddress:     grpcAddress,
 		pubkey:          publ,
 		eciesPubkey:     eciesPubl,
@@ -163,95 +174,195 @@ func newLspd(h *lntest.TestHarness, mem *mempoolApi, name string, nodeConfig *co
 	return l, nil
 }
 
+func (l *lspBase) StopRuntime() {
+	if l.runtime != nil {
+		lntest.PerformCleanup(l.runtime.cleanups)
+	}
+
+	l.runtime = nil
+}
+
 func (l *lspBase) Stop() error {
-	return l.postgresBackend.Stop(context.Background())
+	l.StopRuntime()
+	lntest.PerformCleanup(l.cleanups)
+	return nil
 }
 
 func (l *lspBase) Cleanup() error {
 	return l.postgresBackend.Cleanup(context.Background())
 }
 
-func (l *lspBase) Initialize() error {
-	var cleanups []*lntest.Cleanup
-	migrationsDir, err := getMigrationsDir()
-	if err != nil {
-		return err
+func (l *lspBase) Start(
+	node lntest.LightningNode,
+	confFunc func(*config.NodeConfig),
+) {
+	var initializeCleanups []*lntest.Cleanup
+	var runtimeCleanups []*lntest.Cleanup
+	wasInitialized := l.isInitialized
+
+	node.Start()
+	runtimeCleanups = append(runtimeCleanups, &lntest.Cleanup{
+		Name: fmt.Sprintf("%s: lsp lightning node", l.name),
+		Fn:   node.Stop,
+	})
+
+	if !wasInitialized {
+		err := l.postgresBackend.Start(l.harness.Ctx)
+		if err != nil {
+			lntest.PerformCleanup(initializeCleanups)
+			l.harness.T.Fatalf("failed to start postgres container: %v", err)
+		}
+
+		initializeCleanups = append(initializeCleanups, &lntest.Cleanup{
+			Name: fmt.Sprintf("%s: postgres container", l.name),
+			Fn: func() error {
+				return l.postgresBackend.Stop(context.Background())
+			},
+		})
+
+		log.Printf("%s: Creating lspd startup script at %s", l.name, l.scriptFilePath)
+		scriptFile, err := os.OpenFile(l.scriptFilePath, os.O_CREATE|os.O_WRONLY, 0755)
+		if err != nil {
+			lntest.PerformCleanup(runtimeCleanups)
+			lntest.PerformCleanup(initializeCleanups)
+			l.harness.T.Fatalf("failed to create lspd startup script: %v", err)
+		}
+
+		defer scriptFile.Close()
+		writer := bufio.NewWriter(scriptFile)
+		_, err = writer.WriteString("#!/bin/bash\n")
+		if err != nil {
+			lntest.PerformCleanup(runtimeCleanups)
+			lntest.PerformCleanup(initializeCleanups)
+			l.harness.T.Fatalf("failed to write lspd startup script: %v", err)
+		}
+
+		confFunc(l.conf)
+		confJson, _ := json.Marshal(l.conf)
+		nodes := fmt.Sprintf(`NODES='[%s]'`, string(confJson))
+		log.Printf("%s: node config: %s", l.name, nodes)
+
+		for _, str := range append(l.env, nodes) {
+			_, err = writer.WriteString("export " + str + "\n")
+			if err != nil {
+				lntest.PerformCleanup(runtimeCleanups)
+				lntest.PerformCleanup(initializeCleanups)
+				l.harness.T.Fatalf("failed to write lspd startup script: %v", err)
+			}
+		}
+
+		_, err = writer.WriteString(l.binary + "\n")
+		if err != nil {
+			lntest.PerformCleanup(runtimeCleanups)
+			lntest.PerformCleanup(initializeCleanups)
+			l.harness.T.Fatalf("failed to write lspd startup script: %v", err)
+		}
+
+		err = writer.Flush()
+		if err != nil {
+			lntest.PerformCleanup(runtimeCleanups)
+			lntest.PerformCleanup(initializeCleanups)
+			l.harness.T.Fatalf("failed to flush lspd startup script: %v", err)
+		}
+
+		l.isInitialized = true
+		l.cleanups = initializeCleanups
 	}
 
-	err = l.postgresBackend.Start(l.harness.Ctx)
+	cmd := exec.CommandContext(l.harness.Ctx, l.scriptFilePath)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	logFile, err := os.Create(l.logFilePath)
 	if err != nil {
-		return err
+		lntest.PerformCleanup(runtimeCleanups)
+		lntest.PerformCleanup(initializeCleanups)
+		l.harness.T.Fatalf("failed create lsp logfile: %v", err)
 	}
+	runtimeCleanups = append(runtimeCleanups, &lntest.Cleanup{
+		Name: fmt.Sprintf("%s: logfile", l.name),
+		Fn:   logFile.Close,
+	})
 
-	cleanups = append(cleanups, &lntest.Cleanup{
-		Name: fmt.Sprintf("%s: postgres container", l.name),
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+
+	log.Printf("%s: starting lspd %s", l.name, l.scriptFilePath)
+	err = cmd.Start()
+	if err != nil {
+		lntest.PerformCleanup(runtimeCleanups)
+		lntest.PerformCleanup(initializeCleanups)
+		l.harness.T.Fatalf("failed start lspd: %v", err)
+	}
+	runtimeCleanups = append(runtimeCleanups, &lntest.Cleanup{
+		Name: fmt.Sprintf("%s: cmd", l.name),
 		Fn: func() error {
-			return l.postgresBackend.Stop(context.Background())
+			proc := cmd.Process
+			if proc == nil {
+				return nil
+			}
+
+			syscall.Kill(-proc.Pid, syscall.SIGINT)
+
+			log.Printf("About to wait for lspd to exit")
+			status, err := proc.Wait()
+			if err != nil {
+				log.Printf("waiting for lspd process error: %v, status: %v", err, status)
+			}
+			err = cmd.Wait()
+			if err != nil {
+				log.Printf("waiting for lspd cmd error: %v", err)
+			}
+
+			return nil
 		},
 	})
-	err = l.postgresBackend.RunMigrations(l.harness.Ctx, migrationsDir)
-	if err != nil {
-		lntest.PerformCleanup(cleanups)
-		return err
-	}
 
-	_, err = l.postgresBackend.Pool().Exec(
-		l.harness.Ctx,
-		`DELETE FROM new_channel_params`,
-	)
-	if err != nil {
-		lntest.PerformCleanup(cleanups)
-		return fmt.Errorf("failed to delete new_channel_params: %w", err)
-	}
-
-	_, err = l.postgresBackend.Pool().Exec(
-		l.harness.Ctx,
-		`INSERT INTO new_channel_params (validity, params, token)
-		 VALUES 
-		  (3600, '{"min_msat": "1000000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432}', 'hello'),
-		  (259200, '{"min_msat": "1100000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432}', 'hello');`,
-	)
-	if err != nil {
-		lntest.PerformCleanup(cleanups)
-		return fmt.Errorf("failed to insert new_channel_params: %w", err)
-	}
-
-	log.Printf("%s: Creating lspd startup script at %s", l.name, l.scriptFilePath)
-	scriptFile, err := os.OpenFile(l.scriptFilePath, os.O_CREATE|os.O_WRONLY, 0755)
-	if err != nil {
-		lntest.PerformCleanup(cleanups)
-		return err
-	}
-
-	defer scriptFile.Close()
-	writer := bufio.NewWriter(scriptFile)
-	_, err = writer.WriteString("#!/bin/bash\n")
-	if err != nil {
-		lntest.PerformCleanup(cleanups)
-		return err
-	}
-
-	for _, str := range l.env {
-		_, err = writer.WriteString("export " + str + "\n")
+	if !wasInitialized {
+		<-time.After(time.Second * 2)
+		tx, err := l.postgresBackend.Pool().Begin(l.harness.Ctx)
+		defer tx.Rollback(l.harness.Ctx)
 		if err != nil {
-			lntest.PerformCleanup(cleanups)
-			return err
+			lntest.PerformCleanup(runtimeCleanups)
+			lntest.PerformCleanup(initializeCleanups)
+			l.harness.T.Fatalf("failed to begin postgres tx: %v", err)
+		}
+
+		_, err = tx.Exec(
+			l.harness.Ctx,
+			`DELETE FROM new_channel_params`,
+		)
+		if err != nil {
+			lntest.PerformCleanup(runtimeCleanups)
+			lntest.PerformCleanup(initializeCleanups)
+			l.harness.T.Fatalf("failed to delete new_channel_params: %v", err)
+		}
+
+		_, err = tx.Exec(
+			l.harness.Ctx,
+			`INSERT INTO new_channel_params (validity, params, token)
+			VALUES
+			(3600, '{"min_msat": "1000000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432}', 'hello'),
+			(259200, '{"min_msat": "1100000", "proportional": 7500, "max_idle_time": 4320, "max_client_to_self_delay": 432}', 'hello');`,
+		)
+		if err != nil {
+			lntest.PerformCleanup(runtimeCleanups)
+			lntest.PerformCleanup(initializeCleanups)
+			l.harness.T.Fatalf("failed to insert new_channel_params: %v", err)
+		}
+
+		err = tx.Commit(l.harness.Ctx)
+		if err != nil {
+			lntest.PerformCleanup(runtimeCleanups)
+			lntest.PerformCleanup(initializeCleanups)
+			l.harness.T.Fatalf("failed to commit tx: %v", err)
 		}
 	}
 
-	_, err = writer.WriteString(l.binary + "\n")
-	if err != nil {
-		lntest.PerformCleanup(cleanups)
-		return err
+	l.runtime = &lspBaseRuntime{
+		node:     node,
+		cmd:      cmd,
+		logFile:  logFile,
+		cleanups: runtimeCleanups,
 	}
-
-	err = writer.Flush()
-	if err != nil {
-		lntest.PerformCleanup(cleanups)
-		return err
-	}
-
-	return nil
 }
 
 func ChannelInformation(l LspNode) *lspd.ChannelInformationReply {
@@ -400,14 +511,6 @@ func getLspdBinary() (string, error) {
 	}
 
 	return exec.LookPath("lspd")
-}
-
-func getMigrationsDir() (string, error) {
-	if lspdMigrationsDir != nil {
-		return *lspdMigrationsDir, nil
-	}
-
-	return exec.LookPath("lspdmigrationsdir")
 }
 
 type token struct {

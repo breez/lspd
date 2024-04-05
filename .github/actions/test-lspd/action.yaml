@@ -128,7 +128,6 @@ runs:
           --lndmobileexec ~/go_lnd_client/bin/lnd \
           --clnpluginexec ${{ github.workspace }}/lspd_cln_plugin \
           --lspdexec ${{ github.workspace }}/lspd \
-          --lspdmigrationsdir ${{ github.workspace }}/postgresql/migrations \
           --preservelogs \
           --testdir /home/runner/test_state || echo "step_failed=true" >> $GITHUB_ENV
       shell: bash

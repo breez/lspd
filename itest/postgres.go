@@ -7,8 +7,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"path/filepath"
-	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -252,28 +250,5 @@ func (c *PostgresContainer) monitorLogs(ctx context.Context) {
 }
 
 func (c *PostgresContainer) ConnectionString() string {
-	return fmt.Sprintf("postgres://postgres:%s@127.0.0.1:%d/postgres", c.password, c.port)
-}
-
-func (c *PostgresContainer) RunMigrations(ctx context.Context, migrationDir string) error {
-	filenames, err := filepath.Glob(filepath.Join(migrationDir, "*.up.sql"))
-	if err != nil {
-		return fmt.Errorf("failed to glob migration files: %w", err)
-	}
-
-	sort.Strings(filenames)
-
-	for _, filename := range filenames {
-		data, err := os.ReadFile(filename)
-		if err != nil {
-			return fmt.Errorf("failed to read migration file '%s': %w", filename, err)
-		}
-
-		_, err = c.pool.Exec(ctx, string(data))
-		if err != nil {
-			return fmt.Errorf("failed to execute migration file '%s': %w", filename, err)
-		}
-	}
-
-	return nil
+	return fmt.Sprintf("postgres://postgres:%s@127.0.0.1:%d/postgres?sslmode=disable", c.password, c.port)
 }
