@@ -13,6 +13,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
 	github.com/docker/docker v20.10.27+incompatible
 	github.com/docker/go-connections v0.4.0
+	github.com/golang-migrate/migrate/v4 v4.16.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/jackc/pgtype v1.14.0
 	github.com/jackc/pgx/v5 v5.4.3
@@ -43,6 +44,8 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/uuid v1.3.1 // indirect
+	github.com/hashicorp/errwrap v1.1.0 // indirect
+	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.14.3 // indirect
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa // indirect
@@ -56,7 +59,6 @@ require (
 	github.com/lightninglabs/neutrino/cache v1.1.1 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
-	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

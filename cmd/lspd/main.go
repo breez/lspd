@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -91,6 +92,13 @@ func main() {
 	}
 
 	databaseUrl := os.Getenv("DATABASE_URL")
+	automigrate, _ := strconv.ParseBool(os.Getenv("AUTO_MIGRATE_DATABASE"))
+	if automigrate {
+		err = postgresql.Migrate(databaseUrl)
+		if err != nil {
+			log.Fatalf("Failed to migrate postgres database: %v", err)
+		}
+	}
 	pool, err := postgresql.PgConnect(databaseUrl)
 	if err != nil {
 		log.Fatalf("pgConnect() error: %v", err)
