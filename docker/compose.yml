@@ -1,0 +1,74 @@
+
+services:
+  lspd:
+    build:
+      context: ..
+      dockerfile: docker/lspd/Dockerfile
+    volumes:
+      - ../bin:/lspd/bin
+    networks:
+      - lspd-pg
+      - lspd-cln
+    env_file:
+      - path: ./lspd/.env.required
+        required: true
+      - path: ./lspd/.env.optional
+        required: false
+    environment:
+      # Make sure pg/.env is sourced before executing, or change this line by 
+      # copying the specific variables from the pg/.env file
+      - DATABASE_URL=postgresql://${PG_USERNAME}:${PG_PASSWORD}@pg
+    depends_on:
+      - pg
+      - cln
+
+  pg:
+    image: postgres:16
+    networks:
+      - lspd-pg
+    volumes:
+      - ./pg/setup.sh:/docker-entrypoint-initdb.d/setup.sh
+    env_file: ./pg/.env
+    restart: always
+
+  cln:
+    build: ./cln
+    volumes:
+      - ../bin:/lspd/bin
+      - bitcoind-root:/root/bitcoin
+    command:
+      --developer
+      --plugin=/lspd/bin/lspd_cln_plugin
+      --max-concurrent-htlcs=0
+      --dev-allowdustreserve=true
+      --lsp-listen=0.0.0.0:${LSPD_CLN_PLUGIN_PORT}
+      --grpc-port=${GRPC_PORT}
+    env_file: ./cln/.env
+    environment:
+      - LIGHTNINGD_NETWORK=bitcoin
+    networks:
+      - cln-bitcoind
+      - lspd-cln
+    depends_on:
+      - bitcoind
+
+  bitcoind:
+    image: lightninglabs/bitcoin-core:24-alpine
+    volumes:
+      - bitcoind-root:/root/bitcoin
+    command:
+      -prune=550
+      -printtoconsole
+    networks:
+      - cln-bitcoind
+
+  # TODO
+  # lnd
+
+networks:
+  cln-bitcoind:
+  lspd-cln:
+  lspd-pg:
+
+volumes:
+  bitcoind-root:
