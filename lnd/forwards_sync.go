@@ -31,6 +31,8 @@ func NewForwardSync(
 
 var forwardChannelSyncInterval time.Duration = time.Minute * 5
 
+const maxEvents = 10_000
+
 func (s *ForwardSync) ForwardsSynchronize(ctx context.Context) {
 	s.forwardsSynchronizeOnce(ctx)
 
@@ -60,7 +62,7 @@ func (s *ForwardSync) forwardsSynchronizeOnce(ctx context.Context) {
 	for {
 		forwardHistory, err := s.client.client.ForwardingHistory(context.Background(), &lnrpc.ForwardingHistoryRequest{
 			StartTime:    startTime / 1_000_000_000,
-			NumMaxEvents: 10000,
+			NumMaxEvents: maxEvents,
 		})
 		if err != nil {
 			log.Printf("forwardsSynchronizeOnce(%x) - ForwardingHistory error: %v", s.nodeid, err)
@@ -88,6 +90,10 @@ func (s *ForwardSync) forwardsSynchronizeOnce(ctx context.Context) {
 		if err != nil {
 			log.Printf("forwardsSynchronizeOnce(%x) - store.InsertForwards() error: %v", s.nodeid, err)
 			return
+		}
+
+		if len(forwardHistory.ForwardingEvents) < maxEvents {
+			break
 		}
 	}
 }
