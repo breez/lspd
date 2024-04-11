@@ -16,6 +16,7 @@ func main() {
 	app.Action = runLspd
 	app.Commands = []cli.Command{
 		genKeyCommand,
+		migrateCommand,
 	}
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
