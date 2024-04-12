@@ -196,7 +196,6 @@ func (l *lspBase) Start(
 	node lntest.LightningNode,
 	confFunc func(*config.NodeConfig),
 ) {
-	var initializeCleanups []*lntest.Cleanup
 	var runtimeCleanups []*lntest.Cleanup
 	wasInitialized := l.isInitialized
 
@@ -207,66 +206,7 @@ func (l *lspBase) Start(
 	})
 
 	if !wasInitialized {
-		err := l.postgresBackend.Start(l.harness.Ctx)
-		if err != nil {
-			lntest.PerformCleanup(initializeCleanups)
-			l.harness.T.Fatalf("failed to start postgres container: %v", err)
-		}
-
-		initializeCleanups = append(initializeCleanups, &lntest.Cleanup{
-			Name: fmt.Sprintf("%s: postgres container", l.name),
-			Fn: func() error {
-				return l.postgresBackend.Stop(context.Background())
-			},
-		})
-
-		log.Printf("%s: Creating lspd startup script at %s", l.name, l.scriptFilePath)
-		scriptFile, err := os.OpenFile(l.scriptFilePath, os.O_CREATE|os.O_WRONLY, 0755)
-		if err != nil {
-			lntest.PerformCleanup(runtimeCleanups)
-			lntest.PerformCleanup(initializeCleanups)
-			l.harness.T.Fatalf("failed to create lspd startup script: %v", err)
-		}
-
-		defer scriptFile.Close()
-		writer := bufio.NewWriter(scriptFile)
-		_, err = writer.WriteString("#!/bin/bash\n")
-		if err != nil {
-			lntest.PerformCleanup(runtimeCleanups)
-			lntest.PerformCleanup(initializeCleanups)
-			l.harness.T.Fatalf("failed to write lspd startup script: %v", err)
-		}
-
-		confFunc(l.conf)
-		confJson, _ := json.Marshal(l.conf)
-		nodes := fmt.Sprintf(`NODES='[%s]'`, string(confJson))
-		log.Printf("%s: node config: %s", l.name, nodes)
-
-		for _, str := range append(l.env, nodes) {
-			_, err = writer.WriteString("export " + str + "\n")
-			if err != nil {
-				lntest.PerformCleanup(runtimeCleanups)
-				lntest.PerformCleanup(initializeCleanups)
-				l.harness.T.Fatalf("failed to write lspd startup script: %v", err)
-			}
-		}
-
-		_, err = writer.WriteString(l.binary + "\n")
-		if err != nil {
-			lntest.PerformCleanup(runtimeCleanups)
-			lntest.PerformCleanup(initializeCleanups)
-			l.harness.T.Fatalf("failed to write lspd startup script: %v", err)
-		}
-
-		err = writer.Flush()
-		if err != nil {
-			lntest.PerformCleanup(runtimeCleanups)
-			lntest.PerformCleanup(initializeCleanups)
-			l.harness.T.Fatalf("failed to flush lspd startup script: %v", err)
-		}
-
-		l.isInitialized = true
-		l.cleanups = initializeCleanups
+		l.initialize(runtimeCleanups, confFunc)
 	}
 
 	cmd := exec.CommandContext(l.harness.Ctx, l.scriptFilePath)
@@ -274,7 +214,7 @@ func (l *lspBase) Start(
 	logFile, err := os.Create(l.logFilePath)
 	if err != nil {
 		lntest.PerformCleanup(runtimeCleanups)
-		lntest.PerformCleanup(initializeCleanups)
+		lntest.PerformCleanup(l.cleanups)
 		l.harness.T.Fatalf("failed create lsp logfile: %v", err)
 	}
 	runtimeCleanups = append(runtimeCleanups, &lntest.Cleanup{
@@ -289,7 +229,7 @@ func (l *lspBase) Start(
 	err = cmd.Start()
 	if err != nil {
 		lntest.PerformCleanup(runtimeCleanups)
-		lntest.PerformCleanup(initializeCleanups)
+		lntest.PerformCleanup(l.cleanups)
 		l.harness.T.Fatalf("failed start lspd: %v", err)
 	}
 	runtimeCleanups = append(runtimeCleanups, &lntest.Cleanup{
@@ -322,7 +262,7 @@ func (l *lspBase) Start(
 		defer tx.Rollback(l.harness.Ctx)
 		if err != nil {
 			lntest.PerformCleanup(runtimeCleanups)
-			lntest.PerformCleanup(initializeCleanups)
+			lntest.PerformCleanup(l.cleanups)
 			l.harness.T.Fatalf("failed to begin postgres tx: %v", err)
 		}
 
@@ -332,7 +272,7 @@ func (l *lspBase) Start(
 		)
 		if err != nil {
 			lntest.PerformCleanup(runtimeCleanups)
-			lntest.PerformCleanup(initializeCleanups)
+			lntest.PerformCleanup(l.cleanups)
 			l.harness.T.Fatalf("failed to delete new_channel_params: %v", err)
 		}
 
@@ -345,14 +285,14 @@ func (l *lspBase) Start(
 		)
 		if err != nil {
 			lntest.PerformCleanup(runtimeCleanups)
-			lntest.PerformCleanup(initializeCleanups)
+			lntest.PerformCleanup(l.cleanups)
 			l.harness.T.Fatalf("failed to insert new_channel_params: %v", err)
 		}
 
 		err = tx.Commit(l.harness.Ctx)
 		if err != nil {
 			lntest.PerformCleanup(runtimeCleanups)
-			lntest.PerformCleanup(initializeCleanups)
+			lntest.PerformCleanup(l.cleanups)
 			l.harness.T.Fatalf("failed to commit tx: %v", err)
 		}
 	}
@@ -363,6 +303,70 @@ func (l *lspBase) Start(
 		logFile:  logFile,
 		cleanups: runtimeCleanups,
 	}
+}
+
+func (l *lspBase) initialize(runtimeCleanups []*lntest.Cleanup, confFunc func(*config.NodeConfig)) {
+	var initializeCleanups []*lntest.Cleanup
+	err := l.postgresBackend.Start(l.harness.Ctx)
+	if err != nil {
+		lntest.PerformCleanup(initializeCleanups)
+		l.harness.T.Fatalf("failed to start postgres container: %v", err)
+	}
+
+	initializeCleanups = append(initializeCleanups, &lntest.Cleanup{
+		Name: fmt.Sprintf("%s: postgres container", l.name),
+		Fn: func() error {
+			return l.postgresBackend.Stop(context.Background())
+		},
+	})
+
+	log.Printf("%s: Creating lspd startup script at %s", l.name, l.scriptFilePath)
+	scriptFile, err := os.OpenFile(l.scriptFilePath, os.O_CREATE|os.O_WRONLY, 0755)
+	if err != nil {
+		lntest.PerformCleanup(runtimeCleanups)
+		lntest.PerformCleanup(initializeCleanups)
+		l.harness.T.Fatalf("failed to create lspd startup script: %v", err)
+	}
+
+	defer scriptFile.Close()
+	writer := bufio.NewWriter(scriptFile)
+	_, err = writer.WriteString("#!/bin/bash\n")
+	if err != nil {
+		lntest.PerformCleanup(runtimeCleanups)
+		lntest.PerformCleanup(initializeCleanups)
+		l.harness.T.Fatalf("failed to write lspd startup script: %v", err)
+	}
+
+	confFunc(l.conf)
+	confJson, _ := json.Marshal(l.conf)
+	nodes := fmt.Sprintf(`NODES='[%s]'`, string(confJson))
+	log.Printf("%s: node config: %s", l.name, nodes)
+
+	for _, str := range append(l.env, nodes) {
+		_, err = writer.WriteString("export " + str + "\n")
+		if err != nil {
+			lntest.PerformCleanup(runtimeCleanups)
+			lntest.PerformCleanup(initializeCleanups)
+			l.harness.T.Fatalf("failed to write lspd startup script: %v", err)
+		}
+	}
+
+	_, err = writer.WriteString(l.binary + "\n")
+	if err != nil {
+		lntest.PerformCleanup(runtimeCleanups)
+		lntest.PerformCleanup(initializeCleanups)
+		l.harness.T.Fatalf("failed to write lspd startup script: %v", err)
+	}
+
+	err = writer.Flush()
+	if err != nil {
+		lntest.PerformCleanup(runtimeCleanups)
+		lntest.PerformCleanup(initializeCleanups)
+		l.harness.T.Fatalf("failed to flush lspd startup script: %v", err)
+	}
+
+	l.isInitialized = true
+	l.cleanups = initializeCleanups
 }
 
 func ChannelInformation(l LspNode) *lspd.ChannelInformationReply {
