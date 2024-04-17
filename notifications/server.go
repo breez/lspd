@@ -67,7 +67,8 @@ func (s *server) SubscribeNotifications(
 		return nil, err
 	}
 
-	err = s.store.Register(ctx, hex.EncodeToString(pubkey.SerializeCompressed()), request.Url)
+	pubkeyStr := hex.EncodeToString(pubkey.SerializeCompressed())
+	err = s.store.Register(ctx, pubkeyStr, request.Url)
 	if err != nil {
 		log.Printf(
 			"failed to register %x for notifications on url %s: %v",
@@ -79,7 +80,7 @@ func (s *server) SubscribeNotifications(
 		return nil, ErrInternal
 	}
 
-	log.Printf("%v was successfully registered for notifications on url %s", pubkey, request.Url)
+	log.Printf("%s was successfully registered for notifications on url %s", pubkeyStr, request.Url)
 	return &SubscribeNotificationsReply{}, nil
 }
 
