@@ -16,7 +16,7 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.16.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/jackc/pgtype v1.14.0
-	github.com/jackc/pgx/v5 v5.4.3
+	github.com/jackc/pgx/v5 v5.5.4
 	github.com/lightningnetwork/lightning-onion v1.2.1-0.20230823005744-06182b1d7d2f
 	github.com/lightningnetwork/lnd v0.17.2-beta
 	github.com/lightningnetwork/lnd/tlv v1.1.1
