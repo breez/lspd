@@ -81,7 +81,7 @@ HealthCheck:
 	for {
 		inspect, err := c.cli.ContainerInspect(ctx, c.id)
 		if err != nil {
-			c.cli.ContainerStop(ctx, c.id, nil)
+			c.cli.ContainerStop(ctx, c.id, container.StopOptions{})
 			c.cli.Close()
 			return fmt.Errorf("failed to inspect container '%s' during healthcheck: %w", c.id, err)
 		}
@@ -89,7 +89,7 @@ HealthCheck:
 		status := inspect.State.Health.Status
 		switch status {
 		case "unhealthy":
-			c.cli.ContainerStop(ctx, c.id, nil)
+			c.cli.ContainerStop(ctx, c.id, container.StopOptions{})
 			c.cli.Close()
 			return fmt.Errorf("container '%s' unhealthy", c.id)
 		case "healthy":
@@ -191,7 +191,7 @@ func (c *PostgresContainer) Stop(ctx context.Context) error {
 	}
 
 	defer c.cli.Close()
-	err := c.cli.ContainerStop(ctx, c.id, nil)
+	err := c.cli.ContainerStop(ctx, c.id, container.StopOptions{})
 	c.isStarted = false
 	return err
 }
