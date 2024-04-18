@@ -15,7 +15,12 @@ func NewCombinedHandler(handlers ...InterceptHandler) *CombinedHandler {
 func (c *CombinedHandler) Intercept(req InterceptRequest) InterceptResult {
 	for i, handler := range c.handlers {
 		res := handler.Intercept(req)
-		log.Printf("Intercept %+v. Interceptor %d returns %+v", req, i, res)
+		log.Printf(
+			"Intercept {%s}. Interceptor %d returns {%s}",
+			req.String(),
+			i,
+			res.String(),
+		)
 		if res.Action != INTERCEPT_RESUME {
 			return res
 		}

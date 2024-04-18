@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/wire"
@@ -47,6 +48,19 @@ func (r *InterceptRequest) HtlcId() string {
 	return r.Identifier
 }
 
+func (r *InterceptRequest) String() string {
+	return fmt.Sprintf(
+		"id: %s, paymenthash: %x, scid: %s, amt_in: %d, amt_out: %d, expiry_in: %d, expiry_out: %d",
+		r.Identifier,
+		r.PaymentHash,
+		r.Scid.ToString(),
+		r.IncomingAmountMsat,
+		r.OutgoingAmountMsat,
+		r.IncomingExpiry,
+		r.OutgoingExpiry,
+	)
+}
+
 type InterceptResult struct {
 	Action             InterceptAction
 	FailureCode        InterceptFailureCode
@@ -58,6 +72,29 @@ type InterceptResult struct {
 	Scid               lightning.ShortChannelID
 	PaymentSecret      []byte
 	UseLegacyOnionBlob bool
+}
+
+func (r *InterceptResult) String() string {
+	var feeMsat string
+	if r.FeeMsat != nil {
+		feeMsat = strconv.FormatUint(*r.FeeMsat, 10)
+	}
+	var cp string
+	if r.ChannelPoint != nil {
+		cp = r.ChannelPoint.String()
+	}
+	return fmt.Sprintf(
+		"action: %v, code: %v, destination: %x, amt: %d, fee: %s, total_amt: %d, channelpoint: %s, scid: %s, use_legacy_blob: %t",
+		r.Action,
+		r.FailureCode,
+		r.Destination,
+		r.AmountMsat,
+		feeMsat,
+		r.TotalAmountMsat,
+		cp,
+		r.Scid.ToString(),
+		r.UseLegacyOnionBlob,
+	)
 }
 
 type InterceptHandler interface {
