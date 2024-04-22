@@ -560,8 +560,10 @@ func (c *ClnPlugin) sendToCln(msg interface{}) error {
 	if err != nil {
 		log.Printf("Failed to send message to cln: %v", err)
 		c.Stop()
+		return fmt.Errorf("failed to send message to cln: %w", err)
 	}
-	return fmt.Errorf("failed to send message to cln: %w", err)
+
+	return nil
 }
 
 func (c *ClnPlugin) setupClnLogging() {
@@ -574,7 +576,7 @@ func (c *ClnPlugin) setupClnLogging() {
 		for {
 			if !scanner.Scan() {
 				if err := scanner.Err(); err != nil {
-					errLogger.Printf("Log input stream died: %v", err)
+					errLogger.Printf("Log input stream died: %s", err.Error())
 					<-time.After(time.Second)
 				}
 
@@ -584,7 +586,7 @@ func (c *ClnPlugin) setupClnLogging() {
 			for _, line := range strings.Split(scanner.Text(), "\n") {
 				err := c.log("info", line)
 				if err != nil {
-					errLogger.Printf("Failed to write log '%s' to cln, error: %v", line, err)
+					errLogger.Printf("Failed to write log '%s' to cln, error: %s", line, err.Error())
 				}
 			}
 		}
