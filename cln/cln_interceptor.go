@@ -140,6 +140,12 @@ func (i *ClnHtlcInterceptor) intercept() error {
 					return
 				}
 
+				if request.Onion == nil || request.Onion.ShortChannelId == "" {
+					interceptorClient.Send(i.defaultResolution(request))
+					i.doneWg.Done()
+					return
+				}
+
 				scid, err := lightning.NewShortChannelIDFromString(request.Onion.ShortChannelId)
 				if err != nil {
 					interceptorClient.Send(i.defaultResolution(request))
