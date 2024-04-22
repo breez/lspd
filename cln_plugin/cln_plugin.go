@@ -6,6 +6,7 @@ package cln_plugin
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -48,7 +49,8 @@ var (
 )
 
 type ClnPlugin struct {
-	done                chan struct{}
+	ctx                 context.Context
+	cancel              context.CancelFunc
 	server              *server
 	in                  *os.File
 	out                 *bufio.Writer
@@ -57,38 +59,40 @@ type ClnPlugin struct {
 }
 
 func NewClnPlugin(in, out *os.File) *ClnPlugin {
+	ctx, cancel := context.WithCancel(context.Background())
 	c := &ClnPlugin{
-		done: make(chan struct{}),
-		in:   in,
-		out:  bufio.NewWriter(out),
+		ctx:    ctx,
+		cancel: cancel,
+		in:     in,
+		out:    bufio.NewWriter(out),
 	}
 
 	return c
 }
 
-// Starts the cln plugin.
+// Starts the cln plugin. This function should only be called once.
 // NOTE: The grpc server is started in the handleInit function.
-func (c *ClnPlugin) Start() {
+func (c *ClnPlugin) Start() error {
+	if c.ctx.Err() != nil {
+		return c.ctx.Err()
+	}
+
 	c.setupLogging()
 	log.Printf(`Starting lspd cln_plugin, tag='%s', revision='%s'`, build.GetTag(), build.GetRevision())
 	go c.listenRequests()
-	<-c.done
+	<-c.ctx.Done()
 	s := c.server
 	if s != nil {
 		<-s.completed
 	}
+	return c.ctx.Err()
 }
 
 // Stops the cln plugin. Drops any remaining work immediately.
 // Pending htlcs will be replayed when cln starts again.
 func (c *ClnPlugin) Stop() {
 	log.Printf("Stop called. Stopping plugin.")
-	close(c.done)
-
-	s := c.server
-	if s != nil {
-		s.Stop()
-	}
+	c.cancel()
 }
 
 // listens stdout for requests from cln and sends the requests to the
@@ -102,7 +106,7 @@ func (c *ClnPlugin) listenRequests() error {
 	scanner.Split(scanDoubleNewline)
 	for {
 		select {
-		case <-c.done:
+		case <-c.ctx.Done():
 			return nil
 		default:
 			if !scanner.Scan() {
@@ -133,7 +137,7 @@ func (c *ClnPlugin) listenRequests() error {
 func (c *ClnPlugin) htlcListenServer() {
 	for {
 		select {
-		case <-c.done:
+		case <-c.ctx.Done():
 			return
 		default:
 			id, result := c.server.ReceiveHtlcResolution()
@@ -157,7 +161,7 @@ func (c *ClnPlugin) htlcListenServer() {
 func (c *ClnPlugin) custommsgListenServer() {
 	for {
 		select {
-		case <-c.done:
+		case <-c.ctx.Done():
 			return
 		default:
 			id, result := c.server.ReceiveCustomMessageResponse()
@@ -612,7 +616,7 @@ func (c *ClnPlugin) setupLogging() {
 		scanner := bufio.NewScanner(in)
 		for {
 			select {
-			case <-c.done:
+			case <-c.ctx.Done():
 				return
 			default:
 				if !scanner.Scan() {
