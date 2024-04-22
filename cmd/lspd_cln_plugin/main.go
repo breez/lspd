@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	plugin := cln_plugin.NewClnPlugin(os.Stdin, os.Stdout)
+	plugin := cln_plugin.NewClnPlugin(os.Stdin, os.Stdout, os.Stderr)
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 	go func() {

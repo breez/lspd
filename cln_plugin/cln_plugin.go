@@ -50,18 +50,20 @@ type ClnPlugin struct {
 	serverStopped       chan struct{}
 	reader              *reader
 	writer              *writer
+	stderr              *os.File
 	channelAcceptScript string
 }
 
-func NewClnPlugin(in, out *os.File) *ClnPlugin {
+func NewClnPlugin(stdin, stdout, stderr *os.File) *ClnPlugin {
 	ctx, cancel := context.WithCancel(context.Background())
-	reader := newReader(in)
-	writer := newWriter(out)
+	reader := newReader(stdin)
+	writer := newWriter(stdout)
 	c := &ClnPlugin{
 		ctx:           ctx,
 		cancel:        cancel,
 		reader:        reader,
 		writer:        writer,
+		stderr:        stderr,
 		serverStopped: make(chan struct{}),
 		server:        NewServer(),
 	}
@@ -77,7 +79,7 @@ func (c *ClnPlugin) Start() error {
 		return c.ctx.Err()
 	}
 
-	c.setupLogging()
+	c.setupClnLogging()
 	log.Printf(`Starting lspd cln_plugin, tag='%s', revision='%s'`, build.GetTag(), build.GetRevision())
 	go func() {
 		err := c.listenRequests()
@@ -561,12 +563,12 @@ func (c *ClnPlugin) sendToCln(msg interface{}) {
 	}
 }
 
-func (c *ClnPlugin) setupLogging() {
+func (c *ClnPlugin) setupClnLogging() {
 	in, out := io.Pipe()
-	log.SetFlags(log.Ltime | log.Lshortfile)
 	log.SetOutput(out)
+	errLogger := log.New(c.stderr, log.Prefix(), log.Ltime|log.Lshortfile)
 	go func(in io.Reader) {
-		// everytime we get a new message, log it thru c-lightning
+		// everytime we get a new message, log it through cln
 		scanner := bufio.NewScanner(in)
 		for {
 			select {
@@ -575,19 +577,23 @@ func (c *ClnPlugin) setupLogging() {
 			default:
 				if !scanner.Scan() {
 					if err := scanner.Err(); err != nil {
-						log.Fatalf(
-							"can't print out to std err, killing: %v",
-							err,
-						)
+						errLogger.Printf("Log input stream died: %v", err)
+						<-time.After(time.Second)
+						continue
 					}
 				}
 
 				for _, line := range strings.Split(scanner.Text(), "\n") {
-					c.log("info", line)
+					err := c.writer.Write(&LogNotification{
+						Level:   "info",
+						Message: line,
+					})
+					if err != nil {
+						errLogger.Printf("Failed to write log '%s' to cln, error: %v", line, err)
+					}
 				}
 			}
 		}
-
 	}(in)
 }
 
