@@ -118,6 +118,7 @@ func (s *server) initialize(address string, subscriberTimeout time.Duration) (ne
 
 	s.subscriberTimeout = subscriberTimeout
 
+	go s.logHtlcStates()
 	go s.listenHtlcRequests()
 	go s.listenHtlcResponses()
 	go s.listenCustomMsgRequests()
@@ -220,6 +221,26 @@ func (s *server) ReceiveHtlcResolution() (string, interface{}) {
 		s.inflightHtlcs.Delete(msg.id)
 		s.mtx.Unlock()
 		return msg.id, msg.result
+	}
+}
+
+func (s *server) logHtlcStates() {
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-time.After(time.Minute * 5):
+		}
+
+		s.mtx.Lock()
+		sendQueueLen := len(s.htlcSendQueue)
+		recvQueueLen := len(s.htlcRecvQueue)
+		inflightLen := s.inflightHtlcs.Len()
+		s.mtx.Unlock()
+
+		log.Printf(
+			"Htlc status: inflight: %d, send queue: %d, receive queue: %d",
+			inflightLen, sendQueueLen, recvQueueLen)
 	}
 }
 
