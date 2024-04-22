@@ -571,26 +571,22 @@ func (c *ClnPlugin) setupClnLogging() {
 		// everytime we get a new message, log it through cln
 		scanner := bufio.NewScanner(in)
 		for {
-			select {
-			case <-c.ctx.Done():
-				return
-			default:
-				if !scanner.Scan() {
-					if err := scanner.Err(); err != nil {
-						errLogger.Printf("Log input stream died: %v", err)
-						<-time.After(time.Second)
-						continue
-					}
+			if !scanner.Scan() {
+				if err := scanner.Err(); err != nil {
+					errLogger.Printf("Log input stream died: %v", err)
+					<-time.After(time.Second)
 				}
 
-				for _, line := range strings.Split(scanner.Text(), "\n") {
-					err := c.writer.Write(&LogNotification{
-						Level:   "info",
-						Message: line,
-					})
-					if err != nil {
-						errLogger.Printf("Failed to write log '%s' to cln, error: %v", line, err)
-					}
+				continue
+			}
+
+			for _, line := range strings.Split(scanner.Text(), "\n") {
+				err := c.writer.Write(&LogNotification{
+					Level:   "info",
+					Message: line,
+				})
+				if err != nil {
+					errLogger.Printf("Failed to write log '%s' to cln, error: %v", line, err)
 				}
 			}
 		}
