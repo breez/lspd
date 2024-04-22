@@ -555,12 +555,13 @@ func (c *ClnPlugin) sendError(id json.RawMessage, code int, message string) {
 }
 
 // Sends a message to cln.
-func (c *ClnPlugin) sendToCln(msg interface{}) {
+func (c *ClnPlugin) sendToCln(msg interface{}) error {
 	err := c.writer.Write(msg)
 	if err != nil {
 		log.Printf("Failed to send message to cln: %v", err)
 		c.Stop()
 	}
+	return fmt.Errorf("failed to send message to cln: %w", err)
 }
 
 func (c *ClnPlugin) setupClnLogging() {
@@ -581,10 +582,7 @@ func (c *ClnPlugin) setupClnLogging() {
 			}
 
 			for _, line := range strings.Split(scanner.Text(), "\n") {
-				err := c.writer.Write(&LogNotification{
-					Level:   "info",
-					Message: line,
-				})
+				err := c.log("info", line)
 				if err != nil {
 					errLogger.Printf("Failed to write log '%s' to cln, error: %v", line, err)
 				}
@@ -593,13 +591,13 @@ func (c *ClnPlugin) setupClnLogging() {
 	}(in)
 }
 
-func (c *ClnPlugin) log(level string, message string) {
+func (c *ClnPlugin) log(level string, message string) error {
 	params, _ := json.Marshal(&LogNotification{
 		Level:   level,
 		Message: message,
 	})
 
-	c.sendToCln(&Request{
+	return c.sendToCln(&Request{
 		Method:  "log",
 		JsonRpc: SpecVersion,
 		Params:  params,
