@@ -52,6 +52,7 @@ type ClnPlugin struct {
 	ctx                 context.Context
 	cancel              context.CancelFunc
 	server              *server
+	serverStopped       chan struct{}
 	in                  *os.File
 	out                 *bufio.Writer
 	writeMtx            sync.Mutex
@@ -61,10 +62,11 @@ type ClnPlugin struct {
 func NewClnPlugin(in, out *os.File) *ClnPlugin {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &ClnPlugin{
-		ctx:    ctx,
-		cancel: cancel,
-		in:     in,
-		out:    bufio.NewWriter(out),
+		ctx:           ctx,
+		cancel:        cancel,
+		in:            in,
+		out:           bufio.NewWriter(out),
+		serverStopped: make(chan struct{}),
 	}
 
 	return c
@@ -83,7 +85,7 @@ func (c *ClnPlugin) Start() error {
 	<-c.ctx.Done()
 	s := c.server
 	if s != nil {
-		<-s.completed
+		<-c.serverStopped
 	}
 	return c.ctx.Err()
 }
@@ -431,7 +433,19 @@ func (c *ClnPlugin) handleInit(request *Request) {
 
 	// Start the grpc server.
 	c.server = NewServer(addr, subscriberTimeout)
-	go c.server.Start()
+
+	go func() {
+		<-c.ctx.Done()
+		c.server.Stop()
+	}()
+	go func() {
+		err := c.server.Start()
+		if err != nil {
+			log.Printf("server exited with error: %v", err)
+		}
+		close(c.serverStopped)
+		c.cancel()
+	}()
 	err = c.server.WaitStarted()
 	if err != nil {
 		c.sendError(

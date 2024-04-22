@@ -1,6 +1,7 @@
 package cln_plugin
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -41,13 +42,13 @@ type custommsgResultMsg struct {
 
 type server struct {
 	proto.ClnPluginServer
+	ctx                    context.Context
+	cancel                 context.CancelFunc
 	listenAddress          string
 	subscriberTimeout      time.Duration
 	grpcServer             *grpc.Server
 	mtx                    sync.Mutex
 	started                chan struct{}
-	done                   chan struct{}
-	completed              chan struct{}
 	startError             chan error
 	htlcnewSubscriber      chan struct{}
 	htlcStream             proto.ClnPlugin_HtlcStreamServer
@@ -61,48 +62,12 @@ type server struct {
 }
 
 // Creates a new grpc server
-func NewServer(listenAddress string, subscriberTimeout time.Duration) *server {
+func NewServer(
+	listenAddress string,
+	subscriberTimeout time.Duration,
+) *server {
 	// TODO: Set a sane max queue size
-	return &server{
-		listenAddress:     listenAddress,
-		subscriberTimeout: subscriberTimeout,
-		// The send queue exists to buffer messages until a subscriber is active.
-		htlcSendQueue:      make(chan *htlcAcceptedMsg, 10000),
-		custommsgSendQueue: make(chan *custommsgMsg, 10000),
-		// The receive queue exists mainly to allow returning timeouts to the
-		// cln plugin. If there is no subscriber active within the subscriber
-		// timeout period these results can be put directly on the receive queue.
-		htlcRecvQueue:      make(chan *htlcResultMsg, 10000),
-		inflightHtlcs:      orderedmap.New[string, *htlcAcceptedMsg](),
-		custommsgRecvQueue: make(chan *custommsgResultMsg, 10000),
-		started:            make(chan struct{}),
-		startError:         make(chan error, 1),
-	}
-}
-
-// Starts the grpc server. Blocks until the servver is stopped. WaitStarted can
-// be called to ensure the server is started without errors if this function
-// is run as a goroutine.
-func (s *server) Start() error {
-	s.mtx.Lock()
-	if s.grpcServer != nil {
-		s.mtx.Unlock()
-		return nil
-	}
-
-	lis, err := net.Listen("tcp", s.listenAddress)
-	if err != nil {
-		log.Printf("ERROR Server failed to listen: %v", err)
-		s.startError <- err
-		s.mtx.Unlock()
-		return err
-	}
-
-	s.done = make(chan struct{})
-	s.completed = make(chan struct{})
-	s.htlcnewSubscriber = make(chan struct{})
-	s.custommsgNewSubscriber = make(chan struct{})
-	s.grpcServer = grpc.NewServer(
+	grpcServer := grpc.NewServer(
 		grpc.KeepaliveParams(keepalive.ServerParameters{
 			Time:    time.Duration(1) * time.Second,
 			Timeout: time.Duration(10) * time.Second,
@@ -111,17 +76,64 @@ func (s *server) Start() error {
 			MinTime: time.Duration(1) * time.Second,
 		}),
 	)
-	s.mtx.Unlock()
-	proto.RegisterClnPluginServer(s.grpcServer, s)
 
-	log.Printf("Server starting to listen on %s.", s.listenAddress)
+	ctx, cancel := context.WithCancel(context.Background())
+	return &server{
+		ctx:               ctx,
+		cancel:            cancel,
+		listenAddress:     listenAddress,
+		subscriberTimeout: subscriberTimeout,
+		// The send queue exists to buffer messages until a subscriber is active.
+		htlcSendQueue:      make(chan *htlcAcceptedMsg, 10000),
+		custommsgSendQueue: make(chan *custommsgMsg, 10000),
+		// The receive queue exists mainly to allow returning timeouts to the
+		// cln plugin. If there is no subscriber active within the subscriber
+		// timeout period these results can be put directly on the receive queue.
+		htlcRecvQueue:          make(chan *htlcResultMsg, 10000),
+		inflightHtlcs:          orderedmap.New[string, *htlcAcceptedMsg](),
+		custommsgRecvQueue:     make(chan *custommsgResultMsg, 10000),
+		started:                make(chan struct{}),
+		startError:             make(chan error, 1),
+		grpcServer:             grpcServer,
+		htlcnewSubscriber:      make(chan struct{}),
+		custommsgNewSubscriber: make(chan struct{}),
+	}
+}
+
+// Starts the grpc server. Blocks until the server is stopped. WaitStarted can
+// be called to ensure the server is started without errors if this function
+// is run as a goroutine. This function can only be called once.
+func (s *server) Start() error {
+	lis, err := s.initialize()
+	if err != nil {
+		s.startError <- err
+		return err
+	}
+	err = s.grpcServer.Serve(lis)
+	return err
+}
+
+func (s *server) initialize() (net.Listener, error) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	if s.ctx.Err() != nil {
+		return nil, s.ctx.Err()
+	}
+
 	go s.listenHtlcRequests()
 	go s.listenHtlcResponses()
 	go s.listenCustomMsgRequests()
+	log.Printf("Server starting to listen on %s.", s.listenAddress)
+	lis, err := net.Listen("tcp", s.listenAddress)
+	if err != nil {
+		return nil, fmt.Errorf("grpc server failed to listen on address '%s': %w",
+			s.listenAddress, err)
+	}
+
+	proto.RegisterClnPluginServer(s.grpcServer, s)
 	close(s.started)
-	err = s.grpcServer.Serve(lis)
-	close(s.completed)
-	return err
+	return lis, nil
 }
 
 // Waits until the server has started, or errored during startup.
@@ -139,15 +151,8 @@ func (s *server) Stop() {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	log.Printf("Server Stop() called.")
-	if s.grpcServer == nil {
-		return
-	}
-
+	s.cancel()
 	s.grpcServer.Stop()
-	s.grpcServer = nil
-
-	close(s.done)
-	<-s.completed
 	log.Printf("Server stopped.")
 }
 
@@ -212,7 +217,7 @@ func (s *server) SendHtlcAccepted(id string, h *HtlcAccepted) {
 // active and has sent a message.
 func (s *server) ReceiveHtlcResolution() (string, interface{}) {
 	select {
-	case <-s.done:
+	case <-s.ctx.Done():
 		return "", nil
 	case msg := <-s.htlcRecvQueue:
 		s.mtx.Lock()
@@ -228,7 +233,7 @@ func (s *server) ReceiveHtlcResolution() (string, interface{}) {
 func (s *server) listenHtlcRequests() {
 	for {
 		select {
-		case <-s.done:
+		case <-s.ctx.Done():
 			log.Printf("listenHtlcRequests received done. Stop listening.")
 			return
 		case msg := <-s.htlcSendQueue:
@@ -250,7 +255,7 @@ func (s *server) handleHtlcAccepted(msg *htlcAcceptedMsg) {
 		// subscriber, or the message times out.
 		if stream == nil {
 			select {
-			case <-s.done:
+			case <-s.ctx.Done():
 				log.Printf("handleHtlcAccepted received server done. Stop processing.")
 				return
 			case <-ns:
@@ -310,7 +315,7 @@ func (s *server) handleHtlcAccepted(msg *htlcAcceptedMsg) {
 func (s *server) listenHtlcResponses() {
 	for {
 		select {
-		case <-s.done:
+		case <-s.ctx.Done():
 			log.Printf("listenHtlcResponses received done. Stopping listening.")
 			return
 		default:
@@ -344,7 +349,7 @@ func (s *server) recvHtlcResolution() *proto.HtlcResolution {
 		if stream == nil {
 			log.Printf("Got no subscribers for htlc receive. Waiting for subscriber.")
 			select {
-			case <-s.done:
+			case <-s.ctx.Done():
 				log.Printf("Done signalled, stopping htlc receive.")
 				return nil
 			case <-ns:
@@ -502,7 +507,7 @@ func (s *server) SendCustomMessage(id string, c *CustomMessageRequest) {
 // active and has sent a message.
 func (s *server) ReceiveCustomMessageResponse() (string, interface{}) {
 	select {
-	case <-s.done:
+	case <-s.ctx.Done():
 		return "", nil
 	case msg := <-s.custommsgRecvQueue:
 		return msg.id, msg.result
@@ -515,7 +520,7 @@ func (s *server) ReceiveCustomMessageResponse() (string, interface{}) {
 func (s *server) listenCustomMsgRequests() {
 	for {
 		select {
-		case <-s.done:
+		case <-s.ctx.Done():
 			log.Printf("listenCustomMsgRequests received done. Stop listening.")
 			return
 		case msg := <-s.custommsgSendQueue:
@@ -537,7 +542,7 @@ func (s *server) handleCustomMsg(msg *custommsgMsg) {
 		// subscriber, or the message times out.
 		if stream == nil {
 			select {
-			case <-s.done:
+			case <-s.ctx.Done():
 				log.Printf("handleCustomMsg received server done. Stop processing.")
 				return
 			case <-ns:
