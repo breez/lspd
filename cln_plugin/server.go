@@ -44,7 +44,6 @@ type server struct {
 	proto.ClnPluginServer
 	ctx                    context.Context
 	cancel                 context.CancelFunc
-	listenAddress          string
 	subscriberTimeout      time.Duration
 	grpcServer             *grpc.Server
 	mtx                    sync.Mutex
@@ -62,10 +61,7 @@ type server struct {
 }
 
 // Creates a new grpc server
-func NewServer(
-	listenAddress string,
-	subscriberTimeout time.Duration,
-) *server {
+func NewServer() *server {
 	// TODO: Set a sane max queue size
 	grpcServer := grpc.NewServer(
 		grpc.KeepaliveParams(keepalive.ServerParameters{
@@ -79,10 +75,8 @@ func NewServer(
 
 	ctx, cancel := context.WithCancel(context.Background())
 	return &server{
-		ctx:               ctx,
-		cancel:            cancel,
-		listenAddress:     listenAddress,
-		subscriberTimeout: subscriberTimeout,
+		ctx:    ctx,
+		cancel: cancel,
 		// The send queue exists to buffer messages until a subscriber is active.
 		htlcSendQueue:      make(chan *htlcAcceptedMsg, 10000),
 		custommsgSendQueue: make(chan *custommsgMsg, 10000),
@@ -103,17 +97,18 @@ func NewServer(
 // Starts the grpc server. Blocks until the server is stopped. WaitStarted can
 // be called to ensure the server is started without errors if this function
 // is run as a goroutine. This function can only be called once.
-func (s *server) Start() error {
-	lis, err := s.initialize()
+func (s *server) Start(address string, subscriberTimeout time.Duration) error {
+	lis, err := s.initialize(address, subscriberTimeout)
 	if err != nil {
 		s.startError <- err
 		return err
 	}
+	close(s.started)
 	err = s.grpcServer.Serve(lis)
 	return err
 }
 
-func (s *server) initialize() (net.Listener, error) {
+func (s *server) initialize(address string, subscriberTimeout time.Duration) (net.Listener, error) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -121,18 +116,19 @@ func (s *server) initialize() (net.Listener, error) {
 		return nil, s.ctx.Err()
 	}
 
+	s.subscriberTimeout = subscriberTimeout
+
 	go s.listenHtlcRequests()
 	go s.listenHtlcResponses()
 	go s.listenCustomMsgRequests()
-	log.Printf("Server starting to listen on %s.", s.listenAddress)
-	lis, err := net.Listen("tcp", s.listenAddress)
+	log.Printf("Server starting to listen on %s.", address)
+	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("grpc server failed to listen on address '%s': %w",
-			s.listenAddress, err)
+			address, err)
 	}
 
 	proto.RegisterClnPluginServer(s.grpcServer, s)
-	close(s.started)
 	return lis, nil
 }
 

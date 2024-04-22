@@ -67,8 +67,10 @@ func NewClnPlugin(in, out *os.File) *ClnPlugin {
 		in:            in,
 		out:           bufio.NewWriter(out),
 		serverStopped: make(chan struct{}),
+		server:        NewServer(),
 	}
 
+	close(c.serverStopped)
 	return c
 }
 
@@ -83,10 +85,8 @@ func (c *ClnPlugin) Start() error {
 	log.Printf(`Starting lspd cln_plugin, tag='%s', revision='%s'`, build.GetTag(), build.GetRevision())
 	go c.listenRequests()
 	<-c.ctx.Done()
-	s := c.server
-	if s != nil {
 		<-c.serverStopped
-	}
+
 	return c.ctx.Err()
 }
 
@@ -431,15 +431,14 @@ func (c *ClnPlugin) handleInit(request *Request) {
 		return
 	}
 
-	// Start the grpc server.
-	c.server = NewServer(addr, subscriberTimeout)
-
+	c.serverStopped = make(chan struct{})
 	go func() {
 		<-c.ctx.Done()
 		c.server.Stop()
 	}()
 	go func() {
-		err := c.server.Start()
+		// Start the grpc server.
+		err := c.server.Start(addr, subscriberTimeout)
 		if err != nil {
 			log.Printf("server exited with error: %v", err)
 		}
