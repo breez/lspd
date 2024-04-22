@@ -91,6 +91,7 @@ func (c *ClnPlugin) Start() error {
 	<-c.ctx.Done()
 	<-c.serverStopped
 
+	log.Printf("lspd cln_plugin stopped.")
 	return c.ctx.Err()
 }
 
