@@ -13,7 +13,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/breez/lspd/build"
@@ -29,10 +28,6 @@ var (
 	DefaultSubscriberTimeout     = "1m"
 	DefaultChannelAcceptorScript = ""
 	LspsFeatureBit               = "0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-)
-
-const (
-	MaxIntakeBuffer = 500 * 1024 * 1023
 )
 
 const (
@@ -53,19 +48,20 @@ type ClnPlugin struct {
 	cancel              context.CancelFunc
 	server              *server
 	serverStopped       chan struct{}
-	in                  *os.File
-	out                 *bufio.Writer
-	writeMtx            sync.Mutex
+	reader              *reader
+	writer              *writer
 	channelAcceptScript string
 }
 
 func NewClnPlugin(in, out *os.File) *ClnPlugin {
 	ctx, cancel := context.WithCancel(context.Background())
+	reader := newReader(in)
+	writer := newWriter(out)
 	c := &ClnPlugin{
 		ctx:           ctx,
 		cancel:        cancel,
-		in:            in,
-		out:           bufio.NewWriter(out),
+		reader:        reader,
+		writer:        writer,
 		serverStopped: make(chan struct{}),
 		server:        NewServer(),
 	}
@@ -83,9 +79,15 @@ func (c *ClnPlugin) Start() error {
 
 	c.setupLogging()
 	log.Printf(`Starting lspd cln_plugin, tag='%s', revision='%s'`, build.GetTag(), build.GetRevision())
-	go c.listenRequests()
+	go func() {
+		err := c.listenRequests()
+		if err != nil {
+			log.Printf("listenRequests exited with error: %v", err)
+			c.Stop()
+		}
+	}()
 	<-c.ctx.Done()
-		<-c.serverStopped
+	<-c.serverStopped
 
 	return c.ctx.Err()
 }
@@ -100,37 +102,26 @@ func (c *ClnPlugin) Stop() {
 // listens stdout for requests from cln and sends the requests to the
 // appropriate handler in fifo order.
 func (c *ClnPlugin) listenRequests() error {
-	scanner := bufio.NewScanner(c.in)
-	buf := make([]byte, 1024)
-	scanner.Buffer(buf, MaxIntakeBuffer)
+	go func() {
+		<-c.ctx.Done()
 
-	// cln messages are split by a double newline.
-	scanner.Split(scanDoubleNewline)
+		// Close the reader (closes stdin internally) when cancelled, so the
+		// blocking read call is released.
+		c.reader.Close()
+	}()
+
 	for {
 		select {
 		case <-c.ctx.Done():
 			return nil
 		default:
-			if !scanner.Scan() {
-				if err := scanner.Err(); err != nil {
-					log.Fatal(err)
-					return err
-				}
-
-				return nil
+			req, err := c.reader.Next()
+			if err != nil {
+				log.Printf("Failed to read next request: %v", err)
+				return err
 			}
 
-			msg := scanner.Bytes()
-
-			// Always log the message json
-			log.Println(string(msg))
-
-			// pass down a copy so things stay sane
-			msg_buf := make([]byte, len(msg))
-			copy(msg_buf, msg)
-
-			// NOTE: processMsg is synchronous, so it should only do quick work.
-			c.processMsg(msg_buf)
+			c.processRequest(req)
 		}
 	}
 }
@@ -181,49 +172,6 @@ func (c *ClnPlugin) custommsgListenServer() {
 			})
 		}
 	}
-}
-
-// processes a single message from cln. Sends the message to the appropriate
-// handler.
-func (c *ClnPlugin) processMsg(msg []byte) {
-	if len(msg) == 0 {
-		c.sendError(nil, InvalidRequest, "Got an invalid zero length request")
-		return
-	}
-
-	// Handle request batches.
-	if msg[0] == '[' {
-		var requests []*Request
-		err := json.Unmarshal(msg, &requests)
-		if err != nil {
-			c.sendError(
-				nil,
-				ParseError,
-				fmt.Sprintf("Failed to unmarshal request batch: %v", err),
-			)
-			return
-		}
-
-		for _, request := range requests {
-			c.processRequest(request)
-		}
-
-		return
-	}
-
-	// Parse the received buffer into a request object.
-	var request Request
-	err := json.Unmarshal(msg, &request)
-	if err != nil {
-		c.sendError(
-			nil,
-			ParseError,
-			fmt.Sprintf("failed to unmarshal request: %v", err),
-		)
-		return
-	}
-
-	c.processRequest(&request)
 }
 
 func (c *ClnPlugin) processRequest(request *Request) {
@@ -443,7 +391,7 @@ func (c *ClnPlugin) handleInit(request *Request) {
 			log.Printf("server exited with error: %v", err)
 		}
 		close(c.serverStopped)
-		c.cancel()
+		c.Stop()
 	}()
 	err = c.server.WaitStarted()
 	if err != nil {
@@ -606,18 +554,11 @@ func (c *ClnPlugin) sendError(id json.RawMessage, code int, message string) {
 
 // Sends a message to cln.
 func (c *ClnPlugin) sendToCln(msg interface{}) {
-	c.writeMtx.Lock()
-	defer c.writeMtx.Unlock()
-
-	data, err := json.Marshal(msg)
+	err := c.writer.Write(msg)
 	if err != nil {
-		log.Printf("Failed to marshal message for cln, ignoring message: %+v", msg)
-		return
+		log.Printf("Failed to send message to cln: %v", err)
+		c.Stop()
 	}
-
-	data = append(data, TwoNewLines...)
-	c.out.Write(data)
-	c.out.Flush()
 }
 
 func (c *ClnPlugin) setupLogging() {
@@ -661,21 +602,6 @@ func (c *ClnPlugin) log(level string, message string) {
 		JsonRpc: SpecVersion,
 		Params:  params,
 	})
-}
-
-// Helper method for the bufio scanner to split messages on double newlines.
-func scanDoubleNewline(
-	data []byte,
-	atEOF bool,
-) (advance int, token []byte, err error) {
-	for i := 0; i < len(data); i++ {
-		if data[i] == '\n' && (i+1) < len(data) && data[i+1] == '\n' {
-			return i + 2, data[:i], nil
-		}
-	}
-	// this trashes anything left over in
-	// the buffer if we're at EOF, with no /n/n present
-	return 0, nil, nil
 }
 
 // converts a raw cln id to string. The CLN id can either be an integer or a
