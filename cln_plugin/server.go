@@ -6,10 +6,12 @@ import (
 	"log"
 	"net"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/breez/lspd/cln_plugin/proto"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
+	"golang.org/x/sys/unix"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 )
@@ -123,7 +125,8 @@ func (s *server) initialize(address string, subscriberTimeout time.Duration) (ne
 	go s.listenHtlcResponses()
 	go s.listenCustomMsgRequests()
 	log.Printf("Server starting to listen on %s.", address)
-	lis, err := net.Listen("tcp", address)
+	config := &net.ListenConfig{Control: reusePort}
+	lis, err := config.Listen(s.ctx, "tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("grpc server failed to listen on address '%s': %w",
 			address, err)
@@ -131,6 +134,12 @@ func (s *server) initialize(address string, subscriberTimeout time.Duration) (ne
 
 	proto.RegisterClnPluginServer(s.grpcServer, s)
 	return lis, nil
+}
+
+func reusePort(network, address string, conn syscall.RawConn) error {
+	return conn.Control(func(descriptor uintptr) {
+		syscall.SetsockoptInt(int(descriptor), unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
+	})
 }
 
 // Waits until the server has started, or errored during startup.
