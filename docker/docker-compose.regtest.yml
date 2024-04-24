@@ -1,0 +1,65 @@
+
+services:
+  lspd:
+    image: lspd
+    networks:
+      - lspd-pg
+      - lspd-cln
+    environment:
+      # Make sure pg/.env is sourced before executing, or change this line by 
+      # copying the specific variables from the pg/.env file
+      - DATABASE_URL=postgresql://postgres:postgres@pg
+      - NODES=[]
+    depends_on:
+      - pg
+
+  pg:
+    image: postgres:16
+    networks:
+      - lspd-pg
+    # volumes:
+    #   - ./pg/setup.sh:/docker-entrypoint-initdb.d/setup.sh
+    environment:
+      - POSTGRES_USERNAME=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DATABASE=postgres
+    restart: always
+
+  lightningd-lsp:
+    image: lightningd-lsp
+    command:
+      --bitcoin-rpcuser=btcuser
+      --bitcoin-rpcpassword=btcpass
+      --bitcoin-rpcconnect=bitcoind
+      --bitcoin-rpcport=18443
+      --network=regtest
+    networks:
+      - cln-bitcoind
+      - lspd-cln
+    depends_on:
+      - bitcoind
+
+  bitcoind:
+    image: bitcoind
+    command:
+      -regtest
+      -server
+      -logtimestamps
+      -nolisten
+      -addresstype=bech32
+      -txindex
+      -fallbackfee=0.00000253
+      -debug=mempool
+      -debug=rpc
+      -rpcpassword=btcpass
+      -rpcuser=btcuser
+    networks:
+      - cln-bitcoind
+
+  # TODO
+  # lnd
+
+networks:
+  cln-bitcoind:
+  lspd-cln:
+  lspd-pg:
