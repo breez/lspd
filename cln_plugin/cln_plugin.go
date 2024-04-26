@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/breez/lspd/build"
@@ -47,7 +48,7 @@ type ClnPlugin struct {
 	ctx                 context.Context
 	cancel              context.CancelFunc
 	server              *server
-	serverStopped       chan struct{}
+	serverStopped       sync.WaitGroup
 	reader              *reader
 	writer              *writer
 	stderr              *os.File
@@ -59,16 +60,14 @@ func NewClnPlugin(stdin, stdout, stderr *os.File) *ClnPlugin {
 	reader := newReader(stdin)
 	writer := newWriter(stdout)
 	c := &ClnPlugin{
-		ctx:           ctx,
-		cancel:        cancel,
-		reader:        reader,
-		writer:        writer,
-		stderr:        stderr,
-		serverStopped: make(chan struct{}),
-		server:        NewServer(),
+		ctx:    ctx,
+		cancel: cancel,
+		reader: reader,
+		writer: writer,
+		stderr: stderr,
+		server: NewServer(),
 	}
 
-	close(c.serverStopped)
 	return c
 }
 
@@ -89,7 +88,7 @@ func (c *ClnPlugin) Start() error {
 		}
 	}()
 	<-c.ctx.Done()
-	<-c.serverStopped
+	c.serverStopped.Wait()
 
 	log.Printf("lspd cln_plugin stopped.")
 	return c.ctx.Err()
@@ -382,7 +381,7 @@ func (c *ClnPlugin) handleInit(request *Request) {
 		return
 	}
 
-	c.serverStopped = make(chan struct{})
+	c.serverStopped.Add(1)
 	go func() {
 		<-c.ctx.Done()
 		c.server.Stop()
@@ -393,7 +392,7 @@ func (c *ClnPlugin) handleInit(request *Request) {
 		if err != nil {
 			log.Printf("server exited with error: %v", err)
 		}
-		close(c.serverStopped)
+		c.serverStopped.Done()
 		c.Stop()
 	}()
 	err = c.server.WaitStarted()
