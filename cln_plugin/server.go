@@ -149,6 +149,8 @@ func reusePort(network, address string, conn syscall.RawConn) error {
 // Waits until the server has started, or errored during startup.
 func (s *server) WaitStarted() error {
 	select {
+	case <-s.ctx.Done():
+		return s.ctx.Err()
 	case <-s.started:
 		return nil
 	case err := <-s.startError:
@@ -217,10 +219,13 @@ func (s *server) newHtlcStream(stream proto.ClnPlugin_HtlcStreamServer) error {
 
 // Enqueues a htlc_accepted message for send to the grpc client.
 func (s *server) SendHtlcAccepted(id string, h *HtlcAccepted) {
-	s.htlcSendQueue <- &htlcAcceptedMsg{
+	select {
+	case <-s.ctx.Done():
+	case s.htlcSendQueue <- &htlcAcceptedMsg{
 		id:      id,
 		htlc:    h,
 		timeout: time.Now().Add(s.subscriberTimeout),
+	}:
 	}
 }
 
@@ -534,10 +539,13 @@ func (s *server) newCustomMsgStream(stream proto.ClnPlugin_CustomMsgStreamServer
 
 // Enqueues a htlc_accepted message for send to the grpc client.
 func (s *server) SendCustomMessage(id string, c *CustomMessageRequest) {
-	s.custommsgSendQueue <- &custommsgMsg{
+	select {
+	case <-s.ctx.Done():
+	case s.custommsgSendQueue <- &custommsgMsg{
 		id:        id,
 		custommsg: c,
 		timeout:   time.Now().Add(s.subscriberTimeout),
+	}:
 	}
 }
 
