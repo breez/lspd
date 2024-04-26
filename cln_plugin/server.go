@@ -105,6 +105,10 @@ func (s *server) Start(address string, subscriberTimeout time.Duration) error {
 		s.startError <- err
 		return err
 	}
+	go func() {
+		<-s.ctx.Done()
+		s.grpcServer.Stop()
+	}()
 	close(s.started)
 	err = s.grpcServer.Serve(lis)
 	return err
@@ -154,12 +158,8 @@ func (s *server) WaitStarted() error {
 
 // Stops all work from the grpc server immediately.
 func (s *server) Stop() {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
 	log.Printf("Server Stop() called.")
 	s.cancel()
-	s.grpcServer.Stop()
-	log.Printf("Server stopped.")
 }
 
 // Grpc method that is called when a new client subscribes. There can only be
