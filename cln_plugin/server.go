@@ -166,11 +166,29 @@ func (s *server) Stop() {
 // one subscriber active at a time. If there is an error receiving or sending
 // from or to the subscriber, the subscription is closed.
 func (s *server) HtlcStream(stream proto.ClnPlugin_HtlcStreamServer) error {
+	err := s.newHtlcStream(stream)
+	if err != nil {
+		return err
+	}
+
+	<-stream.Context().Done()
+	log.Printf("HtlcStream context is done. Return: %v", stream.Context().Err())
+
+	// Remove the subscriber.
 	s.mtx.Lock()
+	s.htlcStream = nil
+	s.mtx.Unlock()
+
+	return stream.Context().Err()
+}
+
+func (s *server) newHtlcStream(stream proto.ClnPlugin_HtlcStreamServer) error {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
 	if s.htlcStream == nil {
 		log.Printf("Got a new HTLC stream subscription request.")
 	} else {
-		s.mtx.Unlock()
 		log.Printf("Got a HTLC stream subscription request, but subscription " +
 			"was already active.")
 		return fmt.Errorf("already subscribed")
@@ -181,7 +199,6 @@ func (s *server) HtlcStream(stream proto.ClnPlugin_HtlcStreamServer) error {
 	for pair := s.inflightHtlcs.Oldest(); pair != nil; pair = pair.Next() {
 		err := sendHtlcAccepted(stream, pair.Value)
 		if err != nil {
-			s.mtx.Unlock()
 			return err
 		}
 
@@ -195,17 +212,7 @@ func (s *server) HtlcStream(stream proto.ClnPlugin_HtlcStreamServer) error {
 	// a new one immediately in case this subscriber is dropped later.
 	close(s.htlcnewSubscriber)
 	s.htlcnewSubscriber = make(chan struct{})
-	s.mtx.Unlock()
-
-	<-stream.Context().Done()
-	log.Printf("HtlcStream context is done. Return: %v", stream.Context().Err())
-
-	// Remove the subscriber.
-	s.mtx.Lock()
-	s.htlcStream = nil
-	s.mtx.Unlock()
-
-	return stream.Context().Err()
+	return nil
 }
 
 // Enqueues a htlc_accepted message for send to the grpc client.
@@ -485,24 +492,10 @@ func (s *server) CustomMsgStream(
 	_ *proto.CustomMessageRequest,
 	stream proto.ClnPlugin_CustomMsgStreamServer,
 ) error {
-
-	s.mtx.Lock()
-	if s.custommsgStream == nil {
-		log.Printf("Got a new custommsg stream subscription request.")
-	} else {
-		s.mtx.Unlock()
-		log.Printf("Got a custommsg stream subscription request, but " +
-			"subscription was already active.")
-		return fmt.Errorf("already subscribed")
+	err := s.newCustomMsgStream(stream)
+	if err != nil {
+		return err
 	}
-
-	s.custommsgStream = stream
-
-	// Notify listeners that a new subscriber is active. Replace the chan with
-	// a new one immediately in case this subscriber is dropped later.
-	close(s.custommsgNewSubscriber)
-	s.custommsgNewSubscriber = make(chan struct{})
-	s.mtx.Unlock()
 
 	<-stream.Context().Done()
 	log.Printf(
@@ -516,6 +509,27 @@ func (s *server) CustomMsgStream(
 	s.mtx.Unlock()
 
 	return stream.Context().Err()
+}
+
+func (s *server) newCustomMsgStream(stream proto.ClnPlugin_CustomMsgStreamServer) error {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	if s.custommsgStream == nil {
+		log.Printf("Got a new custommsg stream subscription request.")
+	} else {
+		log.Printf("Got a custommsg stream subscription request, but " +
+			"subscription was already active.")
+		return fmt.Errorf("already subscribed")
+	}
+
+	s.custommsgStream = stream
+
+	// Notify listeners that a new subscriber is active. Replace the chan with
+	// a new one immediately in case this subscriber is dropped later.
+	close(s.custommsgNewSubscriber)
+	s.custommsgNewSubscriber = make(chan struct{})
+	return nil
 }
 
 // Enqueues a htlc_accepted message for send to the grpc client.
