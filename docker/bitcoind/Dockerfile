@@ -27,9 +27,11 @@ ENV BUILDER_KEYS 982A193E3CE0EED535E09023188CBB2648416AD5 101598DC823C1B5F9A6624
                  C388F6961FB972A95678E327F62711DBDCA8AE56 9DEAE0DC7063249FB05474681E4AED62986CD25D
 
 RUN gpg --keyserver keyserver.ubuntu.com --recv-keys $BUILDER_KEYS
-RUN git clone -b "$VERSION" --depth=1 "$REPOSITORY" "/bitcoin/"
-RUN cd "/bitcoin/" && \
-    git verify-tag "$VERSION"
+
+WORKDIR /source/
+
+RUN git clone -b "$VERSION" --depth=1 "$REPOSITORY" ./
+RUN git verify-tag "$VERSION"
 
 
 FROM debian:bookworm-slim AS builder
@@ -48,8 +50,8 @@ RUN apt-get update -qq && \
         libsqlite3-dev \
         libzmq3-dev
 
-WORKDIR /bitcoin/
-COPY  --from=downloader /bitcoin/  ./
+WORKDIR /app/
+COPY --from=downloader /source/ ./
 
 RUN ./autogen.sh
 
@@ -78,7 +80,7 @@ RUN apt-get update -qq && \
         libsqlite3-0 \
         libzmq5
 
-COPY --from=builder /opt/bitcoin/ /opt/bitcoin/
+COPY --from=builder /opt/bitcoin/ /usr/local/
 
 RUN adduser --disabled-password \
             --home "$DIR/" \
@@ -105,6 +107,6 @@ EXPOSE 8332 18332 18443
 # ZMQ ports (for transactions & blocks respectively)
 EXPOSE 28332 28333
 
-ENTRYPOINT ["/opt/bitcoin/bin/bitcoind"]
+ENTRYPOINT ["bitcoind"]
 
 CMD ["-zmqpubrawblock=tcp://0.0.0.0:28332", "-zmqpubrawtx=tcp://0.0.0.0:28333"]

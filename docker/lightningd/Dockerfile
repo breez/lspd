@@ -10,6 +10,8 @@ FROM debian:bookworm-slim as downloader
 ARG VERSION
 ARG REPOSITORY
 
+WORKDIR /source/
+
 RUN apt-get update -qq && \
     apt-get install -qq -y --no-install-recommends \
         ca-certificates \
@@ -20,7 +22,7 @@ RUN apt-get update -qq && \
 ENV BUILDER_KEYS B731AAC521B013859313F674A26D6D9FE088ED58
 
 RUN gpg --keyserver keyserver.ubuntu.com --recv-keys $BUILDER_KEYS
-RUN git clone -b "$VERSION" --depth=1 "$REPOSITORY" "/lightning/"
+RUN git clone -b "$VERSION" --depth=1 "$REPOSITORY" ./
 # RUN cd "/lightning/" && \
 #     git verify-tag "$VERSION"
 
@@ -29,6 +31,7 @@ FROM debian:bookworm-slim as builder
 
 RUN apt-get update -qq && \
     apt-get install -qq -y --no-install-recommends \
+        curl \
         ca-certificates \
         jq \
         autoconf \
@@ -44,16 +47,27 @@ RUN apt-get update -qq && \
         zlib1g-dev \
         libsodium-dev \
         gettext \
-        cargo \
         protobuf-compiler
 
 RUN pip3 install --upgrade pip --break-system-packages && \
     pip3 install grpcio-tools --break-system-packages
 
-WORKDIR /lightning/
-COPY  --from=downloader /lightning/  ./
+USER root
+ENV RUST_PROFILE=release
+ENV PATH=$PATH:/root/.cargo/bin/
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+RUN rustup toolchain install stable \
+    --component rustfmt \
+    --allow-downgrade \
+    --profile minimal
 
-RUN ./configure --prefix=/tmp/lightning --enable-static && \
+WORKDIR /app/
+COPY  --from=downloader /source/  ./
+COPY --from=bitcoind /usr/local/bin/bitcoin-cli /usr/local/bin/
+
+RUN ./configure \
+        --prefix="/opt/lightning" \
+        --enable-static && \
     make && \
     make install
 
@@ -70,8 +84,8 @@ RUN apt-get update -qq && \
         libevent-2.1-7 \
         python3
 
-COPY --from=bitcoind /opt/bitcoin/bin/ /usr/bin
-COPY --from=builder /tmp/lightning/ /usr/local/
+COPY --from=bitcoind /usr/local/bin/bitcoin-cli /usr/local/bin/
+COPY --from=builder /opt/lightning/ /usr/local/
 
 RUN adduser --disabled-password \
             --home "$DIR/" \
@@ -83,7 +97,7 @@ USER $USER
 # Prevents `VOLUME $DIR/.lightning/` being created as owned by `root`
 RUN mkdir -p "$DIR/.lightning/"
 
-# Expose volume containing all `bitcoind` data
+# Expose volume containing all `lightningd` data
 VOLUME $DIR/.lightning/
 
 # Lightning P2P port

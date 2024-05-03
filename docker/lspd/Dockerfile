@@ -1,23 +1,27 @@
 ARG USER=lspd
+ARG DIR=/data
 
 FROM golang:bookworm AS builder
 
-WORKDIR /lspd/
+WORKDIR /app
 
-RUN mkdir -p bin
+COPY ../../go.mod ../../go.sum ./
+
+RUN go mod download
 
 COPY ../.. .
 
-RUN OUT_DIR=bin make release-all
+RUN make release-lspd
 
 
 FROM debian:bookworm-slim AS final
 
 ARG USER
+ARG DIR
 
 LABEL maintainer="Jesse de Wit (@JssDWt)"
 
-COPY --from=builder /lspd/bin/ /usr/local/bin/
+COPY --from=builder /app/lspd /usr/local/bin/
 
 RUN adduser --disabled-password \
             --home "$DIR/" \

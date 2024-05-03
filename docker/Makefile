@@ -9,5 +9,5 @@ docker-lightningd: docker-bitcoind
 docker-lspd:
 	docker build -t lspd -f lspd/Dockerfile ..
 
-docker-lightningd-lsp: docker-lightningd docker-lspd
-	docker build -t lightningd-lsp -f lightningd-lsp/Dockerfile .
+docker-lightningd-lsp: docker-lightningd
+	docker build -t lightningd-lsp -f lightningd-lsp/Dockerfile ..
