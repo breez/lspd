@@ -29,7 +29,9 @@ func Migrate(databaseUrl string) error {
 	}
 	log.Printf("Current database version is %d, dirty = %t", version, dirty)
 	err = m.Up()
-	if err != nil {
+	if err == migrate.ErrNoChange {
+		log.Printf("No migrations to apply.")
+	} else if err != nil {
 		return fmt.Errorf("failed to apply database migrations: %w", err)
 	}
 
