@@ -104,3 +104,7 @@ VOLUME $DIR/.lightning/
 EXPOSE 9735
 
 ENTRYPOINT ["lightningd"]
+
+CMD [ \
+    "--lightning-dir='$DIR/.lightning'" \
+]

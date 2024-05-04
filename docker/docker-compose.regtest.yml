@@ -9,9 +9,12 @@ services:
       # Make sure pg/.env is sourced before executing, or change this line by 
       # copying the specific variables from the pg/.env file
       - DATABASE_URL=postgresql://postgres:postgres@pg
-      - NODES=[]
+      - NODES=[{"cln":{"pluginAddress":"cln:12312","grpcAddress":"cln:8888","caCert":"/data/.lightning/regtest/ca.pem","clientCert":"/data/.lightning/regtest/client.pem","clientKey":"/data/.lightning/regtest/client-key.pem"}}]
     depends_on:
       - pg
+      - cln
+    volumes:
+      - lightning:/data/.lightning
 
   pg:
     image: postgres:16
@@ -25,7 +28,7 @@ services:
       - POSTGRES_DATABASE=postgres
     restart: always
 
-  lightningd-lsp:
+  cln:
     image: lightningd-lsp
     command:
       --bitcoin-rpcuser=btcuser
@@ -38,6 +41,8 @@ services:
       - lspd-cln
     depends_on:
       - bitcoind
+    volumes:
+      - lightning:/data/.lightning
 
   bitcoind:
     image: bitcoind
@@ -53,9 +58,10 @@ services:
       -debug=rpc
       -rpcpassword=btcpass
       -rpcuser=btcuser
+      -rpcbind=0.0.0.0
+      -rpcallowip=0.0.0.0/0
     networks:
       - cln-bitcoind
-
   # TODO
   # lnd
 
@@ -63,3 +69,6 @@ networks:
   cln-bitcoind:
   lspd-cln:
   lspd-pg:
+
+volumes:
+  lightning:
