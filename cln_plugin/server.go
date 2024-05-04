@@ -358,6 +358,10 @@ func (s *server) listenHtlcResponses() {
 			return
 		default:
 			resp := s.recvHtlcResolution()
+			if resp == nil {
+				continue
+			}
+
 			s.htlcRecvQueue <- &htlcResultMsg{
 				id:     resp.Correlationid,
 				result: s.mapHtlcResult(resp.Outcome),
@@ -371,6 +375,10 @@ func (s *server) listenHtlcResponses() {
 // has stopped.
 func (s *server) recvHtlcResolution() *proto.HtlcResolution {
 	for {
+		if s.ctx.Err() != nil {
+			return nil
+		}
+
 		// make a copy of the used fields, to make sure state updates don't
 		// surprise us. The newSubscriber chan is swapped whenever a new
 		// subscriber arrives.
