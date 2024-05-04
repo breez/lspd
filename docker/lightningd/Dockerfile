@@ -82,7 +82,9 @@ LABEL maintainer="Jesse de Wit (@JssDWt)"
 RUN apt-get update -qq && \
     apt-get install -qq -y --no-install-recommends \
         libevent-2.1-7 \
-        python3
+        python3 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=bitcoind /usr/local/bin/bitcoin-cli /usr/local/bin/
 COPY --from=builder /opt/lightning/ /usr/local/

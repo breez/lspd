@@ -78,7 +78,9 @@ RUN apt-get update -qq && \
         libevent-2.1-7 \
         libevent-pthreads-2.1-7 \
         libsqlite3-0 \
-        libzmq5
+        libzmq5 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/bitcoin/ /usr/local/
 
