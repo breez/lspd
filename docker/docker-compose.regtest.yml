@@ -8,8 +8,9 @@ services:
     environment:
       # Make sure pg/.env is sourced before executing, or change this line by 
       # copying the specific variables from the pg/.env file
-      - DATABASE_URL=postgresql://postgres:postgres@pg
+      - DATABASE_URL=postgresql://postgres:postgres@pg?sslmode=disable
       - NODES=[{"cln":{"pluginAddress":"cln:12312","grpcAddress":"cln:8888","caCert":"/data/.lightning/regtest/ca.pem","clientCert":"/data/.lightning/regtest/client.pem","clientKey":"/data/.lightning/regtest/client-key.pem"}}]
+      - AUTO_MIGRATE_DATABASE=true
     depends_on:
       - pg
       - cln
@@ -36,6 +37,11 @@ services:
       --bitcoin-rpcconnect=bitcoind
       --bitcoin-rpcport=18443
       --network=regtest
+      --grpc-port=8888
+      --plugin=/usr/local/bin/lspd_cln_plugin
+      --lsp-listen=0.0.0.0:12312
+      --developer
+      --dev-allowdustreserve=true
     networks:
       - cln-bitcoind
       - lspd-cln
