@@ -18,10 +18,10 @@ type ForwardSync struct {
 	updatedOffset uint64
 	nodeid        []byte
 	client        *ClnClient
-	store         history.Store
+	store         history.RuntimeStore
 }
 
-func NewForwardSync(nodeid []byte, client *ClnClient, store history.Store) *ForwardSync {
+func NewForwardSync(nodeid []byte, client *ClnClient, store history.RuntimeStore) *ForwardSync {
 	return &ForwardSync{
 		nodeid: nodeid,
 		client: client,

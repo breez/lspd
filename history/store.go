@@ -36,7 +36,39 @@ type OpenChannelHtlc struct {
 	ForwardTime        time.Time
 }
 
+type RevenueForward struct {
+	Identifier      string
+	Nodeid          []byte
+	PeeridIn        []byte
+	PeeridOut       []byte
+	AmtMsatIn       uint64
+	AmtMsatOut      uint64
+	ResolvedTime    uint64
+	ChannelPointIn  wire.OutPoint
+	ChannelPointOut wire.OutPoint
+	SendToken       *string
+	ReceiveToken    *string
+	OpenChannelHtlc *OpenChannelHtlc
+}
+
+type ExportedForward struct {
+	Token          string
+	NodeId         []byte
+	ExternalNodeId []byte
+	ResolvedTime   time.Time
+	// Direction is 'send' if the client associated to the token sent a payment.
+	// Direction is 'receive' if the client associated to the token sent a payment.
+	Direction string
+	// The amount forwarded to/from the external node
+	AmountMsat uint64
+}
+
 type Store interface {
+	RuntimeStore
+	DataStore
+}
+
+type RuntimeStore interface {
 	UpdateChannels(ctx context.Context, updates []*ChannelUpdate) error
 	InsertForwards(ctx context.Context, forwards []*Forward, nodeId []byte) error
 	UpdateForwards(ctx context.Context, forwards []*Forward, nodeId []byte) error
@@ -44,4 +76,27 @@ type Store interface {
 	SetClnForwardOffsets(ctx context.Context, nodeId []byte, created uint64, updated uint64) error
 	FetchLndForwardOffset(ctx context.Context, nodeId []byte) (*time.Time, error)
 	AddOpenChannelHtlc(ctx context.Context, htlc *OpenChannelHtlc) error
+}
+
+type DataStore interface {
+	ExportTokenForwardsForExternalNode(
+		ctx context.Context,
+		startNs uint64,
+		endNs uint64,
+		node []byte,
+		externalNode []byte,
+	) ([]*ExportedForward, error)
+
+	GetOpenChannelHtlcs(
+		ctx context.Context,
+		startNs uint64,
+		endNs uint64,
+	) ([]*OpenChannelHtlc, error)
+
+	// Gets all settled forwards in the defined time range. Ordered by nodeid, peerid_in, amt_msat_in, resolved_time
+	GetForwards(
+		ctx context.Context,
+		startNs uint64,
+		endNs uint64,
+	) ([]*RevenueForward, error)
 }

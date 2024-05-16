@@ -31,7 +31,7 @@ type InterceptorConfig struct {
 
 type Interceptor struct {
 	store               Lsps2Store
-	historyStore        history.Store
+	historyStore        history.RuntimeStore
 	openingService      common.OpeningService
 	client              lightning.Client
 	feeEstimator        chain.FeeEstimator
@@ -46,7 +46,7 @@ type Interceptor struct {
 
 func NewInterceptHandler(
 	store Lsps2Store,
-	historyStore history.Store,
+	historyStore history.RuntimeStore,
 	openingService common.OpeningService,
 	client lightning.Client,
 	feeEstimator chain.FeeEstimator,

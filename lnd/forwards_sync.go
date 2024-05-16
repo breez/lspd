@@ -14,13 +14,13 @@ import (
 type ForwardSync struct {
 	nodeid []byte
 	client *LndClient
-	store  history.Store
+	store  history.RuntimeStore
 }
 
 func NewForwardSync(
 	nodeid []byte,
 	client *LndClient,
-	store history.Store,
+	store history.RuntimeStore,
 ) *ForwardSync {
 	return &ForwardSync{
 		nodeid: nodeid,

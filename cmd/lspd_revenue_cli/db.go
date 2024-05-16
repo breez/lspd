@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/breez/lspd/history"
 	"github.com/breez/lspd/postgresql"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/urfave/cli"
@@ -22,11 +23,11 @@ func getPool(ctx *cli.Context) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-func getStore(ctx *cli.Context) (*postgresql.RevenueCliStore, error) {
+func getStore(ctx *cli.Context) (history.DataStore, error) {
 	pool, err := getPool(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return postgresql.NewCliStore(pool), nil
+	return postgresql.NewHistoryStore(pool), nil
 }

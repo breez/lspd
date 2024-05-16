@@ -25,7 +25,7 @@ type Interceptor struct {
 	client              lightning.Client
 	config              *config.NodeConfig
 	store               InterceptStore
-	historyStore        history.Store
+	historyStore        history.RuntimeStore
 	openingService      common.OpeningService
 	feeEstimator        chain.FeeEstimator
 	feeStrategy         chain.FeeStrategy
@@ -37,7 +37,7 @@ func NewInterceptHandler(
 	client lightning.Client,
 	config *config.NodeConfig,
 	store InterceptStore,
-	historyStore history.Store,
+	historyStore history.RuntimeStore,
 	openingService common.OpeningService,
 	feeEstimator chain.FeeEstimator,
 	feeStrategy chain.FeeStrategy,

@@ -11,10 +11,10 @@ import (
 
 type ChannelSync struct {
 	nodes []*common.Node
-	store Store
+	store RuntimeStore
 }
 
-func NewChannelSync(nodes []*common.Node, store Store) *ChannelSync {
+func NewChannelSync(nodes []*common.Node, store RuntimeStore) *ChannelSync {
 	return &ChannelSync{
 		nodes: nodes,
 		store: store,

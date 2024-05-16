@@ -5,20 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/breez/lspd/history"
 	"github.com/breez/lspd/lightning"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-type RevenueCliStore struct {
-	pool *pgxpool.Pool
-}
-
-func NewCliStore(pool *pgxpool.Pool) *RevenueCliStore {
-	return &RevenueCliStore{
-		pool: pool,
-	}
-}
 
 // This CTE selects all channels that were opened associated to a token.
 const tokenChannelsCte = `
@@ -53,25 +42,13 @@ WITH token_channels AS (
 		AND b.funding_tx_outnum = c.funding_tx_outnum
 )`
 
-type ExportedForward struct {
-	Token          string
-	NodeId         []byte
-	ExternalNodeId []byte
-	ResolvedTime   time.Time
-	// Direction is 'send' if the client associated to the token sent a payment.
-	// Direction is 'receive' if the client associated to the token sent a payment.
-	Direction string
-	// The amount forwarded to/from the external node
-	AmountMsat uint64
-}
-
-func (s *RevenueCliStore) ExportTokenForwardsForExternalNode(
+func (s *HistoryStore) ExportTokenForwardsForExternalNode(
 	ctx context.Context,
 	startNs uint64,
 	endNs uint64,
 	node []byte,
 	externalNode []byte,
-) ([]*ExportedForward, error) {
+) ([]*history.ExportedForward, error) {
 	err := s.sanityCheck(ctx, startNs, endNs)
 	if err != nil {
 		return nil, err
@@ -118,7 +95,7 @@ func (s *RevenueCliStore) ExportTokenForwardsForExternalNode(
 	}
 	defer rows.Close()
 
-	result := make([]*ExportedForward, rows.CommandTag().RowsAffected())
+	result := make([]*history.ExportedForward, rows.CommandTag().RowsAffected())
 	for rows.Next() {
 		var direction string
 		var token string
@@ -129,7 +106,7 @@ func (s *RevenueCliStore) ExportTokenForwardsForExternalNode(
 			return nil, fmt.Errorf("rows.Scan err: %w", err)
 		}
 
-		result = append(result, &ExportedForward{
+		result = append(result, &history.ExportedForward{
 			Token:          token,
 			NodeId:         node,
 			ExternalNodeId: externalNode,
@@ -142,7 +119,7 @@ func (s *RevenueCliStore) ExportTokenForwardsForExternalNode(
 	return result, nil
 }
 
-func (s *RevenueCliStore) sanityCheck(ctx context.Context, startNs, endNs uint64) error {
+func (s *HistoryStore) sanityCheck(ctx context.Context, startNs, endNs uint64) error {
 	// Sanity check, does forward/channel sync work? Can all forwards be associated to a channel?
 	row := s.pool.QueryRow(ctx, `
 		SELECT COUNT(*)
@@ -166,35 +143,11 @@ func (s *RevenueCliStore) sanityCheck(ctx context.Context, startNs, endNs uint64
 	return nil
 }
 
-type RevenueForward struct {
-	Identifier      string
-	Nodeid          []byte
-	PeeridIn        []byte
-	PeeridOut       []byte
-	AmtMsatIn       uint64
-	AmtMsatOut      uint64
-	ResolvedTime    uint64
-	ChannelPointIn  wire.OutPoint
-	ChannelPointOut wire.OutPoint
-	SendToken       *string
-	ReceiveToken    *string
-	OpenChannelHtlc *OpenChannelHtlc
-}
-
-type OpenChannelHtlc struct {
-	Nodeid             []byte
-	Peerid             []byte
-	ForwardAmountMsat  uint64
-	OriginalAmountMsat uint64
-	IncomingAmountMsat uint64
-	ChannelPoint       *wire.OutPoint
-}
-
-func (s *RevenueCliStore) GetOpenChannelHtlcs(
+func (s *HistoryStore) GetOpenChannelHtlcs(
 	ctx context.Context,
 	startNs uint64,
 	endNs uint64,
-) ([]*OpenChannelHtlc, error) {
+) ([]*history.OpenChannelHtlc, error) {
 	// filter htlcs used for channel opens. Only include the ones that may have been actually settled.
 	openChannelHtlcs, err := s.pool.Query(ctx, `
 		SELECT htlc.nodeid
@@ -204,6 +157,7 @@ func (s *RevenueCliStore) GetOpenChannelHtlcs(
 		,      htlc.incoming_amt_msat
 		,      htlc.funding_tx_id
 		,      htlc.funding_tx_outnum
+		,      htlc.forward_time
 		FROM open_channel_htlcs htlc
 		INNER JOIN (
 			SELECT DISTINCT h.nodeid, h.peerid, c.funding_tx_id, c.funding_tx_outnum
@@ -216,14 +170,14 @@ func (s *RevenueCliStore) GetOpenChannelHtlcs(
 				AND htlc.peerid = a.peerid
 				AND htlc.funding_tx_id = a.funding_tx_id
 				AND htlc.funding_tx_outnum = a.funding_tx_outnum
-		ORDER BY htlc.nodeid, htlc.peerid, htlc.funding_tx_id, htlc.funding_tx_outnum
+		ORDER BY htlc.nodeid, htlc.peerid, htlc.funding_tx_id, htlc.funding_tx_outnum, htlc.forward_time
 	`, startNs, endNs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query open channel htlcs: %w", err)
 	}
 	defer openChannelHtlcs.Close()
 
-	var result []*OpenChannelHtlc
+	var result []*history.OpenChannelHtlc
 	for openChannelHtlcs.Next() {
 		var nodeid []byte
 		var peerid []byte
@@ -232,6 +186,7 @@ func (s *RevenueCliStore) GetOpenChannelHtlcs(
 		var incoming_amt_msat int64
 		var funding_tx_id []byte
 		var funding_tx_outnum uint32
+		var forward_time int64
 		err = openChannelHtlcs.Scan(
 			&nodeid,
 			&peerid,
@@ -240,6 +195,7 @@ func (s *RevenueCliStore) GetOpenChannelHtlcs(
 			&incoming_amt_msat,
 			&funding_tx_id,
 			&funding_tx_outnum,
+			&forward_time,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan open channel htlc: %w", err)
@@ -250,13 +206,14 @@ func (s *RevenueCliStore) GetOpenChannelHtlcs(
 			return nil, fmt.Errorf("invalid funding outpoint: %w", err)
 		}
 
-		result = append(result, &OpenChannelHtlc{
-			Nodeid:             nodeid,
-			Peerid:             peerid,
+		result = append(result, &history.OpenChannelHtlc{
+			NodeId:             nodeid,
+			PeerId:             peerid,
 			ForwardAmountMsat:  uint64(forward_amt_msat),
 			OriginalAmountMsat: uint64(original_amt_msat),
 			IncomingAmountMsat: uint64(incoming_amt_msat),
 			ChannelPoint:       cp,
+			ForwardTime:        time.Unix(0, forward_time),
 		})
 	}
 
@@ -264,11 +221,11 @@ func (s *RevenueCliStore) GetOpenChannelHtlcs(
 }
 
 // Gets all settled forwards in the defined time range. Ordered by nodeid, peerid_in, amt_msat_in, resolved_time
-func (s *RevenueCliStore) GetForwards(
+func (s *HistoryStore) GetForwards(
 	ctx context.Context,
 	startNs uint64,
 	endNs uint64,
-) ([]*RevenueForward, error) {
+) ([]*history.RevenueForward, error) {
 	err := s.sanityCheck(ctx, startNs, endNs)
 	if err != nil {
 		return nil, err
@@ -308,7 +265,7 @@ func (s *RevenueCliStore) GetForwards(
 		return nil, fmt.Errorf("failed to query our forwards: %w", err)
 	}
 
-	var forwards []*RevenueForward
+	var forwards []*history.RevenueForward
 	for ourForwards.Next() {
 		var identifier string
 		var nodeid []byte
@@ -350,7 +307,7 @@ func (s *RevenueCliStore) GetForwards(
 		if err != nil {
 			return nil, fmt.Errorf("invalid funding outpoint: %w", err)
 		}
-		forwards = append(forwards, &RevenueForward{
+		forwards = append(forwards, &history.RevenueForward{
 			Identifier:      identifier,
 			Nodeid:          nodeid,
 			PeeridIn:        peerid_in,
