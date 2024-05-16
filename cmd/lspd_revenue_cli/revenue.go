@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/breez/lspd/history"
 	"github.com/urfave/cli"
@@ -84,10 +85,10 @@ func revenue(ctx *cli.Context) error {
 			return false
 		}
 
-		if first.ResolvedTime < second.ResolvedTime {
+		if first.ResolvedTime.Before(second.ResolvedTime) {
 			return true
 		}
-		if first.ResolvedTime > second.ResolvedTime {
+		if first.ResolvedTime.After(second.ResolvedTime) {
 			return false
 		}
 
@@ -168,10 +169,10 @@ func getImportedForwards(ctx *cli.Context, timeRange *history.TimeRange) ([]*imp
 			return false
 		}
 
-		if first.resolvedTime < second.resolvedTime {
+		if first.resolvedTime.Before(second.resolvedTime) {
 			return true
 		}
-		if first.resolvedTime > second.resolvedTime {
+		if first.resolvedTime.After(second.resolvedTime) {
 			return false
 		}
 		return false
@@ -206,7 +207,6 @@ func readForwards(fileName string, timeRange *history.TimeRange) ([]*importedFor
 		}
 
 		// Filter out resolved on times outside our range too (since this is external data).
-		resolvedTime := uint64(imp.ResolvedTime.UnixNano())
 		if imp.ResolvedTime.Before(timeRange.Start) || timeRange.End.Before(imp.ResolvedTime) {
 			continue
 		}
@@ -217,7 +217,7 @@ func readForwards(fileName string, timeRange *history.TimeRange) ([]*importedFor
 			amountMsat:   imp.AmountMsat,
 			isCorrelated: false,
 			token:        imp.Token,
-			resolvedTime: resolvedTime,
+			resolvedTime: imp.ResolvedTime,
 			direction:    imp.Direction,
 		})
 	}
@@ -452,10 +452,10 @@ func matchOpenChannelHtlcs(forwardsSortedOut []*history.RevenueForward, openChan
 			return false
 		}
 
-		if first.ResolvedTime < second.ResolvedTime {
+		if first.ResolvedTime.Before(second.ResolvedTime) {
 			return true
 		}
-		if first.ResolvedTime > second.ResolvedTime {
+		if first.ResolvedTime.After(second.ResolvedTime) {
 			return false
 		}
 
@@ -627,6 +627,6 @@ type importedForward struct {
 	amountMsat   uint64
 	isCorrelated bool
 	token        string
-	resolvedTime uint64
+	resolvedTime time.Time
 	direction    string
 }

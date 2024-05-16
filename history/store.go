@@ -43,7 +43,7 @@ type RevenueForward struct {
 	PeeridOut       []byte
 	AmtMsatIn       uint64
 	AmtMsatOut      uint64
-	ResolvedTime    uint64
+	ResolvedTime    time.Time
 	ChannelPointIn  wire.OutPoint
 	ChannelPointOut wire.OutPoint
 	SendToken       *string

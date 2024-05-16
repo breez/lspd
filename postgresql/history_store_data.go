@@ -311,7 +311,7 @@ func (s *HistoryStore) GetForwards(
 			PeeridOut:       peerid_out,
 			AmtMsatIn:       uint64(amt_msat_in),
 			AmtMsatOut:      uint64(amt_msat_out),
-			ResolvedTime:    uint64(resolved_time),
+			ResolvedTime:    time.Unix(0, resolved_time),
 			ChannelPointIn:  *cpIn,
 			ChannelPointOut: *cpOut,
 			SendToken:       send_token,
