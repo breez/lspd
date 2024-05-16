@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/urfave/cli"
 )
@@ -14,28 +13,21 @@ import (
 var exportForwardsCommand = cli.Command{
 	Name:  "export-forwards",
 	Usage: "Export forwards with a given peer correlated to an api key for a given time period.",
-	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:     "node",
-			Required: true,
-			Usage:    "The public key of your own lightning node to export forwards for.",
+	Flags: append(
+		[]cli.Flag{
+			cli.StringFlag{
+				Name:     "node",
+				Required: true,
+				Usage:    "The public key of your own lightning node to export forwards for.",
+			},
+			cli.StringFlag{
+				Name:     "peer",
+				Required: true,
+				Usage:    "The public key of the peer to export the forwards for.",
+			},
 		},
-		cli.StringFlag{
-			Name:     "peer",
-			Required: true,
-			Usage:    "The public key of the peer to export the forwards for.",
-		},
-		cli.Uint64Flag{
-			Name:     "start",
-			Required: false,
-			Usage:    "Start time of exported forwards as a UTC unix timestamp in seconds. If not set will export from the beginning.",
-		},
-		cli.Uint64Flag{
-			Name:     "end",
-			Required: false,
-			Usage:    "End time of exported forwards as a UTC unix timestamp in seconds. If not set will export until now.",
-		},
-	},
+		timeRangeFlags...,
+	),
 	Action: exportForwards,
 }
 
@@ -58,23 +50,16 @@ func exportForwards(ctx *cli.Context) error {
 		return fmt.Errorf("peer is not a pubkey")
 	}
 
-	start := ctx.Uint64("start")
-	startNs := start * 1_000_000_000
-	end := ctx.Uint64("end")
-	endNs := end * 1_000_000_000
-	if endNs == 0 {
-		endNs = uint64(time.Now().UnixNano())
-	}
-
-	if startNs > endNs {
-		return fmt.Errorf("start cannot be after end")
+	timeRange, err := getTimeRange(ctx)
+	if err != nil {
+		return err
 	}
 
 	store, err := getStore(ctx)
 	if err != nil {
 		return err
 	}
-	result, err := store.ExportTokenForwardsForExternalNode(context.Background(), startNs, endNs, nodeId, peerId)
+	result, err := store.ExportTokenForwardsForExternalNode(context.Background(), timeRange, nodeId, peerId)
 	if err != nil {
 		return err
 	}

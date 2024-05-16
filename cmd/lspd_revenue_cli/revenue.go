@@ -23,44 +23,26 @@ const (
 var revenueCommand = cli.Command{
 	Name:  "revenue",
 	Usage: "Get a revenue report.",
-	Flags: []cli.Flag{
-		cli.Uint64Flag{
-			Name:     "start",
-			Required: true,
-			Usage:    "Start time of forwards taken into account as a UTC unix timestamp in seconds.",
+	Flags: append(
+		[]cli.Flag{
+			cli.StringFlag{
+				Name:     "import",
+				Required: false,
+				Usage:    "Optional imports to consider when generating the revenue report. Imports are files generated from the export-forwards command on other nodes. Used to correlate local forwards to api keys. Can be a glob pattern.",
+			},
 		},
-		cli.Uint64Flag{
-			Name:     "end",
-			Required: true,
-			Usage:    "End time of forwards taken into account as a UTC unix timestamp in seconds.",
-		},
-		cli.StringFlag{
-			Name:     "import",
-			Required: false,
-			Usage:    "Optional imports to consider when generating the revenue report. Imports are files generated from the export-forwards command on other nodes. Used to correlate local forwards to api keys. Can be a glob pattern.",
-		},
-	},
+		timeRangeFlags...,
+	),
 	Action: revenue,
 }
 
 func revenue(ctx *cli.Context) error {
-	start := ctx.Uint64("start")
-	if start == 0 {
-		return fmt.Errorf("start is required")
+	timeRange, err := getTimeRange(ctx)
+	if err != nil {
+		return err
 	}
 
-	end := ctx.Uint64("end")
-	if end == 0 {
-		return fmt.Errorf("end is required")
-	}
-
-	startNs := start * 1_000_000_000
-	endNs := end * 1_000_000_000
-	if startNs > endNs {
-		return fmt.Errorf("start cannot be after end")
-	}
-
-	importedForwards, err := getImportedForwards(ctx, startNs, endNs)
+	importedForwards, err := getImportedForwards(ctx, timeRange)
 	if err != nil {
 		return err
 	}
@@ -70,7 +52,7 @@ func revenue(ctx *cli.Context) error {
 		return err
 	}
 
-	forwardsSortedIn, err := store.GetForwards(context.Background(), startNs, endNs)
+	forwardsSortedIn, err := store.GetForwards(context.Background(), timeRange)
 	if err != nil {
 		return err
 	}
@@ -122,7 +104,7 @@ func revenue(ctx *cli.Context) error {
 		matchInternalForwards(forwardsSortedIn, forwardsSortedOut)
 	}
 
-	openChannelHtlcs, err := store.GetOpenChannelHtlcs(context.Background(), startNs, endNs)
+	openChannelHtlcs, err := store.GetOpenChannelHtlcs(context.Background(), timeRange)
 	if err != nil {
 		return err
 	}
@@ -141,7 +123,7 @@ func revenue(ctx *cli.Context) error {
 	return nil
 }
 
-func getImportedForwards(ctx *cli.Context, startNs, endNs uint64) ([]*importedForward, error) {
+func getImportedForwards(ctx *cli.Context, timeRange *history.TimeRange) ([]*importedForward, error) {
 	var importedForwards []*importedForward
 	importFiles := ctx.String("import")
 	if importFiles != "" {
@@ -151,7 +133,7 @@ func getImportedForwards(ctx *cli.Context, startNs, endNs uint64) ([]*importedFo
 		}
 
 		for _, match := range matches {
-			forwards, err := readForwards(match, startNs, endNs)
+			forwards, err := readForwards(match, timeRange)
 			if err != nil {
 				return nil, err
 			}
@@ -198,7 +180,7 @@ func getImportedForwards(ctx *cli.Context, startNs, endNs uint64) ([]*importedFo
 	return importedForwards, nil
 }
 
-func readForwards(fileName string, startNs, endNs uint64) ([]*importedForward, error) {
+func readForwards(fileName string, timeRange *history.TimeRange) ([]*importedForward, error) {
 	f, err := os.Open(fileName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open %s: %w", fileName, err)
@@ -225,7 +207,7 @@ func readForwards(fileName string, startNs, endNs uint64) ([]*importedForward, e
 
 		// Filter out resolved on times outside our range too (since this is external data).
 		resolvedTime := uint64(imp.ResolvedTime.UnixNano())
-		if resolvedTime < startNs || resolvedTime >= endNs {
+		if imp.ResolvedTime.Before(timeRange.Start) || timeRange.End.Before(imp.ResolvedTime) {
 			continue
 		}
 

@@ -81,22 +81,19 @@ type RuntimeStore interface {
 type DataStore interface {
 	ExportTokenForwardsForExternalNode(
 		ctx context.Context,
-		startNs uint64,
-		endNs uint64,
+		timeRange *TimeRange,
 		node []byte,
 		externalNode []byte,
 	) ([]*ExportedForward, error)
 
 	GetOpenChannelHtlcs(
 		ctx context.Context,
-		startNs uint64,
-		endNs uint64,
+		timeRange *TimeRange,
 	) ([]*OpenChannelHtlc, error)
 
 	// Gets all settled forwards in the defined time range. Ordered by nodeid, peerid_in, amt_msat_in, resolved_time
 	GetForwards(
 		ctx context.Context,
-		startNs uint64,
-		endNs uint64,
+		timeRange *TimeRange,
 	) ([]*RevenueForward, error)
 }

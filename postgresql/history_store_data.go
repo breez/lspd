@@ -44,12 +44,11 @@ WITH token_channels AS (
 
 func (s *HistoryStore) ExportTokenForwardsForExternalNode(
 	ctx context.Context,
-	startNs uint64,
-	endNs uint64,
+	timeRange *history.TimeRange,
 	node []byte,
 	externalNode []byte,
 ) ([]*history.ExportedForward, error) {
-	err := s.sanityCheck(ctx, startNs, endNs)
+	err := s.sanityCheck(ctx, timeRange)
 	if err != nil {
 		return nil, err
 	}
@@ -87,8 +86,8 @@ func (s *HistoryStore) ExportTokenForwardsForExternalNode(
 		`,
 		node,
 		externalNode,
-		startNs,
-		endNs,
+		timeRange.Start.UnixNano(),
+		timeRange.End.UnixNano(),
 	)
 	if err != nil {
 		return nil, err
@@ -119,7 +118,7 @@ func (s *HistoryStore) ExportTokenForwardsForExternalNode(
 	return result, nil
 }
 
-func (s *HistoryStore) sanityCheck(ctx context.Context, startNs, endNs uint64) error {
+func (s *HistoryStore) sanityCheck(ctx context.Context, timeRange *history.TimeRange) error {
 	// Sanity check, does forward/channel sync work? Can all forwards be associated to a channel?
 	row := s.pool.QueryRow(ctx, `
 		SELECT COUNT(*)
@@ -130,7 +129,7 @@ func (s *HistoryStore) sanityCheck(ctx context.Context, startNs, endNs uint64) e
 			ON h.nodeid = c_out.nodeid AND (h.chanid_out = c_out.confirmed_scid OR h.chanid_out = c_out.alias_scid)
 		WHERE h.resolved_time >= $1 AND h.resolved_time < $2
 			AND (c_in.nodeid IS NULL OR c_out.nodeid IS NULL)
-	`, startNs, endNs)
+	`, timeRange.Start.UnixNano(), timeRange.End.UnixNano())
 	var count int64
 	err := row.Scan(&count)
 	if err != nil {
@@ -145,8 +144,7 @@ func (s *HistoryStore) sanityCheck(ctx context.Context, startNs, endNs uint64) e
 
 func (s *HistoryStore) GetOpenChannelHtlcs(
 	ctx context.Context,
-	startNs uint64,
-	endNs uint64,
+	timeRange *history.TimeRange,
 ) ([]*history.OpenChannelHtlc, error) {
 	// filter htlcs used for channel opens. Only include the ones that may have been actually settled.
 	openChannelHtlcs, err := s.pool.Query(ctx, `
@@ -171,7 +169,7 @@ func (s *HistoryStore) GetOpenChannelHtlcs(
 				AND htlc.funding_tx_id = a.funding_tx_id
 				AND htlc.funding_tx_outnum = a.funding_tx_outnum
 		ORDER BY htlc.nodeid, htlc.peerid, htlc.funding_tx_id, htlc.funding_tx_outnum, htlc.forward_time
-	`, startNs, endNs)
+	`, timeRange.Start.UnixNano(), timeRange.End.UnixNano())
 	if err != nil {
 		return nil, fmt.Errorf("failed to query open channel htlcs: %w", err)
 	}
@@ -223,10 +221,9 @@ func (s *HistoryStore) GetOpenChannelHtlcs(
 // Gets all settled forwards in the defined time range. Ordered by nodeid, peerid_in, amt_msat_in, resolved_time
 func (s *HistoryStore) GetForwards(
 	ctx context.Context,
-	startNs uint64,
-	endNs uint64,
+	timeRange *history.TimeRange,
 ) ([]*history.RevenueForward, error) {
-	err := s.sanityCheck(ctx, startNs, endNs)
+	err := s.sanityCheck(ctx, timeRange)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +257,7 @@ func (s *HistoryStore) GetForwards(
 			ON c_out.nodeid = tc_out.nodeid AND c_out.funding_tx_id = tc_out.funding_tx_id AND c_out.funding_tx_outnum = tc_out.funding_tx_outnum
 		WHERE h.resolved_time >= $1 AND h.resolved_time < $2
 		ORDER BY h.nodeid, h.peerid_in, h.amt_msat_in, h.resolved_time
-	`, startNs, endNs)
+	`, timeRange.Start.UnixNano(), timeRange.End.UnixNano())
 	if err != nil {
 		return nil, fmt.Errorf("failed to query our forwards: %w", err)
 	}
