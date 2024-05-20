@@ -321,3 +321,41 @@ func (s *HistoryStore) GetForwards(
 
 	return forwards, nil
 }
+
+func (s *HistoryStore) GetStats(
+	ctx context.Context,
+	timeRange *history.TimeRange,
+) (*history.Summary, error) {
+	err := s.sanityCheck(ctx, timeRange)
+	if err != nil {
+		return nil, err
+	}
+
+	row := s.pool.QueryRow(ctx,
+		`SELECT SUM(h.amt_msat_out) AS amount_msat
+		 ,      SUM(h.amt_msat_in - h.amt_msat_out) AS fee_msat
+		 ,      COUNT(*) AS count
+		 FROM forwarding_history h
+		 WHERE h.resolved_time >= $1 AND h.resolved_time < $2`,
+		timeRange.Start.UnixNano(),
+		timeRange.End.UnixNano(),
+	)
+
+	var amount_msat int64
+	var fee_msat int64
+	var count int64
+	err = row.Scan(&amount_msat, &fee_msat, &count)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query forwarding stats: %w", err)
+	}
+
+	s.pool.QueryRow(
+		ctx,
+		`SELECT 
+		 FROM `)
+	return &history.Summary{
+		AmountForwardedMsat: uint64(amount_msat),
+		ForwardCount:        uint64(count),
+		ForwardingFeesMsat:  uint64(fee_msat),
+	}
+}

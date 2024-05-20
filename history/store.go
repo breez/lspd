@@ -63,6 +63,28 @@ type ExportedForward struct {
 	AmountMsat uint64
 }
 
+type Summary struct {
+	// The total amount successfully forwarded.
+	AmountForwardedMsat uint64
+
+	// The total amount of successful forwards.
+	ForwardCount uint64
+
+	// The total fees made from forwarding htlcs. Note this includes channel
+	// open fees.
+	ForwardingFeesMsat uint64
+
+	// The total amount of channels opened.
+	ChannelsOpened uint64
+
+	// The part of the opened channels where we failed to claim the open channel
+	// fee.
+	ChannelsOpenedWithoutFee uint64
+
+	// Part of the forwarding fees that was made due to channel open fees.
+	ChannelOpenFeesMsat uint64
+}
+
 type Store interface {
 	RuntimeStore
 	DataStore
