@@ -8,7 +8,7 @@ env:
   LSP_REF: 'breez-node-v0.17.2-beta'
   CLIENT_REF: 'v0.16.4-breez-3'
   GO_VERSION: '^1.19'
-  CLN_VERSION: 'v24.02.1'
+  CLN_VERSION: 'v24.02.2'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
