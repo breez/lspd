@@ -9,7 +9,6 @@ import (
 
 	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/config"
-	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/btcec/v2"
 	sphinx "github.com/lightningnetwork/lightning-onion"
@@ -23,7 +22,7 @@ import (
 )
 
 type LndHtlcInterceptor struct {
-	interceptor   *interceptor.Interceptor
+	interceptor   common.InterceptHandler
 	config        *config.NodeConfig
 	client        *LndClient
 	stopRequested bool
@@ -36,7 +35,7 @@ type LndHtlcInterceptor struct {
 func NewLndHtlcInterceptor(
 	conf *config.NodeConfig,
 	client *LndClient,
-	interceptor *interceptor.Interceptor,
+	interceptor common.InterceptHandler,
 ) (*LndHtlcInterceptor, error) {
 	i := &LndHtlcInterceptor{
 		config:      conf,

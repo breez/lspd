@@ -134,7 +134,8 @@ func runLspd(cliCtx *cli.Context) error {
 			forwardSync := lnd.NewForwardSync(node.NodeId, client, historyStore)
 			go forwardSync.ForwardsSynchronize(ctx)
 			interceptor := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, feeStrategy, notificationService)
-			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node.NodeConfig, client, interceptor)
+			combinedHandler := common.NewCombinedHandler(interceptor)
+			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node.NodeConfig, client, combinedHandler)
 			if err != nil {
 				log.Fatalf("failed to initialize LND interceptor: %v", err)
 			}
