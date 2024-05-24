@@ -29,10 +29,9 @@ import (
 	"github.com/breez/lspd/postgresql"
 	"github.com/btcsuite/btcd/btcec/v2"
 	ecies "github.com/ecies/go/v2"
-	"github.com/urfave/cli"
 )
 
-func runLspd(cliCtx *cli.Context) error {
+func Main() error {
 	log.Printf(`Starting lspd, tag='%s', revision='%s'`, build.GetTag(), build.GetRevision())
 	n := os.Getenv("NODES")
 	var nodeConfigs []*config.NodeConfig
