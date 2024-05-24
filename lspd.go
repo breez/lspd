@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/breez/lspd/build"
@@ -28,7 +26,7 @@ import (
 	ecies "github.com/ecies/go/v2"
 )
 
-func Main(config *config.Config) error {
+func Main(ctx context.Context, config *config.Config) error {
 	log.Printf(`Starting lspd, tag='%s', revision='%s'`, build.GetTag(), build.GetRevision())
 
 	nodes, err := initializeNodes(config.Nodes)
@@ -69,7 +67,7 @@ func Main(config *config.Config) error {
 	lsps2Store := postgresql.NewLsps2Store(pool)
 	historyStore := postgresql.NewHistoryStore(pool)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	notificationService := notifications.NewNotificationService(notificationsStore)
 	go notificationService.Start(ctx)
 	openingService := common.NewOpeningService(openingStore, nodesService)
@@ -205,11 +203,9 @@ func Main(config *config.Config) error {
 		stopInterceptors()
 	}()
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		sig := <-c
-		log.Printf("Received stop signal %v. Stopping.", sig)
+		<-ctx.Done()
+		log.Printf("Received stop signal. Stopping.")
 
 		// Stop everything gracefully on stop signal
 		s.Stop()
