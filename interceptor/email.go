@@ -18,7 +18,7 @@ const (
 	charset = "UTF-8"
 )
 
-var OpenChannelEmailConfig *config.Email = &config.Email{}
+var OpenChannelEmailConfig *config.Email
 
 func sendEmail(conf *config.Email, content, subject string) error {
 
@@ -81,6 +81,10 @@ func sendOpenChannelEmailNotification(
 	channelPoint string,
 	tag *string,
 ) error {
+	if OpenChannelEmailConfig == nil {
+		return nil
+	}
+
 	var html bytes.Buffer
 
 	tpl := `

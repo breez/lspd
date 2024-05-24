@@ -65,7 +65,10 @@ func LoadConfig() (*Config, error) {
 	automigrate, _ := strconv.ParseBool(os.Getenv("AUTO_MIGRATE_DATABASE"))
 	address := os.Getenv("LISTEN_ADDRESS")
 	certMagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
-	openChannelEmail := loadOpenChannelEmailSettings()
+	openChannelEmail, err := loadOpenChannelEmailSettings()
+	if err != nil {
+		return nil, err
+	}
 	return &Config{
 		Nodes:             nodes,
 		FeeStrategy:       feeStrategy,
