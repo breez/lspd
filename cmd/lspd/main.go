@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/breez/lspd"
 	"github.com/breez/lspd/build"
 	"github.com/breez/lspd/config"
 	"github.com/urfave/cli"
@@ -20,7 +21,7 @@ func main() {
 			return err
 		}
 
-		return Main(config)
+		return lspd.Main(config)
 	}
 	app.Commands = []cli.Command{
 		genKeyCommand,
