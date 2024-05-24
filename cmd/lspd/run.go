@@ -3,13 +3,10 @@ package main
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -31,20 +28,10 @@ import (
 	ecies "github.com/ecies/go/v2"
 )
 
-func Main() error {
+func Main(config *config.Config) error {
 	log.Printf(`Starting lspd, tag='%s', revision='%s'`, build.GetTag(), build.GetRevision())
-	n := os.Getenv("NODES")
-	var nodeConfigs []*config.NodeConfig
-	err := json.Unmarshal([]byte(n), &nodeConfigs)
-	if err != nil {
-		log.Fatalf("failed to unmarshal NODES env: %v", err)
-	}
 
-	if len(nodeConfigs) == 0 {
-		log.Fatalf("need at least one node configured in NODES.")
-	}
-
-	nodes, err := initializeNodes(nodeConfigs)
+	nodes, err := initializeNodes(config.Nodes)
 	if err != nil {
 		log.Fatalf("failed to initialize nodes: %v", err)
 	}
@@ -54,47 +41,28 @@ func Main() error {
 		log.Fatalf("failed to create nodes service: %v", err)
 	}
 
-	var feeStrategy chain.FeeStrategy
-	envFeeStrategy := os.Getenv("MEMPOOL_PRIORITY")
-	switch strings.ToLower(envFeeStrategy) {
-	case "minimum":
-		feeStrategy = chain.FeeStrategyMinimum
-	case "economy":
-		feeStrategy = chain.FeeStrategyEconomy
-	case "hour":
-		feeStrategy = chain.FeeStrategyHour
-	case "halfhour":
-		feeStrategy = chain.FeeStrategyHalfHour
-	case "fastest":
-		feeStrategy = chain.FeeStrategyFastest
-	default:
-		feeStrategy = chain.FeeStrategyEconomy
-	}
-
 	var mempoolClient *mempool.MempoolClient
-	mempoolUrl := os.Getenv("MEMPOOL_API_BASE_URL")
-	if mempoolUrl != "" {
-		mempoolClient, err = mempool.NewMempoolClient(mempoolUrl)
+	if config.MempoolApiBaseUrl != nil {
+		mempoolClient, err = mempool.NewMempoolClient(*config.MempoolApiBaseUrl)
 		if err != nil {
 			log.Fatalf("failed to initialize mempool client: %v", err)
 		}
 
-		log.Printf("using mempool api for fee estimation: %v, fee strategy: %v:%v", mempoolUrl, envFeeStrategy, feeStrategy)
+		log.Printf("using mempool api for fee estimation: %v, fee strategy: %v", *config.MempoolApiBaseUrl, config.FeeStrategy)
 	}
 
-	databaseUrl := os.Getenv("DATABASE_URL")
-	automigrate, _ := strconv.ParseBool(os.Getenv("AUTO_MIGRATE_DATABASE"))
-	if automigrate {
-		err = postgresql.Migrate(databaseUrl)
+	if config.AutoMigrateDb {
+		err = postgresql.Migrate(config.DatabaseUrl)
 		if err != nil {
 			log.Fatalf("Failed to migrate postgres database: %v", err)
 		}
 	}
-	pool, err := postgresql.PgConnect(databaseUrl)
+	pool, err := postgresql.PgConnect(config.DatabaseUrl)
 	if err != nil {
 		log.Fatalf("pgConnect() error: %v", err)
 	}
 
+	interceptor.OpenChannelEmailConfig = config.OpenChannelEmail
 	interceptStore := postgresql.NewPostgresInterceptStore(pool)
 	openingStore := postgresql.NewPostgresOpeningStore(pool)
 	notificationsStore := postgresql.NewNotificationsStore(pool)
@@ -132,7 +100,7 @@ func Main() error {
 
 			forwardSync := lnd.NewForwardSync(node.NodeId, client, historyStore)
 			go forwardSync.ForwardsSynchronize(ctx)
-			interceptor := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, feeStrategy, notificationService)
+			interceptor := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, config.FeeStrategy, notificationService)
 			combinedHandler := common.NewCombinedHandler(interceptor)
 			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node.NodeConfig, client, combinedHandler)
 			if err != nil {
@@ -148,13 +116,13 @@ func Main() error {
 
 			forwardSync := cln.NewForwardSync(node.NodeId, client, historyStore)
 			go forwardSync.ForwardsSynchronize(ctx)
-			legacyHandler := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, feeStrategy, notificationService)
+			legacyHandler := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, config.FeeStrategy, notificationService)
 			lsps2Handler := lsps2.NewInterceptHandler(lsps2Store, historyStore, openingService, client, feeEstimator, &lsps2.InterceptorConfig{
 				NodeId:                       node.NodeId,
 				AdditionalChannelCapacitySat: uint64(node.NodeConfig.AdditionalChannelCapacity),
 				MinConfs:                     node.NodeConfig.MinConfs,
 				TargetConf:                   node.NodeConfig.TargetConf,
-				FeeStrategy:                  feeStrategy,
+				FeeStrategy:                  config.FeeStrategy,
 				MinPaymentSizeMsat:           node.NodeConfig.MinPaymentSizeMsat,
 				MaxPaymentSizeMsat:           node.NodeConfig.MaxPaymentSizeMsat,
 				TimeLockDelta:                node.NodeConfig.TimeLockDelta,
@@ -187,11 +155,9 @@ func Main() error {
 		interceptors = append(interceptors, htlcInterceptor)
 	}
 
-	address := os.Getenv("LISTEN_ADDRESS")
-	certMagicDomain := os.Getenv("CERTMAGIC_DOMAIN")
 	cs := NewChannelOpenerServer(interceptStore, openingService)
 	ns := notifications.NewNotificationsServer(notificationsStore)
-	s, err := NewGrpcServer(nodesService, address, certMagicDomain, cs, ns)
+	s, err := NewGrpcServer(nodesService, config.ListenAddress, config.CertmagicDomain, cs, ns)
 	if err != nil {
 		log.Fatalf("failed to initialize grpc server: %v", err)
 	}
