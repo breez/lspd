@@ -13,7 +13,9 @@ func main() {
 	app.Name = "lspd"
 	app.Version = build.GetTag() + " commit=" + build.GetRevision()
 	app.Usage = "LSP implementation for LND and CLN"
-	app.Action = runLspd
+	app.Action = func(ctx *cli.Context) error {
+		return Main()
+	}
 	app.Commands = []cli.Command{
 		genKeyCommand,
 		migrateCommand,
