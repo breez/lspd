@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/breez/lspd/build"
+	"github.com/breez/lspd/config"
 	"github.com/urfave/cli"
 )
 
@@ -14,7 +15,12 @@ func main() {
 	app.Version = build.GetTag() + " commit=" + build.GetRevision()
 	app.Usage = "LSP implementation for LND and CLN"
 	app.Action = func(ctx *cli.Context) error {
-		return Main()
+		config, err := config.LoadConfig()
+		if err != nil {
+			return err
+		}
+
+		return Main(config)
 	}
 	app.Commands = []cli.Command{
 		genKeyCommand,
