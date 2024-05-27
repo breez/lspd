@@ -94,7 +94,7 @@ func Main(ctx context.Context, config *config.Config) error {
 				log.Fatalf("failed to initialize LND client: %v", err)
 			}
 
-			client.StartListeners()
+			client.StartListeners(ctx)
 
 			forwardSync := lnd.NewForwardSync(node.NodeId, client, historyStore)
 			go forwardSync.ForwardsSynchronize(ctx)
