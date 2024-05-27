@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/breez/lntest"
+	"github.com/breez/lspd/itest/lntest"
 	"github.com/breez/lspd/lsps0"
 	"github.com/stretchr/testify/assert"
 )
 
 func testLsps0GetProtocolVersions(p *testParams) {
-	p.BreezClient().Node().ConnectPeer(p.Lsp().LightningNode())
+	p.BreezClient().Node().ConnectPeer(p.Node())
 
 	// Make sure everything is activated.
 	<-time.After(htlcInterceptorDelay)
@@ -23,7 +23,7 @@ func testLsps0GetProtocolVersions(p *testParams) {
 		"params": {}
 	  }`
 	p.BreezClient().Node().SendCustomMessage(&lntest.CustomMsgRequest{
-		PeerId: hex.EncodeToString(p.Lsp().NodeId()),
+		PeerId: hex.EncodeToString(p.Node().NodeId()),
 		Type:   lsps0.Lsps0MessageType,
 		Data:   []byte(rawMsg),
 	})

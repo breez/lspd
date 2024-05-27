@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/breez/lntest"
+	"github.com/breez/lspd/itest/lntest"
 	"github.com/breez/lspd/lsps2"
 	"github.com/stretchr/testify/assert"
 )
@@ -13,31 +13,31 @@ func testLsps2HappyFlow(p *testParams) {
 	alice := lntest.NewClnNode(p.h, p.m, "Alice")
 	alice.Start()
 	alice.Fund(10000000)
-	p.lsp.LightningNode().Fund(10000000)
+	p.Node().Fund(10000000)
 
 	log.Print("Opening channel between Alice and the lsp")
-	channel := alice.OpenChannel(p.lsp.LightningNode(), &lntest.OpenChannelOptions{
+	channel := alice.OpenChannel(p.Node(), &lntest.OpenChannelOptions{
 		AmountSat: publicChanAmount,
 	})
 	alice.WaitForChannelReady(channel)
 
 	log.Print("Connecting bob to lspd")
-	p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
+	p.BreezClient().Node().ConnectPeer(p.Node())
 
 	// Make sure everything is activated.
 	<-time.After(htlcInterceptorDelay)
 
 	log.Printf("Calling lsps2.get_info")
-	info := Lsps2GetInfo(p.BreezClient(), p.Lsp(), lsps2.GetInfoRequest{
+	info := p.Lspd().Client(0).Lsps2GetInfo(p.BreezClient(), lsps2.GetInfoRequest{
 		Token: &WorkingToken,
 	})
 
 	outerAmountMsat := uint64(2100000)
-	innerAmountMsat := lsps2CalculateInnerAmountMsat(p.lsp, outerAmountMsat, info.OpeningFeeParamsMenu[0])
+	innerAmountMsat := Lsps2CalculateInnerAmountMsat(p.Harness(), outerAmountMsat, info.OpeningFeeParamsMenu[0])
 	p.BreezClient().SetHtlcAcceptor(innerAmountMsat)
 
 	log.Printf("Calling lsps2.buy")
-	buyResp := Lsps2Buy(p.BreezClient(), p.Lsp(), lsps2.BuyRequest{
+	buyResp := p.Lspd().Client(0).Lsps2Buy(p.BreezClient(), lsps2.BuyRequest{
 		OpeningFeeParams: *info.OpeningFeeParamsMenu[0],
 		PaymentSizeMsat:  &outerAmountMsat,
 	})
@@ -49,7 +49,7 @@ func testLsps2HappyFlow(p *testParams) {
 			innerAmountMsat: innerAmountMsat,
 			outerAmountMsat: outerAmountMsat,
 			description:     description,
-			lsp:             p.lsp,
+			lsp:             p.Lspd().Client(0),
 		},
 		buyResp.JitChannelScid)
 

@@ -6,27 +6,27 @@ import (
 	"log"
 	"time"
 
-	"github.com/breez/lntest"
+	"github.com/breez/lspd/itest/lntest"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lsps0"
 	"github.com/stretchr/testify/assert"
 )
 
 func testLsps2Buy(p *testParams) {
-	SetFeeParams(p.Lsp(), []*FeeParamSetting{
+	p.Lspd().Client(0).SetFeeParams([]*FeeParamSetting{
 		{
 			Validity:     time.Second * 3600,
 			MinMsat:      1000000,
 			Proportional: 1000,
 		},
 	})
-	p.BreezClient().Node().ConnectPeer(p.Lsp().LightningNode())
+	p.BreezClient().Node().ConnectPeer(p.Node())
 
 	// Make sure everything is activated.
 	<-time.After(htlcInterceptorDelay)
 
 	p.BreezClient().Node().SendCustomMessage(&lntest.CustomMsgRequest{
-		PeerId: hex.EncodeToString(p.Lsp().NodeId()),
+		PeerId: hex.EncodeToString(p.Node().NodeId()),
 		Type:   lsps0.Lsps0MessageType,
 		Data: []byte(`{
 			"method": "lsps2.get_info",
@@ -63,7 +63,7 @@ func testLsps2Buy(p *testParams) {
 	pr, err := json.Marshal(&data.Result.Menu[0])
 	lntest.CheckError(p.t, err)
 	p.BreezClient().Node().SendCustomMessage(&lntest.CustomMsgRequest{
-		PeerId: hex.EncodeToString(p.Lsp().NodeId()),
+		PeerId: hex.EncodeToString(p.Node().NodeId()),
 		Type:   lsps0.Lsps0MessageType,
 		Data: append(append(
 			[]byte(`{
@@ -94,7 +94,7 @@ func testLsps2Buy(p *testParams) {
 	scid, err := lightning.NewShortChannelIDFromString(b.Result.Jit_channel_scid)
 	lntest.CheckError(p.t, err)
 
-	rows, err := p.lsp.PostgresBackend().Pool().Query(
+	rows, err := p.Lspd().PostgresBackend().Pool().Query(
 		p.h.Ctx,
 		`SELECT token 
 		 FROM lsps2.buy_registrations

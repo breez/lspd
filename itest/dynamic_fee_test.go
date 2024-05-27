@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/breez/lntest"
+	"github.com/breez/lspd/itest/lntest"
 	lspd "github.com/breez/lspd/rpc"
 	"github.com/stretchr/testify/assert"
 )
@@ -13,24 +13,28 @@ func testDynamicFeeFlow(p *testParams) {
 	alice := lntest.NewClnNode(p.h, p.m, "Alice")
 	alice.Start()
 	alice.Fund(10000000)
-	p.lsp.LightningNode().Fund(10000000)
+	p.Node().Fund(10000000)
 
 	log.Print("Opening channel between Alice and the lsp")
-	channel := alice.OpenChannel(p.lsp.LightningNode(), &lntest.OpenChannelOptions{
+	channel := alice.OpenChannel(p.Node(), &lntest.OpenChannelOptions{
 		AmountSat: publicChanAmount,
 	})
 	channelId := alice.WaitForChannelReady(channel)
 
-	log.Printf("Getting channel information")
-	SetFeeParams(p.lsp, []*FeeParamSetting{
-		{
-			Validity:     time.Second * 3600,
-			MinMsat:      3000000,
-			Proportional: 1000,
+	log.Printf("Setting fee params")
+	p.Lspd().Client(0).SetFeeParams(
+		[]*FeeParamSetting{
+			{
+				Validity:     time.Second * 3600,
+				MinMsat:      3000000,
+				Proportional: 1000,
+			},
 		},
-	},
 	)
-	info := ChannelInformation(p.lsp)
+
+	log.Printf("Getting channel information")
+
+	info := p.Lspd().Client(0).ChannelInformation()
 	assert.Len(p.t, info.OpeningFeeParamsMenu, 1)
 	params := info.OpeningFeeParamsMenu[0]
 	assert.Equal(p.t, uint64(3000000), params.MinMsat)
@@ -38,22 +42,22 @@ func testDynamicFeeFlow(p *testParams) {
 	log.Printf("opening_fee_params: %+v", params)
 	log.Printf("Adding bob's invoices")
 	outerAmountMsat := uint64(4200000)
-	innerAmountMsat := calculateInnerAmountMsat(p.lsp, outerAmountMsat, params)
+	innerAmountMsat := calculateInnerAmountMsat(p.Harness(), outerAmountMsat, params)
 	description := "Please pay me"
 	innerInvoice, outerInvoice := GenerateInvoices(p.BreezClient(),
 		generateInvoicesRequest{
 			innerAmountMsat: innerAmountMsat,
 			outerAmountMsat: outerAmountMsat,
 			description:     description,
-			lsp:             p.lsp,
+			lsp:             p.Lspd().Client(0),
 		})
 
 	p.BreezClient().SetHtlcAcceptor(innerAmountMsat)
 	log.Print("Connecting bob to lspd")
-	p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
+	p.BreezClient().Node().ConnectPeer(p.Node())
 
 	log.Printf("Testing some bad registrations")
-	err := RegisterPayment(p.lsp, &lspd.PaymentInformation{
+	err := p.Lspd().Client(0).RegisterPayment(&lspd.PaymentInformation{
 		PaymentHash:        innerInvoice.paymentHash,
 		PaymentSecret:      innerInvoice.paymentSecret,
 		Destination:        p.BreezClient().Node().NodeId(),
@@ -71,7 +75,7 @@ func testDynamicFeeFlow(p *testParams) {
 	}, true)
 	assert.Contains(p.t, err.Error(), "invalid opening_fee_params")
 
-	err = RegisterPayment(p.lsp, &lspd.PaymentInformation{
+	err = p.Lspd().Client(0).RegisterPayment(&lspd.PaymentInformation{
 		PaymentHash:        innerInvoice.paymentHash,
 		PaymentSecret:      innerInvoice.paymentSecret,
 		Destination:        p.BreezClient().Node().NodeId(),
@@ -89,7 +93,7 @@ func testDynamicFeeFlow(p *testParams) {
 	}, true)
 	assert.Contains(p.t, err.Error(), "invalid opening_fee_params")
 
-	err = RegisterPayment(p.lsp, &lspd.PaymentInformation{
+	err = p.Lspd().Client(0).RegisterPayment(&lspd.PaymentInformation{
 		PaymentHash:   innerInvoice.paymentHash,
 		PaymentSecret: innerInvoice.paymentSecret,
 		Destination:   p.BreezClient().Node().NodeId(),
@@ -100,7 +104,7 @@ func testDynamicFeeFlow(p *testParams) {
 	}, true)
 	assert.Contains(p.t, err.Error(), "not enough fees")
 
-	err = RegisterPayment(p.lsp, &lspd.PaymentInformation{
+	err = p.Lspd().Client(0).RegisterPayment(&lspd.PaymentInformation{
 		PaymentHash:        innerInvoice.paymentHash,
 		PaymentSecret:      innerInvoice.paymentSecret,
 		Destination:        p.BreezClient().Node().NodeId(),
@@ -112,7 +116,7 @@ func testDynamicFeeFlow(p *testParams) {
 
 	// Now register the payment for real
 	log.Printf("Registering payment with lsp")
-	RegisterPayment(p.lsp, &lspd.PaymentInformation{
+	p.Lspd().Client(0).RegisterPayment(&lspd.PaymentInformation{
 		PaymentHash:        innerInvoice.paymentHash,
 		PaymentSecret:      innerInvoice.paymentSecret,
 		Destination:        p.BreezClient().Node().NodeId(),
@@ -125,7 +129,7 @@ func testDynamicFeeFlow(p *testParams) {
 	log.Printf("Waiting %v to allow htlc interceptor to activate.", htlcInterceptorDelay)
 	<-time.After(htlcInterceptorDelay)
 	log.Printf("Alice paying")
-	route := constructRoute(p.lsp.LightningNode(), p.BreezClient().Node(), channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
+	route := constructRoute(p.Node(), p.BreezClient().Node(), channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
 	payResp, err := alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
 	lntest.CheckError(p.t, err)
 	bobInvoice := p.BreezClient().Node().GetInvoice(payResp.PaymentHash)

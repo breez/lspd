@@ -172,8 +172,6 @@ github.com/breez/glightning v0.0.1-breez.0.20231123140102-d50d43e22138 h1:qNHyE7
 github.com/breez/glightning v0.0.1-breez.0.20231123140102-d50d43e22138/go.mod h1:YAdIeSyx8VEhDCtEaGOJLmWNpPaQ3x4vYSAj9Vrppdo=
 github.com/breez/lnd v0.15.0-beta.rc6.0.20231122093500-0c939786ced7 h1:RLHCG90jBAE8wNCUFMeu7j4LNbXWdV8BOsVZtmsTFpk=
 github.com/breez/lnd v0.15.0-beta.rc6.0.20231122093500-0c939786ced7/go.mod h1:AOHMNILUI56HaVlVMai+ComGHsxMzMMCoxqFwN0wmvw=
-github.com/breez/lntest v0.0.30-0.20240324204336-6f828e9fca8f h1:EnpiiJxDGFVO1waxiz/YTCn1sboN+O7gZJ6G9DbDlDk=
-github.com/breez/lntest v0.0.30-0.20240324204336-6f828e9fca8f/go.mod h1:TYaPUDOmJyag/+ezQFvMD3Qqwos8QIEE36CP06gwQUU=
 github.com/btcsuite/btcd v0.20.1-beta/go.mod h1:wVuoA8VJLEcwgqHBwHmzLRazpKxTv13Px/pDuV7OomQ=
 github.com/btcsuite/btcd v0.22.0-beta.0.20220111032746-97732e52810c/go.mod h1:tjmYdS6MLJ5/s0Fj4DbLgSbDHbEqLJrtnHecBFkdz5M=
 github.com/btcsuite/btcd v0.22.0-beta.0.20220204213055-eaf0459ff879/go.mod h1:osu7EoKiL36UThEgzYPqdRaxeo0NU8VoXqgcnwpey0g=
