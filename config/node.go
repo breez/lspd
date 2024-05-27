@@ -103,10 +103,11 @@ type LndConfig struct {
 	// Address to the grpc api.
 	Address string `json:"address"`
 
-	// tls cert for the grpc api.
+	// tls cert for the grpc api. Can either be a file path or the cert
+	// contents. Typically stored in `lnd-dir/tls.cert`.
 	Cert string `json:"cert"`
 
-	// macaroon to use.
+	// macaroon to use. Can either be a file path or the macaroon contents.
 	Macaroon string `json:"macaroon"`
 }
 
