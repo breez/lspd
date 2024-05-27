@@ -80,8 +80,8 @@ func (c *LndClient) Close() {
 	c.conn.Close()
 }
 
-func (c *LndClient) StartListeners() {
-	c.listenerCtx, c.listenerCancel = context.WithCancel(context.Background())
+func (c *LndClient) StartListeners(ctx context.Context) {
+	c.listenerCtx, c.listenerCancel = context.WithCancel(ctx)
 	go c.listenPeerEvents()
 	go c.listenChannelEvents()
 }
