@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/itest/lntest"
 )
 
@@ -20,14 +19,13 @@ func TestTwoLsp(t *testing.T) {
 	miner := lntest.NewMiner(h)
 	miner.Start()
 
-	lndNode, lndConf := NewLndLspdNode(h, miner, "lnd-lsp")
-	clnNode, clnConf := NewClnLspdNode(h, miner, "cln-lsp")
-	mem := NewMempoolApi(h)
+	lndNode := lntest.NewLndNode(h, miner, "lnd-lsp")
+	clnNode := lntest.NewClnNode(h, miner, "cln-lsp")
 	alice := lntest.NewLndNode(h, miner, "alice")
-	breezClient := newClnBreezClient(h, miner, "breez-client")
+	breezClient := lntest.NewClnNode(h, miner, "breez-client")
 
 	var beforeLspdWg sync.WaitGroup
-	beforeLspdWg.Add(3)
+	beforeLspdWg.Add(2)
 	go func() {
 		defer beforeLspdWg.Done()
 		log.Printf("Starting LND lsp node")
@@ -37,11 +35,6 @@ func TestTwoLsp(t *testing.T) {
 		defer beforeLspdWg.Done()
 		log.Printf("Starting CLN lsp node")
 		clnNode.Start()
-	}()
-	go func() {
-		defer beforeLspdWg.Done()
-		log.Printf("Starting mempool api")
-		mem.Start()
 	}()
 
 	var clientsWg sync.WaitGroup
@@ -56,17 +49,22 @@ func TestTwoLsp(t *testing.T) {
 		defer clientsWg.Done()
 		log.Printf("Starting Breez Client")
 		breezClient.Start()
-		breezClient.Node().Fund(1000000)
+		breezClient.Fund(1000000)
 	}()
 
 	beforeLspdWg.Wait()
 
 	var allDoneWg sync.WaitGroup
-	allDoneWg.Add(2)
+	allDoneWg.Add(1)
 	go func() {
 		defer allDoneWg.Done()
+		lndNode.WaitForSync()
+		clnNode.WaitForSync()
 		lndNode.Fund(10000000)
 		clnNode.Fund(10000000)
+		<-time.After(time.Second * 4)
+		lndNode.WaitForSync()
+		clnNode.WaitForSync()
 		lChan := lndNode.OpenChannel(clnNode, &lntest.OpenChannelOptions{
 			IsPublic:  true,
 			AmountSat: 1000000,
@@ -74,42 +72,16 @@ func TestTwoLsp(t *testing.T) {
 		lndNode.WaitForChannelReady(lChan)
 	}()
 
-	// var lspd *Lspd
-	go func() {
-		defer allDoneWg.Done()
-		l, err := NewLspd(
-			h,
-			"lspd",
-			mem,
-			&NodeWithConfig{
-				Node: lndNode,
-				Config: &config.NodeConfig{
-					Lnd: lndConf,
-				},
-			},
-			&NodeWithConfig{
-				Node: clnNode,
-				Config: &config.NodeConfig{
-					Cln: clnConf,
-				},
-			},
-		)
-		if err != nil {
-			h.Fatalf("Failed to create lspd: %v", err)
-		}
-
-		// lspd = l
-		log.Printf("Starting lspd")
-		l.Start()
-		<-time.After(htlcInterceptorDelay)
-	}()
-
 	clientsWg.Wait()
+	alice.WaitForSync()
+	<-time.After(time.Second * 4)
 	aChan := alice.OpenChannel(lndNode, &lntest.OpenChannelOptions{
 		IsPublic:  true,
 		AmountSat: publicChanAmount,
 	})
-	cChan := clnNode.OpenChannel(breezClient.Node(), &lntest.OpenChannelOptions{
+	clnNode.WaitForSync()
+	breezClient.WaitForSync()
+	cChan := clnNode.OpenChannel(breezClient, &lntest.OpenChannelOptions{
 		IsPublic:  false,
 		AmountSat: 1000000,
 	})
@@ -118,14 +90,15 @@ func TestTwoLsp(t *testing.T) {
 	alice.WaitForSync()
 	lndNode.WaitForSync()
 	clnNode.WaitForSync()
-	breezClient.Node().WaitForSync()
+	breezClient.WaitForSync()
 	allDoneWg.Wait()
 
+	<-time.After(time.Second * 4)
 	count := 20
 	var invoices []string
 	for i := 0; i < count; i++ {
 		desc := fmt.Sprintf("invoice %d", i)
-		bolt11 := breezClient.Node().CreateBolt11Invoice(&lntest.CreateInvoiceOptions{
+		bolt11 := breezClient.CreateBolt11Invoice(&lntest.CreateInvoiceOptions{
 			AmountMsat:      10000,
 			Description:     &desc,
 			IncludeHopHints: true,
@@ -140,6 +113,7 @@ func TestTwoLsp(t *testing.T) {
 			defer invoiceWg.Done()
 			log.Printf("Paying invoice %s", bolt11)
 			alice.Pay(bolt11)
+			log.Printf("Payment succeeded")
 		}(bolt11)
 	}
 
