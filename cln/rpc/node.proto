@@ -630,6 +630,7 @@ message InvoiceRequest {
 	repeated string fallbacks = 4;
 	optional bytes preimage = 5;
 	optional uint32 cltv = 6;
+	optional bool exposeprivatechannels = 8;
 	optional bool deschashonly = 9;
 }
 
