@@ -1,7 +1,6 @@
 package itest
 
 import (
-	"fmt"
 	"log"
 	"sync"
 	"testing"
@@ -19,103 +18,69 @@ func TestTwoLsp(t *testing.T) {
 	miner := lntest.NewMiner(h)
 	miner.Start()
 
-	lndNode := lntest.NewLndNode(h, miner, "lnd-lsp")
-	clnNode := lntest.NewClnNode(h, miner, "cln-lsp")
-	alice := lntest.NewLndNode(h, miner, "alice")
-	breezClient := lntest.NewClnNode(h, miner, "breez-client")
+	lndSender := lntest.NewLndNode(h, miner, "lnd-sender")
+	lndRouter := lntest.NewLndNode(h, miner, "lnd-router")
+	clnRouter := lntest.NewClnNode(h, miner, "cln-router")
+	clnRecipient := lntest.NewClnNode(h, miner, "cln-recipient")
 
-	var beforeLspdWg sync.WaitGroup
-	beforeLspdWg.Add(2)
+	var startupWg sync.WaitGroup
+	startupWg.Add(4)
 	go func() {
-		defer beforeLspdWg.Done()
-		log.Printf("Starting LND lsp node")
-		lndNode.Start()
+		defer startupWg.Done()
+		log.Printf("Starting LND routing node")
+		lndRouter.Start()
+		lndRouter.Fund(10000000)
+		lndRouter.WaitForSync()
 	}()
 	go func() {
-		defer beforeLspdWg.Done()
-		log.Printf("Starting CLN lsp node")
-		clnNode.Start()
-	}()
-
-	var clientsWg sync.WaitGroup
-	clientsWg.Add(2)
-	go func() {
-		defer clientsWg.Done()
-		log.Printf("Starting Alice")
-		alice.Start()
-		alice.Fund(10000000)
+		defer startupWg.Done()
+		log.Printf("Starting CLN routing node")
+		clnRouter.Start()
+		clnRouter.Fund(10000000)
+		clnRouter.WaitForSync()
 	}()
 	go func() {
-		defer clientsWg.Done()
-		log.Printf("Starting Breez Client")
-		breezClient.Start()
-		breezClient.Fund(1000000)
+		defer startupWg.Done()
+		log.Printf("Starting sender")
+		lndSender.Start()
+		lndSender.Fund(10000000)
+		lndSender.WaitForSync()
 	}()
-
-	beforeLspdWg.Wait()
-
-	var allDoneWg sync.WaitGroup
-	allDoneWg.Add(1)
 	go func() {
-		defer allDoneWg.Done()
-		lndNode.WaitForSync()
-		clnNode.WaitForSync()
-		lndNode.Fund(10000000)
-		clnNode.Fund(10000000)
-		<-time.After(time.Second * 4)
-		lndNode.WaitForSync()
-		clnNode.WaitForSync()
-		lChan := lndNode.OpenChannel(clnNode, &lntest.OpenChannelOptions{
-			IsPublic:  true,
-			AmountSat: 1000000,
-		})
-		lndNode.WaitForChannelReady(lChan)
+		defer startupWg.Done()
+		log.Printf("Starting recipient")
+		clnRecipient.Start()
+		clnRecipient.Fund(10000000)
+		clnRecipient.WaitForSync()
 	}()
 
-	clientsWg.Wait()
-	alice.WaitForSync()
-	<-time.After(time.Second * 4)
-	aChan := alice.OpenChannel(lndNode, &lntest.OpenChannelOptions{
+	startupWg.Wait()
+
+	aChan := lndSender.OpenChannel(lndRouter, &lntest.OpenChannelOptions{
 		IsPublic:  true,
-		AmountSat: publicChanAmount,
+		AmountSat: 1000000,
 	})
-	clnNode.WaitForSync()
-	breezClient.WaitForSync()
-	cChan := clnNode.OpenChannel(breezClient, &lntest.OpenChannelOptions{
+	bChan := lndRouter.OpenChannel(clnRouter, &lntest.OpenChannelOptions{
+		IsPublic:  true,
+		AmountSat: 1000000,
+	})
+	cChan := clnRouter.OpenChannel(clnRecipient, &lntest.OpenChannelOptions{
 		IsPublic:  false,
 		AmountSat: 1000000,
 	})
-	alice.WaitForChannelReady(aChan)
-	clnNode.WaitForChannelReady(cChan)
-	alice.WaitForSync()
-	lndNode.WaitForSync()
-	clnNode.WaitForSync()
-	breezClient.WaitForSync()
-	allDoneWg.Wait()
-
+	lndSender.WaitForChannelReady(aChan)
+	lndRouter.WaitForChannelReady(bChan)
+	clnRouter.WaitForChannelReady(cChan)
 	<-time.After(time.Second * 4)
-	count := 20
-	var invoices []string
-	for i := 0; i < count; i++ {
-		desc := fmt.Sprintf("invoice %d", i)
-		bolt11 := breezClient.CreateBolt11Invoice(&lntest.CreateInvoiceOptions{
-			AmountMsat:      10000,
-			Description:     &desc,
-			IncludeHopHints: true,
-		})
-		invoices = append(invoices, bolt11.Bolt11)
-	}
 
-	var invoiceWg sync.WaitGroup
-	invoiceWg.Add(count)
-	for _, bolt11 := range invoices {
-		go func(bolt11 string) {
-			defer invoiceWg.Done()
-			log.Printf("Paying invoice %s", bolt11)
-			alice.Pay(bolt11)
-			log.Printf("Payment succeeded")
-		}(bolt11)
-	}
+	desc := "paying invoice fails with INVALID_ONION_HMAC"
+	bolt11 := clnRecipient.CreateBolt11Invoice(&lntest.CreateInvoiceOptions{
+		AmountMsat:      10000,
+		Description:     &desc,
+		IncludeHopHints: true,
+	})
 
-	invoiceWg.Wait()
+	log.Printf("Paying invoice %s", bolt11.Bolt11)
+	lndSender.Pay(bolt11.Bolt11)
+	log.Printf("Payment succeeded")
 }
