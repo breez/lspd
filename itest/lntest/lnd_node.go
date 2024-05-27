@@ -485,7 +485,7 @@ func (n *LndNode) WaitForChannelReady(channel *ChannelInfo) ShortChannelID {
 		if index >= 0 {
 			c := lc.Channels[index]
 			if c.Active {
-				if c.Private {
+				if c.Private && len(c.AliasScids) > 0 {
 					return NewShortChanIDFromInt(c.AliasScids[0])
 				} else {
 					return NewShortChanIDFromInt(c.ChanId)
@@ -592,18 +592,10 @@ func (n *LndNode) Pay(bolt11 string) *PayResult {
 			if len(payment.Htlcs) > 0 {
 				attempt := payment.Htlcs[len(payment.Htlcs)-1]
 				if attempt.Failure != nil {
-					log.Printf("%s: htlc attempt %d failed with code %v", n.name, attempt.AttemptId, attempt.Failure.Code)
+					log.Printf("%s: htlc attempt %d failed with code %v from index %d", n.name, attempt.AttemptId, attempt.Failure.Code, attempt.Failure.FailureSourceIndex)
 				}
 			}
-			log.Printf("%s: Got IN_FLIGHT: %+v", n.name, payment)
 		case lnrpc.Payment_FAILED:
-			if len(payment.Htlcs) > 0 {
-				attempt := payment.Htlcs[len(payment.Htlcs)-1]
-				if attempt.Failure != nil {
-					log.Printf("%s: htlc attempt %d failed with code %v", n.name, attempt.AttemptId, attempt.Failure.Code)
-				}
-			}
-			log.Printf("Got FAILED: %+v", payment)
 			n.harness.T.Fatalf("%s: payment failed with reason: %v", n.name, payment.FailureReason)
 		case lnrpc.Payment_UNKNOWN:
 			log.Printf("%s: got UNKNOWN payment update: %+v", n.name, payment)
