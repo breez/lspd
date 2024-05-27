@@ -249,6 +249,12 @@ func initializeNodes(configs []*config.NodeConfig) ([]*common.Node, error) {
 		}
 
 		if config.Lnd != nil {
+			if tlsCert, err := os.ReadFile(config.Lnd.Cert); err == nil {
+				config.Lnd.Cert = string(tlsCert)
+			}
+			if macaroon, err := os.ReadFile(config.Lnd.Macaroon); err == nil {
+				config.Lnd.Macaroon = hex.EncodeToString(macaroon)
+			}
 			node.Client, err = lnd.NewLndClient(config.Lnd)
 			if err != nil {
 				return nil, err
