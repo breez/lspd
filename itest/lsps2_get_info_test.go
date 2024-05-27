@@ -6,13 +6,13 @@ import (
 	"log"
 	"time"
 
-	"github.com/breez/lntest"
+	"github.com/breez/lspd/itest/lntest"
 	"github.com/breez/lspd/lsps0"
 	"github.com/stretchr/testify/assert"
 )
 
 func testLsps2GetInfo(p *testParams) {
-	SetFeeParams(p.Lsp(), []*FeeParamSetting{
+	p.Lspd().Client(0).SetFeeParams([]*FeeParamSetting{
 		{
 			Validity:     time.Second * 3600,
 			MinMsat:      3000000,
@@ -24,7 +24,7 @@ func testLsps2GetInfo(p *testParams) {
 			Proportional: 800,
 		},
 	})
-	p.BreezClient().Node().ConnectPeer(p.Lsp().LightningNode())
+	p.BreezClient().Node().ConnectPeer(p.Node())
 
 	// Make sure everything is activated.
 	<-time.After(htlcInterceptorDelay)
@@ -39,7 +39,7 @@ func testLsps2GetInfo(p *testParams) {
 		}
 	  }`
 	p.BreezClient().Node().SendCustomMessage(&lntest.CustomMsgRequest{
-		PeerId: hex.EncodeToString(p.Lsp().NodeId()),
+		PeerId: hex.EncodeToString(p.Node().NodeId()),
 		Type:   lsps0.Lsps0MessageType,
 		Data:   []byte(rawMsg),
 	})

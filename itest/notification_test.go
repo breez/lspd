@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/breez/lntest"
+	"github.com/breez/lspd/itest/lntest"
 	lspd "github.com/breez/lspd/rpc"
 	"github.com/stretchr/testify/assert"
 )
@@ -17,31 +17,31 @@ func testOfflineNotificationPaymentRegistered(p *testParams) {
 	alice := lntest.NewClnNode(p.h, p.m, "Alice")
 	alice.Start()
 	alice.Fund(10000000)
-	p.lsp.LightningNode().Fund(10000000)
+	p.Node().Fund(10000000)
 
 	log.Print("Opening channel between Alice and the lsp")
-	channel := alice.OpenChannel(p.lsp.LightningNode(), &lntest.OpenChannelOptions{
+	channel := alice.OpenChannel(p.Node(), &lntest.OpenChannelOptions{
 		AmountSat: publicChanAmount,
 	})
 	channelId := alice.WaitForChannelReady(channel)
 
 	log.Printf("Adding bob's invoices")
 	outerAmountMsat := uint64(2100000)
-	innerAmountMsat := calculateInnerAmountMsat(p.lsp, outerAmountMsat, nil)
+	innerAmountMsat := calculateInnerAmountMsat(p.Harness(), outerAmountMsat, nil)
 	description := "Please pay me"
 	innerInvoice, outerInvoice := GenerateInvoices(p.BreezClient(),
 		generateInvoicesRequest{
 			innerAmountMsat: innerAmountMsat,
 			outerAmountMsat: outerAmountMsat,
 			description:     description,
-			lsp:             p.lsp,
+			lsp:             p.Lspd().Client(0),
 		})
 
 	log.Print("Connecting bob to lspd")
-	p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
+	p.BreezClient().Node().ConnectPeer(p.Node())
 
 	log.Printf("Registering payment with lsp")
-	RegisterPayment(p.lsp, &lspd.PaymentInformation{
+	p.Lspd().Client(0).RegisterPayment(&lspd.PaymentInformation{
 		PaymentHash:        innerInvoice.paymentHash,
 		PaymentSecret:      innerInvoice.paymentSecret,
 		Destination:        p.BreezClient().Node().NodeId(),
@@ -75,7 +75,7 @@ func testOfflineNotificationPaymentRegistered(p *testParams) {
 		log.Printf("Starting breez client again")
 		p.BreezClient().SetHtlcAcceptor(innerAmountMsat)
 		p.BreezClient().Start()
-		p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
+		p.BreezClient().Node().ConnectPeer(p.Node())
 	}()
 
 	// TODO: Fix race waiting for htlc interceptor.
@@ -83,9 +83,9 @@ func testOfflineNotificationPaymentRegistered(p *testParams) {
 	<-time.After(htlcInterceptorDelay)
 
 	url := "http://" + addr + "/api/v1/notify"
-	SubscribeNotifications(p.lsp, p.BreezClient(), url, false)
+	p.Lspd().Client(0).SubscribeNotifications(p.BreezClient(), url, false)
 	log.Printf("Alice paying")
-	route := constructRoute(p.lsp.LightningNode(), p.BreezClient().Node(), channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
+	route := constructRoute(p.Node(), p.BreezClient().Node(), channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
 	_, err = alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
 	assert.Nil(p.t, err)
 }
@@ -94,17 +94,17 @@ func testOfflineNotificationRegularForward(p *testParams) {
 	alice := lntest.NewClnNode(p.h, p.m, "Alice")
 	alice.Start()
 	alice.Fund(10000000)
-	p.lsp.LightningNode().Fund(10000000)
+	p.Node().Fund(10000000)
 	p.BreezClient().Node().Fund(100000)
 
 	log.Print("Opening channel between Alice and the lsp")
-	channelAL := alice.OpenChannel(p.lsp.LightningNode(), &lntest.OpenChannelOptions{
+	channelAL := alice.OpenChannel(p.Node(), &lntest.OpenChannelOptions{
 		AmountSat: publicChanAmount,
 		IsPublic:  true,
 	})
 
 	log.Print("Opening channel between lsp and Breez client")
-	channelLB := p.lsp.LightningNode().OpenChannel(p.BreezClient().Node(), &lntest.OpenChannelOptions{
+	channelLB := p.Node().OpenChannel(p.BreezClient().Node(), &lntest.OpenChannelOptions{
 		AmountSat: 200000,
 		IsPublic:  false,
 	})
@@ -112,7 +112,7 @@ func testOfflineNotificationRegularForward(p *testParams) {
 	log.Print("Waiting for channel between Alice and the lsp to be ready.")
 	alice.WaitForChannelReady(channelAL)
 	log.Print("Waiting for channel between LSP and Bob to be ready.")
-	p.lsp.LightningNode().WaitForChannelReady(channelLB)
+	p.Node().WaitForChannelReady(channelLB)
 	p.BreezClient().Node().WaitForChannelReady(channelLB)
 
 	port, err := lntest.GetPort()
@@ -134,11 +134,11 @@ func testOfflineNotificationRegularForward(p *testParams) {
 		<-delivered
 		log.Printf("Notification was delivered. Starting breez client again")
 		p.BreezClient().Start()
-		p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
+		p.BreezClient().Node().ConnectPeer(p.Node())
 	}()
 
 	url := "http://" + addr + "/api/v1/notify"
-	SubscribeNotifications(p.lsp, p.BreezClient(), url, false)
+	p.Lspd().Client(0).SubscribeNotifications(p.BreezClient(), url, false)
 
 	<-time.After(time.Second * 2)
 	log.Printf("Adding bob's invoice")
@@ -162,7 +162,7 @@ func testOfflineNotificationRegularForward(p *testParams) {
 		} else {
 			id = chans[0].ShortChannelID
 		}
-		invoiceWithHint = AddHopHint(p.BreezClient(), bobInvoice.Bolt11, p.Lsp(), id, nil, 144)
+		invoiceWithHint = AddHopHint(p.BreezClient(), bobInvoice.Bolt11, p.Lspd().Client(0), id, nil, 144)
 	}
 	log.Printf("invoice with hint: %v", invoiceWithHint)
 
@@ -185,10 +185,10 @@ func testOfflineNotificationZeroConfChannel(p *testParams) {
 	alice := lntest.NewClnNode(p.h, p.m, "Alice")
 	alice.Start()
 	alice.Fund(10000000)
-	p.lsp.LightningNode().Fund(10000000)
+	p.Node().Fund(10000000)
 
 	log.Print("Opening channel between Alice and the lsp")
-	channel := alice.OpenChannel(p.lsp.LightningNode(), &lntest.OpenChannelOptions{
+	channel := alice.OpenChannel(p.Node(), &lntest.OpenChannelOptions{
 		AmountSat: publicChanAmount,
 		IsPublic:  true,
 	})
@@ -196,18 +196,18 @@ func testOfflineNotificationZeroConfChannel(p *testParams) {
 
 	log.Printf("Adding bob's invoices")
 	outerAmountMsat := uint64(2100000)
-	innerAmountMsat := calculateInnerAmountMsat(p.lsp, outerAmountMsat, nil)
+	innerAmountMsat := calculateInnerAmountMsat(p.Harness(), outerAmountMsat, nil)
 	description := "Please pay me"
 	innerInvoice, outerInvoice := GenerateInvoices(p.BreezClient(),
 		generateInvoicesRequest{
 			innerAmountMsat: innerAmountMsat,
 			outerAmountMsat: outerAmountMsat,
 			description:     description,
-			lsp:             p.lsp,
+			lsp:             p.Lspd().Client(0),
 		})
 
 	log.Print("Connecting bob to lspd")
-	p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
+	p.BreezClient().Node().ConnectPeer(p.Node())
 	p.BreezClient().SetHtlcAcceptor(innerAmountMsat)
 
 	// TODO: Fix race waiting for htlc interceptor.
@@ -215,7 +215,7 @@ func testOfflineNotificationZeroConfChannel(p *testParams) {
 	<-time.After(htlcInterceptorDelay)
 
 	log.Printf("Registering payment with lsp")
-	RegisterPayment(p.lsp, &lspd.PaymentInformation{
+	p.Lspd().Client(0).RegisterPayment(&lspd.PaymentInformation{
 		PaymentHash:        innerInvoice.paymentHash,
 		PaymentSecret:      innerInvoice.paymentSecret,
 		Destination:        p.BreezClient().Node().NodeId(),
@@ -225,7 +225,7 @@ func testOfflineNotificationZeroConfChannel(p *testParams) {
 
 	expectedheight := p.Miner().GetBlockHeight()
 	log.Printf("Alice paying")
-	route := constructRoute(p.lsp.LightningNode(), p.BreezClient().Node(), channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
+	route := constructRoute(p.Node(), p.BreezClient().Node(), channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
 	_, err := alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
 	assert.Nil(p.t, err)
 
@@ -251,7 +251,7 @@ func testOfflineNotificationZeroConfChannel(p *testParams) {
 		} else {
 			id = chans[0].ShortChannelID
 		}
-		invoiceWithHint = AddHopHint(p.BreezClient(), bobInvoice.Bolt11, p.Lsp(), id, nil, lspCltvDelta)
+		invoiceWithHint = AddHopHint(p.BreezClient(), bobInvoice.Bolt11, p.Lspd().Client(0), id, nil, lspCltvDelta)
 	}
 
 	log.Printf("Invoice with hint: %s", invoiceWithHint)
@@ -280,11 +280,11 @@ func testOfflineNotificationZeroConfChannel(p *testParams) {
 		<-delivered
 		log.Printf("Starting breez client again")
 		p.BreezClient().Start()
-		p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
+		p.BreezClient().Node().ConnectPeer(p.Node())
 	}()
 
 	url := "http://" + addr + "/api/v1/notify"
-	SubscribeNotifications(p.lsp, p.BreezClient(), url, false)
+	p.Lspd().Client(0).SubscribeNotifications(p.BreezClient(), url, false)
 
 	log.Printf("Alice paying zero conf invoice")
 	payResp := alice.Pay(invoiceWithHint)
@@ -305,7 +305,7 @@ func testNotificationsUnsubscribe(p *testParams) {
 	log.Printf("Client pubkey: %s", pubkey)
 
 	count_subscriptions := func() (uint64, error) {
-		row := p.lsp.PostgresBackend().Pool().QueryRow(
+		row := p.Lspd().PostgresBackend().Pool().QueryRow(
 			p.h.Ctx,
 			`SELECT COUNT(*)
 		 	 FROM public.notification_subscriptions
@@ -323,14 +323,14 @@ func testNotificationsUnsubscribe(p *testParams) {
 		return count, nil
 	}
 
-	SubscribeNotifications(p.lsp, p.BreezClient(), url, false)
+	p.Lspd().Client(0).SubscribeNotifications(p.BreezClient(), url, false)
 
 	// Verify that we have subscribed to the webhook
 	count, err := count_subscriptions()
 	assert.Nil(p.h.T, err)
 	assert.Equal(p.h.T, count, 1)
 
-	UnsubscribeNotifications(p.lsp, p.BreezClient(), url, false)
+	p.Lspd().Client(0).UnsubscribeNotifications(p.BreezClient(), url, false)
 
 	// Verify that we have unsubscribed from the webhook
 	count, err = count_subscriptions()

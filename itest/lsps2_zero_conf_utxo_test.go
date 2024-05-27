@@ -4,8 +4,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/breez/lntest"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/itest/lntest"
 	"github.com/breez/lspd/lsps2"
 	"github.com/stretchr/testify/assert"
 )
@@ -16,43 +16,44 @@ func testLsps2ZeroConfUtxo(p *testParams) {
 	alice.Fund(10000000)
 
 	minConfs := uint32(0)
-	lsp := p.lspFunc(p.h, p.m, p.mem, &config.NodeConfig{MinConfs: &minConfs})
+	node, lsp := p.lspFunc(p.h, p.m, p.mem, &config.NodeConfig{MinConfs: &minConfs})
+	node.Start()
 	lsp.Start()
 
 	log.Print("Opening channel between Alice and the lsp")
-	channel := alice.OpenChannel(lsp.LightningNode(), &lntest.OpenChannelOptions{
+	channel := alice.OpenChannel(node, &lntest.OpenChannelOptions{
 		AmountSat: publicChanAmount,
 	})
 	channelId := alice.WaitForChannelReady(channel)
 
-	tempaddr := lsp.LightningNode().GetNewAddress()
+	tempaddr := node.GetNewAddress()
 	p.m.SendToAddress(tempaddr, 210000)
-	reserveaddr := lsp.LightningNode().GetNewAddress()
+	reserveaddr := node.GetNewAddress()
 	p.m.SendToAddress(reserveaddr, 50000)
 	p.m.MineBlocks(6)
-	lsp.LightningNode().WaitForSync()
+	node.WaitForSync()
 
 	initialHeight := p.m.GetBlockHeight()
-	addr := lsp.LightningNode().GetNewAddress()
-	lsp.LightningNode().SendToAddress(addr, 200000)
+	addr := node.GetNewAddress()
+	node.SendToAddress(addr, 200000)
 
 	log.Print("Connecting bob to lspd")
-	p.BreezClient().Node().ConnectPeer(lsp.LightningNode())
+	p.BreezClient().Node().ConnectPeer(node)
 
 	// Make sure everything is activated.
 	<-time.After(htlcInterceptorDelay)
 
 	log.Printf("Calling lsps2.get_info")
-	info := Lsps2GetInfo(p.BreezClient(), lsp, lsps2.GetInfoRequest{
+	info := lsp.Client(0).Lsps2GetInfo(p.BreezClient(), lsps2.GetInfoRequest{
 		Token: &WorkingToken,
 	})
 
 	outerAmountMsat := uint64(2100000)
-	innerAmountMsat := lsps2CalculateInnerAmountMsat(lsp, outerAmountMsat, info.OpeningFeeParamsMenu[0])
+	innerAmountMsat := Lsps2CalculateInnerAmountMsat(p.Harness(), outerAmountMsat, info.OpeningFeeParamsMenu[0])
 	p.BreezClient().SetHtlcAcceptor(innerAmountMsat)
 
 	log.Printf("Calling lsps2.buy")
-	buyResp := Lsps2Buy(p.BreezClient(), lsp, lsps2.BuyRequest{
+	buyResp := lsp.Client(0).Lsps2Buy(p.BreezClient(), lsps2.BuyRequest{
 		OpeningFeeParams: *info.OpeningFeeParamsMenu[0],
 		PaymentSizeMsat:  &outerAmountMsat,
 	})
@@ -64,7 +65,7 @@ func testLsps2ZeroConfUtxo(p *testParams) {
 			innerAmountMsat: innerAmountMsat,
 			outerAmountMsat: outerAmountMsat,
 			description:     description,
-			lsp:             lsp,
+			lsp:             lsp.Client(0),
 		},
 		buyResp.JitChannelScid)
 
@@ -72,7 +73,7 @@ func testLsps2ZeroConfUtxo(p *testParams) {
 	log.Printf("Waiting %v to allow htlc interceptor to activate.", htlcInterceptorDelay)
 	<-time.After(htlcInterceptorDelay)
 	log.Printf("Alice paying")
-	route := constructRoute(lsp.LightningNode(), p.BreezClient().Node(), channelId, lntest.NewShortChanIDFromString(buyResp.JitChannelScid), outerAmountMsat)
+	route := constructRoute(node, p.BreezClient().Node(), channelId, lntest.NewShortChanIDFromString(buyResp.JitChannelScid), outerAmountMsat)
 	route.Hops[0].Delay += 2
 	payResp, err := alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
 	lntest.CheckError(p.t, err)

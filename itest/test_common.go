@@ -5,6 +5,7 @@ import (
 	"log"
 	"testing"
 
+	"github.com/breez/lspd/itest/lntest"
 	"github.com/breez/lspd/lsps2"
 	lspd "github.com/breez/lspd/rpc"
 	"github.com/stretchr/testify/assert"
@@ -31,7 +32,7 @@ func AssertChannelCapacity(
 	assert.Equal(t, ((outerAmountMsat/1000)+100000)*1000, capacityMsat)
 }
 
-func calculateInnerAmountMsat(lsp LspNode, outerAmountMsat uint64, params *lspd.OpeningFeeParams) uint64 {
+func calculateInnerAmountMsat(h *lntest.TestHarness, outerAmountMsat uint64, params *lspd.OpeningFeeParams) uint64 {
 	var fee uint64
 	log.Printf("%+v", params)
 	if params == nil {
@@ -47,14 +48,14 @@ func calculateInnerAmountMsat(lsp LspNode, outerAmountMsat uint64, params *lspd.
 	}
 
 	if fee > outerAmountMsat {
-		lsp.Harness().Fatalf("Fee is higher than amount")
+		h.Fatalf("Fee is higher than amount")
 	}
 
 	log.Printf("outer: %v, fee: %v", outerAmountMsat, fee)
 	return outerAmountMsat - fee
 }
 
-func lsps2CalculateInnerAmountMsat(lsp LspNode, outerAmountMsat uint64, params *lsps2.OpeningFeeParams) uint64 {
+func Lsps2CalculateInnerAmountMsat(h *lntest.TestHarness, outerAmountMsat uint64, params *lsps2.OpeningFeeParams) uint64 {
 	fee := (outerAmountMsat*uint64(params.Proportional) + 999_999) / 1_000_000
 	if fee < params.MinFeeMsat {
 		fee = params.MinFeeMsat

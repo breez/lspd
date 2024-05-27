@@ -45,13 +45,11 @@ go test -timeout 20m -v ./itest \
   --lndexec /full/path/to/lnd \
   --lndmobileexec /full/path/to/lnd \
   --clnpluginexec /full/path/to/lspd_cln_plugin \
-  --lspdexec /full/path/to/lspd \
 ```
 
 - Required: `--lightningdexec` Full path to lightningd development build executable. Defaults to `lightningd` in `$PATH`.
 - Required: `--lndexec` Full path to LSP LND executable. Defaults to `lnd` in `$PATH`. 
 - Required: `--lndmobileexec` Full path to Breez mobile client LND executable. No default.
-- Required: `--lspdexec` Full path to `lspd` executable to test. Defaults to `lspd` in `$PATH`.
 - Required: `--clnpluginexec` Full path to the lspd cln plugin executable. No default.
 - Recommended: `--bitcoindexec` Full path to `bitcoind`. Defaults to `bitcoind` in `$PATH`.
 - Recommended: `--bitcoincliexec` Full path to `bitcoin-cli`. Defaults to `bitcoin-cli` in `$PATH`.

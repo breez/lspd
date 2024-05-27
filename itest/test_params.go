@@ -3,11 +3,11 @@ package itest
 import (
 	"testing"
 
-	"github.com/breez/lntest"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/itest/lntest"
 )
 
-type LspFunc func(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, c *config.NodeConfig) LspNode
+type LspFunc func(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, c *config.NodeConfig) (lntest.LightningNode, *Lspd)
 type ClientFunc func(h *lntest.TestHarness, m *lntest.Miner) BreezClient
 
 type testParams struct {
@@ -16,7 +16,8 @@ type testParams struct {
 	m          *lntest.Miner
 	mem        *mempoolApi
 	c          BreezClient
-	lsp        LspNode
+	lspd       *Lspd
+	node       lntest.LightningNode
 	lspFunc    LspFunc
 	clientFunc ClientFunc
 }
@@ -33,8 +34,12 @@ func (h *testParams) Mempool() *mempoolApi {
 	return h.mem
 }
 
-func (h *testParams) Lsp() LspNode {
-	return h.lsp
+func (h *testParams) Lspd() *Lspd {
+	return h.lspd
+}
+
+func (h *testParams) Node() lntest.LightningNode {
+	return h.node
 }
 
 func (h *testParams) Harness() *lntest.TestHarness {
