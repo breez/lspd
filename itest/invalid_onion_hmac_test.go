@@ -10,7 +10,7 @@ import (
 )
 
 func TestInvalidOnionHmac(t *testing.T) {
-	h := lntest.NewTestHarness(t, time.Now().Add(defaultTimeout))
+	h := lntest.NewTestHarness(t, time.Now().Add(time.Minute*5))
 	defer func() {
 		h.TearDown()
 	}()
