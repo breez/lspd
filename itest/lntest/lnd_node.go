@@ -85,7 +85,7 @@ func NewLndNodeFromBinary(h *TestHarness, m *Miner, name string, binary string, 
 	restAddress := fmt.Sprintf("%s:%d", host, restPort)
 	args := append([]string{
 		fmt.Sprintf("--lnddir=%s", lndDir),
-		"--debuglevel=debug",
+		"--debuglevel=trace",
 		"--nobootstrap",
 		fmt.Sprintf("--rpclisten=%s", grpcAddress),
 		fmt.Sprintf("--restlisten=%s", restAddress),
