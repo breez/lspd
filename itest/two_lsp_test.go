@@ -9,7 +9,7 @@ import (
 	"github.com/breez/lspd/itest/lntest"
 )
 
-func TestTwoLsp(t *testing.T) {
+func TestInvalidOnionHmac(t *testing.T) {
 	h := lntest.NewTestHarness(t, time.Now().Add(defaultTimeout))
 	defer func() {
 		h.TearDown()
