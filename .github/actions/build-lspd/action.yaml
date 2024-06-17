@@ -1,5 +1,5 @@
-name: 'Build LSPD'
-description: 'Build LSPD and upload the build artifacts.'
+name: 'Build LSPD CLN plugin'
+description: 'Build LSPD CLN plugin and upload the build artifacts.'
 runs:
   using: 'composite'
   steps:
@@ -14,13 +14,11 @@ runs:
         go-version: '1.21'
 
     - name: build
-      run: make release-all
+      run: make release-plugin
       shell: bash
 
     - name: upload lspd artifacts
       uses: actions/upload-artifact@v4
       with:
         name: build-artifacts
-        path: |
-          lspd
-          lspd_cln_plugin
+        path: lspd_cln_plugin
