@@ -46,11 +46,10 @@ type OpenChannelOptions struct {
 }
 
 type CreateInvoiceOptions struct {
-	AmountMsat      uint64
-	Description     *string
-	Preimage        *[]byte
-	Cltv            *uint32
-	IncludeHopHints bool
+	AmountMsat  uint64
+	Description *string
+	Preimage    *[]byte
+	Cltv        *uint32
 }
 
 type CreateInvoiceResult struct {

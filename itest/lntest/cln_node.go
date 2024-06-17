@@ -511,10 +511,6 @@ func (n *ClnNode) CreateBolt11Invoice(options *CreateInvoiceOptions) *CreateInvo
 	label, err := GenerateRandomString()
 	CheckError(n.harness.T, err)
 
-	exposePrivateChannels := []string{}
-	if options.IncludeHopHints {
-		exposePrivateChannels = append(exposePrivateChannels, "true")
-	}
 	req := &rpc.InvoiceRequest{
 		Label: label,
 		AmountMsat: &rpc.AmountOrAny{
@@ -524,7 +520,6 @@ func (n *ClnNode) CreateBolt11Invoice(options *CreateInvoiceOptions) *CreateInvo
 				},
 			},
 		},
-		Exposeprivatechannels: exposePrivateChannels,
 	}
 
 	if options.Description != nil {

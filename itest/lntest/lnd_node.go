@@ -524,7 +524,7 @@ func (n *LndNode) WaitForChannelReady(channel *ChannelInfo) ShortChannelID {
 func (n *LndNode) CreateBolt11Invoice(options *CreateInvoiceOptions) *CreateInvoiceResult {
 	req := &lnrpc.Invoice{
 		ValueMsat: int64(options.AmountMsat),
-		Private:   options.IncludeHopHints,
+		Private:   true,
 	}
 
 	if options.Description != nil {
