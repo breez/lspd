@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/breez/lntest"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/itest/lntest"
 )
 
 var defaultTimeout time.Duration = time.Second * 120
@@ -29,22 +29,63 @@ func TestLspd(t *testing.T) {
 	runTests(t, testCases, "CLN-lsp-CLN-client", clnLspFunc, clnClientFunc)
 }
 
-func legacyOnionLndLspFunc(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, c *config.NodeConfig) LspNode {
+func legacyOnionLndLspFunc(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, c *config.NodeConfig) (lntest.LightningNode, *Lspd) {
 	cfg := c
 	if cfg == nil {
 		cfg = &config.NodeConfig{}
 	}
 
-	cfg.LegacyOnionTokens = []string{"hello"}
-	return lndLspFunc(h, m, mem, cfg)
+	cfg.LegacyOnionTokens = []string{"hello0"}
+
+	node, config := NewLndLspdNode(h, m, "lsp-node")
+	cfg.Lnd = config
+	lspd, err := NewLspd(h, "lsp", mem, &NodeWithConfig{
+		Node:   node,
+		Config: cfg,
+	})
+	if err != nil {
+		h.T.Fatalf("Failed to initialize lspd: %v", err)
+	}
+
+	return node, lspd
 }
 
-func lndLspFunc(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, c *config.NodeConfig) LspNode {
-	return NewLndLspdNode(h, m, mem, "lsp", c)
+func lndLspFunc(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, c *config.NodeConfig) (lntest.LightningNode, *Lspd) {
+	cfg := c
+	if cfg == nil {
+		cfg = &config.NodeConfig{}
+	}
+
+	node, config := NewLndLspdNode(h, m, "lsp-node")
+	cfg.Lnd = config
+	lspd, err := NewLspd(h, "lsp", mem, &NodeWithConfig{
+		Node:   node,
+		Config: cfg,
+	})
+	if err != nil {
+		h.T.Fatalf("Failed to initialize lspd: %v", err)
+	}
+
+	return node, lspd
 }
 
-func clnLspFunc(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, c *config.NodeConfig) LspNode {
-	return NewClnLspdNode(h, m, mem, "lsp", c)
+func clnLspFunc(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, c *config.NodeConfig) (lntest.LightningNode, *Lspd) {
+	cfg := c
+	if cfg == nil {
+		cfg = &config.NodeConfig{}
+	}
+
+	node, config := NewClnLspdNode(h, m, "lsp-node")
+	cfg.Cln = config
+	lspd, err := NewLspd(h, "lsp", mem, &NodeWithConfig{
+		Node:   node,
+		Config: cfg,
+	})
+	if err != nil {
+		h.T.Fatalf("Failed to initialize lspd: %v", err)
+	}
+
+	return node, lspd
 }
 
 func lndClientFunc(h *lntest.TestHarness, m *lntest.Miner) BreezClient {
@@ -99,10 +140,12 @@ func runTest(
 	mem.Start()
 
 	log.Printf("Creating lsp")
-	var lsp LspNode
+	var lspd *Lspd
+	var node lntest.LightningNode
 	if !testCase.skipCreateLsp {
-		lsp = lspFunc(h, miner, mem, nil)
-		lsp.Start()
+		node, lspd = lspFunc(h, miner, mem, nil)
+		node.Start()
+		lspd.Start()
 	}
 	c := clientFunc(h, miner)
 	c.Start()
@@ -113,7 +156,8 @@ func runTest(
 		m:          miner,
 		mem:        mem,
 		c:          c,
-		lsp:        lsp,
+		lspd:       lspd,
+		node:       node,
 		lspFunc:    lspFunc,
 		clientFunc: clientFunc,
 	})

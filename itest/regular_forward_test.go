@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/breez/lntest"
+	"github.com/breez/lspd/itest/lntest"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -12,17 +12,17 @@ func testRegularForward(p *testParams) {
 	alice := lntest.NewClnNode(p.h, p.m, "Alice")
 	alice.Start()
 	alice.Fund(10000000)
-	p.lsp.LightningNode().Fund(10000000)
+	p.Node().Fund(10000000)
 	p.BreezClient().Node().Fund(100000)
 
 	log.Print("Opening channel between Alice and the lsp")
-	channelAL := alice.OpenChannel(p.lsp.LightningNode(), &lntest.OpenChannelOptions{
+	channelAL := alice.OpenChannel(p.Node(), &lntest.OpenChannelOptions{
 		AmountSat: publicChanAmount,
 		IsPublic:  true,
 	})
 
 	log.Print("Opening channel between lsp and Breez client")
-	channelLB := p.lsp.LightningNode().OpenChannel(p.BreezClient().Node(), &lntest.OpenChannelOptions{
+	channelLB := p.Node().OpenChannel(p.BreezClient().Node(), &lntest.OpenChannelOptions{
 		AmountSat: 200000,
 		IsPublic:  false,
 	})
@@ -30,7 +30,7 @@ func testRegularForward(p *testParams) {
 	log.Print("Waiting for channel between Alice and the lsp to be ready.")
 	alice.WaitForChannelReady(channelAL)
 	log.Print("Waiting for channel between LSP and Bob to be ready.")
-	p.lsp.LightningNode().WaitForChannelReady(channelLB)
+	p.Node().WaitForChannelReady(channelLB)
 	p.BreezClient().Node().WaitForChannelReady(channelLB)
 
 	// TODO: Fix race waiting for htlc interceptor.
@@ -40,8 +40,7 @@ func testRegularForward(p *testParams) {
 	log.Printf("Adding bob's invoice")
 	amountMsat := uint64(2100000)
 	bobInvoice := p.BreezClient().Node().CreateBolt11Invoice(&lntest.CreateInvoiceOptions{
-		AmountMsat:      amountMsat,
-		IncludeHopHints: true,
+		AmountMsat: amountMsat,
 	})
 	log.Printf(bobInvoice.Bolt11)
 
@@ -58,7 +57,7 @@ func testRegularForward(p *testParams) {
 		} else {
 			id = chans[0].ShortChannelID
 		}
-		invoiceWithHint = AddHopHint(p.BreezClient(), bobInvoice.Bolt11, p.Lsp(), id, nil, 144)
+		invoiceWithHint = AddHopHint(p.BreezClient(), bobInvoice.Bolt11, p.Lspd().Client(0), id, nil, 144)
 	}
 	log.Printf("invoice with hint: %v", invoiceWithHint)
 

@@ -5,8 +5,8 @@ import (
 	"flag"
 	"sync"
 
-	"github.com/breez/lntest"
-	"github.com/breez/lntest/lnd"
+	"github.com/breez/lspd/itest/lntest"
+	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwire"
 )
 
@@ -104,7 +104,7 @@ func (c *lndBreezClient) startChannelAcceptor(ctx context.Context) error {
 		}
 
 		private := request.ChannelFlags&uint32(lnwire.FFAnnounceChannel) == 0
-		resp := &lnd.ChannelAcceptResponse{
+		resp := &lnrpc.ChannelAcceptResponse{
 			PendingChanId: request.PendingChanId,
 			Accept:        private,
 		}

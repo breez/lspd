@@ -35,9 +35,7 @@ runs:
         name: build-artifacts
   
     - name: Set permissions
-      run: |
-        chmod 755 lspd
-        chmod 755 lspd_cln_plugin
+      run: chmod 755 lspd_cln_plugin
       shell: bash
 
     - name: Cache LND client
@@ -127,7 +125,6 @@ runs:
           --lndexec ~/go_lnd_lsp/bin/lnd \
           --lndmobileexec ~/go_lnd_client/bin/lnd \
           --clnpluginexec ${{ github.workspace }}/lspd_cln_plugin \
-          --lspdexec ${{ github.workspace }}/lspd \
           --preservelogs \
           --testdir /home/runner/test_state || echo "step_failed=true" >> $GITHUB_ENV
       shell: bash

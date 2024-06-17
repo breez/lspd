@@ -3,28 +3,24 @@ package interceptor
 import (
 	"bytes"
 	"encoding/hex"
-	"encoding/json"
 	"html/template"
 	"log"
-	"os"
 	"strconv"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ses"
+	"github.com/breez/lspd/config"
 )
 
 const (
 	charset = "UTF-8"
 )
 
-func addresses(a string) (addr []*string) {
-	json.Unmarshal([]byte(a), &addr)
-	return
-}
+var OpenChannelEmailConfig *config.Email
 
-func sendEmail(to, cc, from, content, subject string) error {
+func sendEmail(conf *config.Email, content, subject string) error {
 
 	sess, err := session.NewSession(&aws.Config{})
 	if err != nil {
@@ -35,8 +31,8 @@ func sendEmail(to, cc, from, content, subject string) error {
 
 	input := &ses.SendEmailInput{
 		Destination: &ses.Destination{
-			CcAddresses: addresses(cc),
-			ToAddresses: addresses(to),
+			CcAddresses: conf.Cc,
+			ToAddresses: conf.To,
 		},
 		Message: &ses.Message{
 			Body: &ses.Body{
@@ -50,7 +46,7 @@ func sendEmail(to, cc, from, content, subject string) error {
 				Data:    aws.String(subject),
 			},
 		},
-		Source: aws.String(from),
+		Source: aws.String(conf.From),
 	}
 	// Attempt to send the email.
 	result, err := svc.SendEmail(input)
@@ -79,54 +75,16 @@ func sendEmail(to, cc, from, content, subject string) error {
 	return nil
 }
 
-func sendChannelMismatchNotification(nodeID string, notFakeChannels, closedChannels map[string]uint64) error {
-	var html bytes.Buffer
-
-	tpl := `
-	<h2>NodeID: {{ .NodeID }}</h2>
-	{{ if .NotFakeChannels }}<h3>Channels not fake anynmore</h3><table>
-	<tr><th>Channel Point</th><th>Height Hint</th></tr>
-	{{ range $key, $value := .NotFakeChannels }}<tr><td>{{ $key }}</td><td>{{ $value }}</td></tr>{{ end }}
-	</table>{{ end }}
-	{{ if .ClosedChannels }}<h3>Closed Channels</h3><table>
-	<tr><th>Channel Point</th><th>Height Hint</th></tr>
-	{{ range $key, $value := .ClosedChannels }}<tr><td>{{ $key }}</td><td>{{ $value }}</td></tr>{{ end }}
-	</table>{{ end }}
-	`
-	t, err := template.New("ChannelMismatchEmail").Parse(tpl)
-	if err != nil {
-		return err
-	}
-
-	if err := t.Execute(&html, struct {
-		NodeID          string
-		NotFakeChannels map[string]uint64
-		ClosedChannels  map[string]uint64
-	}{nodeID, notFakeChannels, closedChannels}); err != nil {
-		return err
-	}
-
-	err = sendEmail(
-		os.Getenv("CHANNELMISMATCH_NOTIFICATION_TO"),
-		os.Getenv("CHANNELMISMATCH_NOTIFICATION_CC"),
-		os.Getenv("CHANNELMISMATCH_NOTIFICATION_FROM"),
-		html.String(),
-		"Channel(s) Mismatch",
-	)
-	if err != nil {
-		log.Printf("Error sending open channel email: %v", err)
-		return err
-	}
-
-	return nil
-}
-
 func sendOpenChannelEmailNotification(
 	paymentHash []byte, incomingAmountMsat int64,
 	destination []byte, capacity int64,
 	channelPoint string,
 	tag *string,
 ) error {
+	if OpenChannelEmailConfig == nil {
+		return nil
+	}
+
 	var html bytes.Buffer
 
 	tpl := `
@@ -160,9 +118,7 @@ func sendOpenChannelEmailNotification(
 	}
 
 	err = sendEmail(
-		os.Getenv("OPENCHANNEL_NOTIFICATION_TO"),
-		os.Getenv("OPENCHANNEL_NOTIFICATION_CC"),
-		os.Getenv("OPENCHANNEL_NOTIFICATION_FROM"),
+		OpenChannelEmailConfig,
 		html.String(),
 		"Open Channel - Interceptor",
 	)

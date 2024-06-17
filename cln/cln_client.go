@@ -211,12 +211,7 @@ func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 	}
 
 	for _, c := range channels.Channels {
-		if c.State == nil {
-			log.Printf("Channel '%+v' with peer '%x' doesn't have a state (yet).",
-				c.ShortChannelId, c.PeerId)
-			continue
-		}
-		state := int32(*c.State)
+		state := int32(c.State)
 		log.Printf("getChannel destination: %s, scid: %+v, local alias: %+v, "+
 			"FundingTxID:%x, State:%+v ", pubkey, c.ShortChannelId,
 			c.Alias.Local, c.FundingTxid, c.State)
@@ -267,12 +262,7 @@ func (c *ClnClient) GetClosedChannels(
 
 	lookup := make(map[string]uint64)
 	for _, c := range channels.Channels {
-		if c.State == nil {
-			log.Printf("Channel '%+v' with peer '%x' doesn't have a state (yet).",
-				c.ShortChannelId, c.PeerId)
-			continue
-		}
-		state := int32(*c.State)
+		state := int32(c.State)
 
 		if slices.Contains(CLOSING_STATUSES, state) {
 			if c.ShortChannelId == nil {
@@ -371,11 +361,7 @@ func (c *ClnClient) WaitChannelActive(peerID []byte, deadline time.Time) error {
 		)
 		if err == nil {
 			for _, c := range peer.Channels {
-				if c.State == nil {
-					continue
-				}
-
-				if slices.Contains(OPEN_STATUSES, int32(*c.State)) {
+				if slices.Contains(OPEN_STATUSES, int32(c.State)) {
 					return nil
 				}
 			}

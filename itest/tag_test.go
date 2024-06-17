@@ -3,7 +3,7 @@ package itest
 import (
 	"log"
 
-	"github.com/breez/lntest"
+	"github.com/breez/lspd/itest/lntest"
 	lspd "github.com/breez/lspd/rpc"
 	"github.com/stretchr/testify/assert"
 )
@@ -15,7 +15,7 @@ func registerPaymentWithTag(p *testParams) {
 	})
 
 	log.Printf("Registering payment with lsp")
-	RegisterPayment(p.lsp, &lspd.PaymentInformation{
+	p.Lspd().Client(0).RegisterPayment(&lspd.PaymentInformation{
 		PaymentHash:        i.PaymentHash,
 		PaymentSecret:      i.PaymentSecret,
 		Destination:        p.BreezClient().Node().NodeId(),
@@ -24,7 +24,7 @@ func registerPaymentWithTag(p *testParams) {
 		Tag:                expected,
 	}, false)
 
-	rows, err := p.lsp.PostgresBackend().Pool().Query(
+	rows, err := p.Lspd().PostgresBackend().Pool().Query(
 		p.h.Ctx,
 		"SELECT tag FROM public.payments WHERE payment_hash=$1",
 		i.PaymentHash,

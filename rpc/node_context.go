@@ -1,4 +1,4 @@
-package lspd
+package rpc
 
 import (
 	context "context"
