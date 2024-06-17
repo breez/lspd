@@ -34,7 +34,7 @@ func testLsps2Buy(p *testParams) {
 			"id": "example#3cad6a54d302edba4c9ade2f7ffac098",
 			"params": {
 				"version": 1,
-				"token": "hello"
+				"token": "hello0"
 			}
 		  }`),
 	})
@@ -116,5 +116,5 @@ func testLsps2Buy(p *testParams) {
 		p.h.T.Fatalf("Failed to get token from row: %v", err)
 	}
 
-	assert.Equal(p.h.T, "hello", actual)
+	assert.Equal(p.h.T, "hello0", actual)
 }

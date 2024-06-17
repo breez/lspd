@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var WorkingToken = "hello"
+var WorkingToken = "hello0"
 
 func GenerateRandomBytes(n int) ([]byte, error) {
 	b := make([]byte, n)

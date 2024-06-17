@@ -35,7 +35,7 @@ func testLsps2GetInfo(p *testParams) {
 		"id": "example#3cad6a54d302edba4c9ade2f7ffac098",
 		"params": {
 			"version": 1,
-			"token": "hello"
+			"token": "hello0"
 		}
 	  }`
 	p.BreezClient().Node().SendCustomMessage(&lntest.CustomMsgRequest{
