@@ -86,7 +86,7 @@ func (l *Lspd) Address() string {
 }
 
 func (l *Lspd) Client(index int) *LspdClient {
-	if l.runtime == nil || len(l.runtime.clients) < index {
+	if l.runtime == nil || len(l.runtime.clients) < (index+1) {
 		l.h.Fatalf("Requested non-existent client with index %d", index)
 	}
 
@@ -276,7 +276,6 @@ func (l *Lspd) Start() error {
 		wg.Done()
 	}(ctx, l.config, &l.runtime.wg)
 
-	var clients []*LspdClient
 	for i, c := range l.clients {
 		conn, err := grpc.DialContext(
 			ctx,
@@ -289,7 +288,7 @@ func (l *Lspd) Start() error {
 			return fmt.Errorf("failed to create grpc connection: %w", err)
 		}
 
-		clients = append(clients, &LspdClient{
+		l.runtime.clients = append(l.runtime.clients, &LspdClient{
 			index:               i,
 			lspd:                l,
 			info:                c,
