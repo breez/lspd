@@ -489,7 +489,7 @@ func (n *ClnNode) WaitForChannelReady(channel *ChannelInfo) ShortChannelID {
 		)
 		if channelIndex >= 0 {
 			peerChannel := resp.Channels[channelIndex]
-			if *peerChannel.State == rpc.ListpeerchannelsChannels_CHANNELD_AWAITING_LOCKIN {
+			if peerChannel.State == rpc.ListpeerchannelsChannels_CHANNELD_AWAITING_LOCKIN {
 				log.Printf("%s: Channel state is CHANNELD_AWAITING_LOCKIN, mining some blocks.", n.name)
 				n.miner.MineBlocks(6)
 				n.WaitForSync()
@@ -511,6 +511,10 @@ func (n *ClnNode) CreateBolt11Invoice(options *CreateInvoiceOptions) *CreateInvo
 	label, err := GenerateRandomString()
 	CheckError(n.harness.T, err)
 
+	exposePrivateChannels := []string{}
+	if options.IncludeHopHints {
+		exposePrivateChannels = append(exposePrivateChannels, "true")
+	}
 	req := &rpc.InvoiceRequest{
 		Label: label,
 		AmountMsat: &rpc.AmountOrAny{
@@ -520,7 +524,7 @@ func (n *ClnNode) CreateBolt11Invoice(options *CreateInvoiceOptions) *CreateInvo
 				},
 			},
 		},
-		Exposeprivatechannels: &options.IncludeHopHints,
+		Exposeprivatechannels: exposePrivateChannels,
 	}
 
 	if options.Description != nil {
