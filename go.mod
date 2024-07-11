@@ -1,6 +1,6 @@
 module github.com/breez/lspd
 
-go 1.19
+go 1.21.4
 
 require (
 	github.com/GoWebProd/uuid7 v0.0.0-20230623091058-5f5954faed6a

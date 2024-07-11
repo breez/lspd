@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
 
 env:
-  LSPD_GO_VERSION: 1.21.0
-  LND_GO_VERSION: 1.21.0
-  LND_REF: 0c939786ced78a981bd77c7da628bfcf86ada568
+  LSPD_GO_VERSION: 1.21.4
+  LND_GO_VERSION: 1.21.4
+  LND_REF: fb0e72c1a836b1186e24d72f5fe3ca4b27c1919c
   CLN_REF: v24.02.1
 
 jobs:

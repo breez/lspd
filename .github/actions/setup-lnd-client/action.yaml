@@ -5,12 +5,12 @@ inputs:
   client-ref:
     description: 'The Git reference for the Client version of LND'
     required: true
-    default: 'v0.16.2-breez'
+    default: 'v0.17.5-breez-3'
 
   go-version:
     description: 'The Go version for building LND'
     required: true
-    default: ^1.19
+    default: ^1.21.4
 
 runs:
   using: 'composite'
