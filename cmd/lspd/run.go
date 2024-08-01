@@ -21,6 +21,7 @@ import (
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/history"
 	"github.com/breez/lspd/interceptor"
+	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lnd"
 	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/lsps2"
@@ -314,7 +315,19 @@ func initializeNodes(configs []*config.NodeConfig) ([]*common.Node, error) {
 		// in config.
 		info, err := node.Client.GetInfo()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get info from host %s", node.NodeConfig.Host)
+			decodedPubkey, decodeErr := hex.DecodeString(
+				node.NodeConfig.NodePubkey)
+			if node.NodeConfig.Name == "" || node.NodeConfig.NodePubkey == "" ||
+				decodeErr != nil || len(decodedPubkey) != 33 {
+
+				return nil, fmt.Errorf("failed to get info from host %s",
+					node.NodeConfig.Host)
+			}
+
+			info = &lightning.GetInfoResult{
+				Alias:  node.NodeConfig.Name,
+				Pubkey: node.NodeConfig.NodePubkey,
+			}
 		}
 
 		if node.NodeConfig.Name == "" {
