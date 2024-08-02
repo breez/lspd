@@ -463,7 +463,8 @@ func (c *ClnClient) SpliceIn(
 	req *lightning.SpliceInRequest,
 ) (*wire.OutPoint, error) {
 	t := true
-	channelid := lnwire.NewChanIDFromOutPoint(req.ChannelOutpoint)
+	chanid := lnwire.NewChanIDFromOutPoint(req.ChannelOutpoint)
+	channelid := reverseBytes(chanid[:])
 	psbtResp, err := c.client.FundPsbt(
 		context.Background(),
 		&rpc.FundpsbtRequest{
@@ -538,7 +539,7 @@ func (c *ClnClient) SpliceIn(
 	}
 
 	// TODO: Get the actual output index
-	outpoint, err := lightning.NewOutPoint(resp.Txid, 0)
+	outpoint, err := lightning.NewOutPoint(reverseBytes(resp.Txid), 0)
 	if err != nil {
 		return nil, err
 	}
