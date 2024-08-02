@@ -325,36 +325,51 @@ func (c *ClnClient) GetPeerId(scid *lightning.ShortChannelID) ([]byte, error) {
 }
 
 func (c *ClnClient) GetPeerInfo(peerID []byte) (*lightning.PeerInfo, error) {
-	client, err := c.getClient()
+	peerChannels, err := c.client.ListPeerChannels(
+		context.Background(),
+		&rpc.ListpeerchannelsRequest{
+			Id: peerID,
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	peerHex := hex.EncodeToString(peerID)
-	peerChannels, err := client.GetPeerChannels(peerHex)
+	peers, err := c.client.ListPeers(
+		context.Background(),
+		&rpc.ListpeersRequest{
+			Id: peerID,
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
-
-	peer, err := client.GetPeer(peerHex)
-	if err != nil {
-		return nil, err
+	if len(peers.Peers) == 0 {
+		return nil, fmt.Errorf("peer not found")
 	}
 
-	supportsSplicing := supportsSplicing(peer.Features.Raw)
-	channels := make([]*lightning.PeerChannel, len(peerChannels))
-	for i, peerChannel := range peerChannels {
-		outpoint, err := toOutpoint(peerChannel.FundingTxId, peerChannel.FundingOutnum)
+	peer := peers.Peers[0]
+	supportsSplicing := supportsSplicing(peer.Features)
+	channels := make([]*lightning.PeerChannel, len(peerChannels.Channels))
+	for i, peerChannel := range peerChannels.Channels {
+		if peerChannel.FundingOutnum == nil {
+			log.Printf("WARN: peerchannel %x has nil funding outnum", peerChannel.FundingTxid)
+			continue
+		}
+
+		outpoint, err := lightning.NewOutPoint(peerChannel.FundingTxid, *peerChannel.FundingOutnum)
 		if err != nil {
 			return nil, err
 		}
 
 		var confirmedScid *lightning.ShortChannelID
-		if peerChannel.ShortChannelId != "" {
-			confirmedScid, _ = lightning.NewShortChannelIDFromString(peerChannel.ShortChannelId)
+		if peerChannel.ShortChannelId != nil {
+			confirmedScid, _ = lightning.NewShortChannelIDFromString(*peerChannel.ShortChannelId)
 		}
 
-		isZeroFeeHtlcTx := slices.Contains(peerChannel.Features, "option_anchors_zero_fee_htlc_tx")
+		// TODO: Get isZeroFeeHtlcTx from peerchannels
+		// isZeroFeeHtlcTx := slices.Contains(peerChannel.Features, "option_anchors_zero_fee_htlc_tx")
+		isZeroFeeHtlcTx := true
 		channels[i] = &lightning.PeerChannel{
 			FundingOutpoint: outpoint,
 			ConfirmedScid:   confirmedScid,
