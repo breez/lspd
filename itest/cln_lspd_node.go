@@ -55,6 +55,7 @@ func NewClnLspdNode(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, nam
 		"--max-concurrent-htlcs=30",
 		"--dev-allowdustreserve=true",
 		"--developer",
+		"--experimental-splicing",
 	}
 	lightningNode := lntest.NewClnNode(h, m, name, args...)
 	cln := &config.ClnConfig{

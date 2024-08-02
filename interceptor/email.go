@@ -173,3 +173,56 @@ func sendOpenChannelEmailNotification(
 
 	return nil
 }
+
+func sendSpliceEmailNotification(
+	paymentHash []byte, incomingAmountMsat int64,
+	destination []byte, capacity int64,
+	channelPoint string,
+	tag *string,
+) error {
+	var html bytes.Buffer
+
+	tpl := `
+	<table>
+	<tr><td>Payment Hash:</td><td>{{ .PaymentHash }}</td></tr>
+	<tr><td>Incoming Amount (msat):</td><td>{{ .IncomingAmountMsat }}</td></tr>
+	<tr><td>Destination Node:</td><td>{{ .Destination }}</td></tr>
+	<tr><td>Additional channel capacity (sat):</td><td>{{ .Capacity }}</td></tr>
+	<tr><td>New channel point:</td><td>{{ .ChannelPoint }}</td></tr>
+	<tr><td>Tag:</td><td>{{ .Tag }}</td></tr>
+	</table>
+	`
+	t, err := template.New("SpliceEmail").Parse(tpl)
+	if err != nil {
+		return err
+	}
+
+	tagStr := ""
+	if tag != nil {
+		tagStr = *tag
+	}
+	if err := t.Execute(&html, map[string]string{
+		"PaymentHash":        hex.EncodeToString(paymentHash),
+		"IncomingAmountMsat": strconv.FormatUint(uint64(incomingAmountMsat), 10),
+		"Destination":        hex.EncodeToString(destination),
+		"Capacity":           strconv.FormatUint(uint64(capacity), 10),
+		"ChannelPoint":       channelPoint,
+		"Tag":                tagStr,
+	}); err != nil {
+		return err
+	}
+
+	err = sendEmail(
+		os.Getenv("OPENCHANNEL_NOTIFICATION_TO"),
+		os.Getenv("OPENCHANNEL_NOTIFICATION_CC"),
+		os.Getenv("OPENCHANNEL_NOTIFICATION_FROM"),
+		html.String(),
+		"Splice - Interceptor",
+	)
+	if err != nil {
+		log.Printf("Error sending splice email: %v", err)
+		return err
+	}
+
+	return nil
+}

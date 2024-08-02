@@ -34,11 +34,11 @@ func NewMempoolApi(h *lntest.TestHarness) *mempoolApi {
 		addr: fmt.Sprintf("127.0.0.1:%d", port),
 		h:    h,
 		fees: &RecommendedFeesResponse{
-			MinimumFee:  1,
-			EconomyFee:  1,
-			HourFee:     1,
-			HalfHourFee: 1,
-			FastestFee:  1,
+			MinimumFee:  5,
+			EconomyFee:  5,
+			HourFee:     5,
+			HalfHourFee: 5,
+			FastestFee:  5,
 		},
 	}
 }
