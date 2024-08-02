@@ -14,6 +14,9 @@ func testSplicing(p *testParams) {
 	alice.Start()
 	alice.Fund(10000000)
 	p.lsp.LightningNode().Fund(10000000)
+	p.lsp.LightningNode().Fund(10000000)
+	p.lsp.LightningNode().Fund(10000000)
+	p.lsp.LightningNode().Fund(10000000)
 
 	log.Print("Opening channel between Alice and the lsp")
 	channel := alice.OpenChannel(p.lsp.LightningNode(), &lntest.OpenChannelOptions{
