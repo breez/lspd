@@ -67,7 +67,7 @@ runs:
       if: steps.cache-core-lightning.outputs.cache-hit != 'true'
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: stable
+        toolchain: 1.79.0
         profile: minimal
         override: true
 
