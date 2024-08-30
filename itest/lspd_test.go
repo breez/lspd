@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/breez/lntest"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/itest/lntest"
 )
 
 var defaultTimeout time.Duration = time.Second * 120

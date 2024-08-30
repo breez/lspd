@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/breez/lntest"
+	"github.com/breez/lspd/itest/lntest"
 	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/lsps0/jsonrpc"
 	"github.com/breez/lspd/lsps2"

@@ -3,8 +3,8 @@ package itest
 import (
 	"testing"
 
-	"github.com/breez/lntest"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/itest/lntest"
 )
 
 type LspFunc func(h *lntest.TestHarness, m *lntest.Miner, mem *mempoolApi, c *config.NodeConfig) LspNode

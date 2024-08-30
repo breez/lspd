@@ -5,8 +5,8 @@ import (
 	"flag"
 	"sync"
 
-	"github.com/breez/lntest"
-	"github.com/breez/lntest/lnd"
+	"github.com/breez/lspd/itest/lntest"
+	"github.com/breez/lspd/itest/lntest/lnd"
 	"github.com/lightningnetwork/lnd/lnwire"
 )
 

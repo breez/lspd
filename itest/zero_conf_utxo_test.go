@@ -4,8 +4,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/breez/lntest"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/itest/lntest"
 	lspd "github.com/breez/lspd/rpc"
 	"github.com/stretchr/testify/assert"
 )

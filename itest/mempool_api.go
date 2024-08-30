@@ -6,7 +6,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/breez/lntest"
+	"github.com/breez/lspd/itest/lntest"
 )
 
 type RecommendedFeesResponse struct {

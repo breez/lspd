@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/breez/lntest"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/itest/lntest"
 	"github.com/breez/lspd/notifications"
 	lspd "github.com/breez/lspd/rpc"
 	"github.com/btcsuite/btcd/btcec/v2"

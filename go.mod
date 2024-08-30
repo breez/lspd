@@ -5,7 +5,6 @@ go 1.21.4
 require (
 	github.com/GoWebProd/uuid7 v0.0.0-20230623091058-5f5954faed6a
 	github.com/aws/aws-sdk-go v1.34.0
-	github.com/breez/lntest v0.0.31
 	github.com/btcsuite/btcd v0.24.0
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
@@ -13,6 +12,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
 	github.com/docker/docker v24.0.9+incompatible
 	github.com/docker/go-connections v0.4.0
+	github.com/elementsproject/glightning v0.0.0-20230525134205-ef34d849f564
 	github.com/golang-migrate/migrate/v4 v4.16.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/jackc/pgtype v1.14.0
@@ -38,7 +38,6 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/docker/go-units v0.5.0 // indirect
-	github.com/elementsproject/glightning v0.0.0-20230525134205-ef34d849f564 // indirect
 	github.com/ethereum/go-ethereum v1.13.15 // indirect
 	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -92,7 +91,7 @@ require (
 	github.com/aead/siphash v1.0.1 // indirect
 	github.com/andybalholm/brotli v1.0.3 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/btcsuite/btcd/btcutil v1.1.5 // indirect
+	github.com/btcsuite/btcd/btcutil v1.1.5
 	github.com/btcsuite/btcd/btcutil/psbt v1.1.8 // indirect
 	github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f // indirect
 	github.com/btcsuite/btcwallet v0.16.10-0.20231017144732-e3ff37491e9c // indirect
@@ -186,7 +185,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.20.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.9.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
-	go.uber.org/multierr v1.8.0 // indirect
+	go.uber.org/multierr v1.8.0
 	go.uber.org/zap v1.17.0 // indirect
 	golang.org/x/crypto v0.21.0 // indirect
 	golang.org/x/term v0.18.0 // indirect

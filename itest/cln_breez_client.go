@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/breez/lntest"
 	"github.com/breez/lspd/cln_plugin/proto"
+	"github.com/breez/lspd/itest/lntest"
 	sphinx "github.com/lightningnetwork/lightning-onion"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/record"

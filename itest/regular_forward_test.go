@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/breez/lntest"
+	"github.com/breez/lspd/itest/lntest"
 	"github.com/stretchr/testify/assert"
 )
 
