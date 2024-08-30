@@ -5,7 +5,7 @@ inputs:
   checkout-version:
     description: Core lightning version
     required: true
-    default: 'v24.02.1'
+    default: 'v24.08'
 
 runs:
   using: 'composite'
