@@ -538,8 +538,7 @@ func (c *ClnClient) SpliceIn(
 		return nil, fmt.Errorf("splice signed failed: %w", err)
 	}
 
-	// TODO: Get the actual output index
-	outpoint, err := lightning.NewOutPoint(reverseBytes(resp.Txid), 0)
+	outpoint, err := lightning.NewOutPoint(reverseBytes(resp.Txid), *resp.Outnum)
 	if err != nil {
 		return nil, err
 	}
