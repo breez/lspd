@@ -489,7 +489,7 @@ func (n *ClnNode) WaitForChannelReady(channel *ChannelInfo) ShortChannelID {
 		)
 		if channelIndex >= 0 {
 			peerChannel := resp.Channels[channelIndex]
-			if *peerChannel.State == rpc.ListpeerchannelsChannels_CHANNELD_AWAITING_LOCKIN {
+			if peerChannel.State == rpc.ListpeerchannelsChannels_CHANNELD_AWAITING_LOCKIN {
 				log.Printf("%s: Channel state is CHANNELD_AWAITING_LOCKIN, mining some blocks.", n.name)
 				n.miner.MineBlocks(6)
 				n.WaitForSync()

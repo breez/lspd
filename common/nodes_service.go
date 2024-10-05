@@ -21,6 +21,7 @@ type Node struct {
 	EciesPublicKey      *ecies.PublicKey
 	OpenChannelReqGroup singleflight.Group
 	Tokens              []string
+	SupportsSplicing    bool
 }
 
 type NodesService interface {

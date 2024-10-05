@@ -96,7 +96,7 @@ runs:
       if: steps.cache-core-lightning.outputs.cache-hit != 'true'
       uses: actions/checkout@v4
       with:
-        repository: ElementsProject/lightning
+        repository: breez/lightning
         ref: ${{ inputs.checkout-version }}
         path: lightning_git
 

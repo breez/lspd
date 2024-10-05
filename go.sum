@@ -173,6 +173,8 @@ github.com/boombuler/barcode v1.0.0/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl
 github.com/boombuler/barcode v1.0.1/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=
 github.com/breez/glightning v0.0.1-breez.0.20231123140102-d50d43e22138 h1:qNHyE789komFsN62blDo4Gbz5eie65pzkOkZ8UxQZEY=
 github.com/breez/glightning v0.0.1-breez.0.20231123140102-d50d43e22138/go.mod h1:YAdIeSyx8VEhDCtEaGOJLmWNpPaQ3x4vYSAj9Vrppdo=
+github.com/breez/glightning v0.0.1-breez.0.20240119143127-fb9a5750bf6c h1:tf6hyML0+Bvbs60Fn+tGAmw5IEpz/gU6/USHNMWQQbM=
+github.com/breez/glightning v0.0.1-breez.0.20240119143127-fb9a5750bf6c/go.mod h1:YAdIeSyx8VEhDCtEaGOJLmWNpPaQ3x4vYSAj9Vrppdo=
 github.com/breez/lnd v0.15.0-beta.rc6.0.20231122093500-0c939786ced7 h1:RLHCG90jBAE8wNCUFMeu7j4LNbXWdV8BOsVZtmsTFpk=
 github.com/breez/lnd v0.15.0-beta.rc6.0.20231122093500-0c939786ced7/go.mod h1:AOHMNILUI56HaVlVMai+ComGHsxMzMMCoxqFwN0wmvw=
 github.com/btcsuite/btcd v0.20.1-beta/go.mod h1:wVuoA8VJLEcwgqHBwHmzLRazpKxTv13Px/pDuV7OomQ=

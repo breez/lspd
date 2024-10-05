@@ -175,6 +175,12 @@ func (c *mockLightningClient) WaitChannelActive(peerID []byte, deadline time.Tim
 func (c *mockLightningClient) ListChannels() ([]*lightning.Channel, error) {
 	return nil, ErrNotImplemented
 }
+func (c *mockLightningClient) SpliceIn(req *lightning.SpliceInRequest) (*wire.OutPoint, error) {
+	return nil, ErrNotImplemented
+}
+func (c *mockLightningClient) GetPeerInfo(peerID []byte) (*lightning.PeerInfo, error) {
+	return nil, ErrNotImplemented
+}
 
 type mockFeeEstimator struct {
 }
