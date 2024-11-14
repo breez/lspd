@@ -17,12 +17,18 @@ type GetChannelResult struct {
 	HtlcMinimumMsat uint64
 }
 
+type RoutingPolicy struct {
+	Ppm      uint32
+	BaseMsat uint64
+}
+
 type OpenChannelRequest struct {
 	Destination    []byte
 	CapacitySat    uint64
 	MinConfs       *uint32
 	FeeSatPerVByte *float64
 	TargetConf     *uint32
+	RoutingPolicy  *RoutingPolicy
 }
 
 type Channel struct {

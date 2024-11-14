@@ -244,6 +244,14 @@ func (c *LndClient) IsConnected(destination []byte) (bool, error) {
 }
 
 func (c *LndClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoint, error) {
+	var baseFee uint64
+	var feeRate uint64
+	useFees := false
+	if req.RoutingPolicy != nil {
+		useFees = true
+		baseFee = req.RoutingPolicy.BaseMsat
+		feeRate = uint64(req.RoutingPolicy.Ppm)
+	}
 	lnReq := &lnrpc.OpenChannelRequest{
 		NodePubkey:         req.Destination,
 		LocalFundingAmount: int64(req.CapacitySat),
@@ -251,6 +259,10 @@ func (c *LndClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoi
 		Private:            true,
 		CommitmentType:     lnrpc.CommitmentType_ANCHORS,
 		ZeroConf:           true,
+		BaseFee:            baseFee,
+		UseBaseFee:         useFees,
+		FeeRate:            feeRate,
+		UseFeeRate:         useFees,
 	}
 
 	if req.MinConfs != nil {

@@ -194,6 +194,20 @@ func (c *ClnClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoi
 		return nil, err
 	}
 
+	if req.RoutingPolicy != nil {
+		var delay uint32 = 0
+
+		_, err = c.client.SetChannel(context.Background(), &rpc.SetchannelRequest{
+			Id:           hex.EncodeToString(fundResult.ChannelId),
+			Feebase:      &rpc.Amount{Msat: req.RoutingPolicy.BaseMsat},
+			Feeppm:       &req.RoutingPolicy.Ppm,
+			Enforcedelay: &delay,
+		})
+		if err != nil {
+			log.Printf("CLN: client.SetChannel error: %v. Ignoring error and continue funding flow.", err)
+		}
+	}
+
 	return channelPoint, nil
 }
 
