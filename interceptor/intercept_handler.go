@@ -410,6 +410,10 @@ func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmoun
 		MinConfs:       i.config.MinConfs,
 		FeeSatPerVByte: fee.SatPerVByte,
 		TargetConf:     fee.TargetConf,
+		RoutingPolicy: &lightning.RoutingPolicy{
+			Ppm:      uint32(i.config.FeeRate * 1_000_000),
+			BaseMsat: i.config.BaseFeeMsat,
+		},
 	})
 	if err != nil {
 		log.Printf("paymenthash %x, client.OpenChannelSync(%x, %v) error: %v", paymentHash, destination, capacity, err)
