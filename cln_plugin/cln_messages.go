@@ -94,12 +94,12 @@ type HtlcAccepted struct {
 }
 
 type Onion struct {
-	Payload           string `json:"payload"`
-	ShortChannelId    string `json:"short_channel_id"`
-	ForwardMsat       uint64 `json:"forward_msat"`
-	OutgoingCltvValue uint32 `json:"outgoing_cltv_value"`
-	SharedSecret      string `json:"shared_secret"`
-	NextOnion         string `json:"next_onion"`
+	Payload           string  `json:"payload"`
+	ShortChannelId    *string `json:"short_channel_id,omitempty"`
+	ForwardMsat       *uint64 `json:"forward_msat,omitempty"`
+	OutgoingCltvValue *uint32 `json:"outgoing_cltv_value,omitempty"`
+	SharedSecret      *string `json:"shared_secret,omitempty"`
+	NextOnion         *string `json:"next_onion,omitempty"`
 }
 
 type Htlc struct {

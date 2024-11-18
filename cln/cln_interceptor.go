@@ -140,13 +140,19 @@ func (i *ClnHtlcInterceptor) intercept() error {
 					return
 				}
 
-				if request.Onion == nil || request.Onion.ShortChannelId == "" {
+				if request.Onion == nil ||
+					request.Onion.ShortChannelId == nil ||
+					*request.Onion.ShortChannelId == "" ||
+					request.Onion.SharedSecret == nil ||
+					request.Onion.ForwardMsat == nil ||
+					request.Onion.OutgoingCltvValue == nil {
+
 					interceptorClient.Send(i.defaultResolution(request))
 					i.doneWg.Done()
 					return
 				}
 
-				scid, err := lightning.NewShortChannelIDFromString(request.Onion.ShortChannelId)
+				scid, err := lightning.NewShortChannelIDFromString(*request.Onion.ShortChannelId)
 				if err != nil {
 					interceptorClient.Send(i.defaultResolution(request))
 					i.doneWg.Done()
@@ -154,13 +160,13 @@ func (i *ClnHtlcInterceptor) intercept() error {
 				}
 
 				interceptResult := i.interceptor.Intercept(common.InterceptRequest{
-					Identifier:         request.Onion.SharedSecret,
+					Identifier:         *request.Onion.SharedSecret,
 					Scid:               *scid,
 					PaymentHash:        paymentHash,
 					IncomingAmountMsat: request.Htlc.AmountMsat,
-					OutgoingAmountMsat: request.Onion.ForwardMsat,
+					OutgoingAmountMsat: *request.Onion.ForwardMsat,
 					IncomingExpiry:     request.Htlc.CltvExpiry,
-					OutgoingExpiry:     request.Onion.OutgoingCltvValue,
+					OutgoingExpiry:     *request.Onion.OutgoingCltvValue,
 				})
 				switch interceptResult.Action {
 				case common.INTERCEPT_RESUME_WITH_ONION:
