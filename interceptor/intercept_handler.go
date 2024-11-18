@@ -116,7 +116,7 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 		isConnected, err := i.client.IsConnected(nextHop)
 		if err != nil {
 			log.Printf("IsConnected(%x) error: %v", nextHop, err)
-			return &common.InterceptResult{
+			return common.InterceptResult{
 				Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
 				FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
 			}, nil
