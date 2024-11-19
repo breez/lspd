@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"math/big"
 	"time"
@@ -31,6 +32,7 @@ type Interceptor struct {
 	feeStrategy         chain.FeeStrategy
 	payHashGroup        singleflight.Group
 	notificationService *notifications.NotificationService
+	enableSplicing      bool
 }
 
 func NewInterceptHandler(
@@ -42,6 +44,7 @@ func NewInterceptHandler(
 	feeEstimator chain.FeeEstimator,
 	feeStrategy chain.FeeStrategy,
 	notificationService *notifications.NotificationService,
+	enableSplicing bool,
 ) *Interceptor {
 	nodeid, _ := hex.DecodeString(config.NodePubkey)
 	return &Interceptor{
@@ -54,6 +57,7 @@ func NewInterceptHandler(
 		feeEstimator:        feeEstimator,
 		feeStrategy:         feeStrategy,
 		notificationService: notificationService,
+		enableSplicing:      enableSplicing,
 	}
 }
 
@@ -213,9 +217,9 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 				log.Printf("Intercepted expired payment registration. Opening channel anyway, because it's cheaper at the current rate. paymenthash: %s, params: %+v", reqPaymentHashStr, params)
 			}
 
-			channelPoint, err = i.openChannel(req.PaymentHash, destination, incomingAmountMsat, tag)
+			channelPoint, err = i.addLiquidity(req.PaymentHash, destination, incomingAmountMsat, tag)
 			if err != nil {
-				log.Printf("paymentHash: %s, openChannel(%x, %v) err: %v", reqPaymentHashStr, destination, incomingAmountMsat, err)
+				log.Printf("paymentHash: %s, addLiquidity(%x, %v) err: %v", reqPaymentHashStr, destination, incomingAmountMsat, err)
 				return common.InterceptResult{
 					Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
 					FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,
@@ -231,7 +235,7 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 		for {
 			chanResult, _ := i.client.GetChannel(destination, *channelPoint)
 			if chanResult != nil {
-				log.Printf("paymentHash: %s, channel opened successfully alias: '%v', confirmed: '%v'", reqPaymentHashStr, chanResult.AliasScid.ToString(), chanResult.ConfirmedScid.ToString())
+				log.Printf("paymentHash: %s, liquidity added successfully. alias: '%v', confirmed: '%v'", reqPaymentHashStr, chanResult.AliasScid.ToString(), chanResult.ConfirmedScid.ToString())
 
 				var scid *lightning.ShortChannelID
 				if chanResult.ConfirmedScid == nil {
@@ -293,7 +297,7 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 				}, nil
 			}
 
-			log.Printf("paymentHash: %s, waiting for channel to get opened... %x", reqPaymentHashStr, destination)
+			log.Printf("paymentHash: %s, waiting for channel with channelpoint %s to become active.... %x", reqPaymentHashStr, channelPoint.String(), destination)
 			if time.Now().After(deadline) {
 				log.Printf("paymentHash: %s, Stop retrying getChannel(%v, %v)", reqPaymentHashStr, destination, channelPoint.String())
 				break
@@ -380,7 +384,7 @@ func (i *Interceptor) notifyAndWait(reqPaymentHashStr string, nextHop []byte, is
 	return nil
 }
 
-func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmountMsat int64, tag *string) (*wire.OutPoint, error) {
+func (i *Interceptor) addLiquidity(paymentHash, destination []byte, incomingAmountMsat int64, tag *string) (*wire.OutPoint, error) {
 	capacity := incomingAmountMsat/1000 + i.config.AdditionalChannelCapacity
 	if capacity == i.config.PublicChannelAmount {
 		capacity++
@@ -396,6 +400,119 @@ func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmoun
 			TargetConf: &i.config.TargetConf,
 		}
 	}
+
+	var channelPoint *wire.OutPoint
+	splice, originalChannelPoint, err := i.shouldSplice(destination)
+	if err != nil {
+		log.Printf("paymenthash %x: Failed to determine whether to splice: %v", paymentHash, err)
+	}
+
+	if splice {
+		channelPoint, err = i.splice(
+			paymentHash,
+			destination,
+			originalChannelPoint,
+			capacity,
+			fee,
+			incomingAmountMsat,
+			tag,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("splice err: %w", err)
+		}
+	} else {
+		channelPoint, err = i.openChannel(
+			destination,
+			paymentHash,
+			capacity,
+			fee,
+			incomingAmountMsat,
+			tag,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("openChannel err: %w", err)
+		}
+	}
+
+	err = i.store.SetFundingTx(paymentHash, channelPoint)
+	return channelPoint, err
+}
+
+func (i *Interceptor) shouldSplice(destination []byte) (bool, *wire.OutPoint, error) {
+	if !i.enableSplicing {
+		return false, nil, nil
+	}
+
+	peerInfo, err := i.client.GetPeerInfo(destination)
+	if err != nil {
+		return false, nil, fmt.Errorf("failed to get peer info for %x: %w", destination, err)
+	}
+
+	if !peerInfo.SupportsSplicing {
+		return false, nil, nil
+	}
+
+	if len(peerInfo.Channels) == 0 {
+		return false, nil, nil
+	}
+
+	var bestChannel *lightning.PeerChannel
+	for _, ch := range peerInfo.Channels {
+		// only splice on anchor channels (since they are preferred over non-anchor channels)
+		if !ch.IsZeroFeeHtlcTx {
+			continue
+		}
+
+		if bestChannel == nil {
+			bestChannel = ch
+			continue
+		}
+
+		if ch.ConfirmedScid == nil {
+			if bestChannel.ConfirmedScid == nil {
+				// Both are equivalent. Pick the one with the 'lowest' txid.
+				if bytes.Compare(
+					ch.FundingOutpoint.Hash[:],
+					bestChannel.FundingOutpoint.Hash[:],
+				) < 0 {
+					bestChannel = ch
+				}
+			}
+
+			continue
+		}
+
+		if bestChannel.ConfirmedScid == nil {
+			bestChannel = ch
+			continue
+		}
+
+		// Pick the oldest channel
+		if *ch.ConfirmedScid < *bestChannel.ConfirmedScid {
+			bestChannel = ch
+			continue
+		}
+
+		if *ch.ConfirmedScid > *bestChannel.ConfirmedScid {
+			continue
+		}
+	}
+
+	if bestChannel == nil {
+		return false, nil, nil
+	}
+
+	return true, bestChannel.FundingOutpoint, nil
+}
+
+func (i *Interceptor) openChannel(
+	destination []byte,
+	paymentHash []byte,
+	capacity int64,
+	fee *chain.FeeEstimation,
+	incomingAmountMsat int64,
+	tag *string,
+) (*wire.OutPoint, error) {
 
 	log.Printf(
 		"Opening zero conf channel. Paymenthash: %x, Destination: %x, capacity: %v, fee: %s",
@@ -416,7 +533,7 @@ func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmoun
 		},
 	})
 	if err != nil {
-		log.Printf("paymenthash %x, client.OpenChannelSync(%x, %v) error: %v", paymentHash, destination, capacity, err)
+		log.Printf("paymenthash %x, client.OpenChannel(%x, %v) error: %v", paymentHash, destination, capacity, err)
 		return nil, err
 	}
 	sendOpenChannelEmailNotification(
@@ -427,6 +544,47 @@ func (i *Interceptor) openChannel(paymentHash, destination []byte, incomingAmoun
 		channelPoint.String(),
 		tag,
 	)
-	err = i.store.SetFundingTx(paymentHash, channelPoint)
-	return channelPoint, err
+
+	return channelPoint, nil
+}
+
+func (i *Interceptor) splice(
+	paymentHash []byte,
+	destination []byte,
+	originalChannelPoint *wire.OutPoint,
+	capacity int64,
+	fee *chain.FeeEstimation,
+	incomingAmountMsat int64,
+	tag *string,
+) (*wire.OutPoint, error) {
+	log.Printf(
+		"Splicing in additional liquidity. Paymenthash: %x, Destination: %x, capacity: %v, fee: %s",
+		paymentHash,
+		destination,
+		capacity,
+		fee.String(),
+	)
+	channelPoint, err := i.client.SpliceIn(&lightning.SpliceInRequest{
+		PeerId:                destination,
+		ChannelOutpoint:       originalChannelPoint,
+		AdditionalCapacitySat: uint64(capacity),
+		FeeSatPerVByte:        fee.SatPerVByte,
+		TargetConf:            fee.TargetConf,
+		MinConfs:              i.config.MinConfs,
+	})
+	if err != nil {
+		log.Printf("paymenthash %x, client.SpliceIn(%x, %v) error: %v", paymentHash, destination, capacity, err)
+		return nil, err
+	}
+
+	sendSpliceEmailNotification(
+		paymentHash,
+		incomingAmountMsat,
+		destination,
+		capacity,
+		channelPoint.String(),
+		tag,
+	)
+
+	return channelPoint, nil
 }

@@ -207,4 +207,4 @@ replace github.com/lightningnetwork/lnd v0.17.2-beta => github.com/breez/lnd v0.
 
 replace google.golang.org/protobuf => github.com/lightninglabs/protobuf-go-hex-display v1.30.0-hex-display
 
-replace github.com/elementsproject/glightning => github.com/breez/glightning v0.0.1-breez.0.20231123140102-d50d43e22138
+replace github.com/elementsproject/glightning => github.com/breez/glightning v0.0.1-breez.0.20240119143127-fb9a5750bf6c

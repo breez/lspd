@@ -20,9 +20,12 @@ func TestLspd(t *testing.T) {
 	testCases := allTestCases
 	var lndTestCases []*testCase
 	for _, c := range testCases {
-		if !c.isLsps2 {
-			lndTestCases = append(lndTestCases, c)
+		// LND does not support LSPS2 or splicing.
+		if c.isLsps2 || c.isSplicing {
+			continue
 		}
+
+		lndTestCases = append(lndTestCases, c)
 	}
 	runTests(t, lndTestCases, "LND-lsp-CLN-client", lndLspFunc, clnClientFunc)
 	runTests(t, lndTestCases, "LND-lsp-LND-client", legacyOnionLndLspFunc, lndClientFunc)
@@ -124,6 +127,7 @@ type testCase struct {
 	test          func(t *testParams)
 	skipCreateLsp bool
 	isLsps2       bool
+	isSplicing    bool
 	timeout       time.Duration
 }
 
@@ -228,5 +232,10 @@ var allTestCases = []*testCase{
 	{
 		name: "testRestartLspNode",
 		test: testRestartLspNode,
+	},
+	{
+		name:       "testSplicing",
+		test:       testSplicing,
+		isSplicing: true,
 	},
 }

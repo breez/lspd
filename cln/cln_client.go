@@ -15,6 +15,7 @@ import (
 	"github.com/breez/lspd/config"
 	"github.com/breez/lspd/lightning"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/lightningnetwork/lnd/lnwire"
 	"golang.org/x/exp/slices"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -94,10 +95,31 @@ func (c *ClnClient) GetInfo() (*lightning.GetInfoResult, error) {
 	if info.Alias != nil {
 		alias = *info.Alias
 	}
+
+	supportsSplicing := supportsSplicing(info.OurFeatures.Init)
+
 	return &lightning.GetInfoResult{
-		Alias:  alias,
-		Pubkey: hex.EncodeToString(info.Id),
+		Alias:            alias,
+		Pubkey:           hex.EncodeToString(info.Id),
+		SupportsSplicing: supportsSplicing,
 	}, nil
+}
+
+func hasFeature(features []byte, bit int) bool {
+	if len(features)*8-1 < bit {
+		return false
+	}
+
+	byteIndex := bit / 8
+	bitIndex := bit % 8
+	return (features[len(features)-byteIndex-1]>>bitIndex)&1 == 1
+}
+
+func supportsSplicing(features []byte) bool {
+	return hasFeature(features, 62) ||
+		hasFeature(features, 63) ||
+		hasFeature(features, 162) ||
+		hasFeature(features, 163)
 }
 
 func (c *ClnClient) IsConnected(destination []byte) (bool, error) {
@@ -127,34 +149,7 @@ func (c *ClnClient) IsConnected(destination []byte) (bool, error) {
 func (c *ClnClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoint, error) {
 	var minDepth uint32 = 0
 	announce := false
-	var rate *rpc.Feerate
-	if req.FeeSatPerVByte != nil {
-		rate = &rpc.Feerate{
-			Style: &rpc.Feerate_Perkb{
-				Perkb: uint32(*req.FeeSatPerVByte * 1000),
-			},
-		}
-	} else if req.TargetConf != nil {
-		if *req.TargetConf < 3 {
-			rate = &rpc.Feerate{
-				Style: &rpc.Feerate_Urgent{
-					Urgent: true,
-				},
-			}
-		} else if *req.TargetConf < 30 {
-			rate = &rpc.Feerate{
-				Style: &rpc.Feerate_Normal{
-					Normal: true,
-				},
-			}
-		} else {
-			rate = &rpc.Feerate{
-				Style: &rpc.Feerate_Slow{
-					Slow: true,
-				},
-			}
-		}
-	}
+	rate := mapFeeRate(req.FeeSatPerVByte, req.TargetConf)
 
 	fundResult, err := c.client.FundChannel(
 		context.Background(),
@@ -189,8 +184,6 @@ func (c *ClnClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoi
 
 	channelPoint, err := lightning.NewOutPoint(reverseBytes(fundResult.Txid), fundResult.Outnum)
 	if err != nil {
-		log.Printf("CLN: NewOutPoint(%x, %d) error: %v", fundResult.Txid,
-			fundResult.Outnum, err)
 		return nil, err
 	}
 
@@ -225,16 +218,10 @@ func (c *ClnClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 	}
 
 	for _, c := range channels.Channels {
-		if c.State == nil {
-			log.Printf("Channel '%+v' with peer '%x' doesn't have a state (yet).",
-				c.ShortChannelId, c.PeerId)
-			continue
-		}
-		state := int32(*c.State)
 		log.Printf("getChannel destination: %s, scid: %+v, local alias: %+v, "+
 			"FundingTxID:%x, State:%+v ", pubkey, c.ShortChannelId,
 			c.Alias.Local, c.FundingTxid, c.State)
-		if slices.Contains(OPEN_STATUSES, state) &&
+		if slices.Contains(OPEN_STATUSES, int32(c.State)) &&
 			bytes.Equal(reverseBytes(c.FundingTxid), channelPoint.Hash[:]) {
 
 			aliasScid, confirmedScid, err := mapScidsFromChannel(c)
@@ -281,14 +268,7 @@ func (c *ClnClient) GetClosedChannels(
 
 	lookup := make(map[string]uint64)
 	for _, c := range channels.Channels {
-		if c.State == nil {
-			log.Printf("Channel '%+v' with peer '%x' doesn't have a state (yet).",
-				c.ShortChannelId, c.PeerId)
-			continue
-		}
-		state := int32(*c.State)
-
-		if slices.Contains(CLOSING_STATUSES, state) {
+		if slices.Contains(CLOSING_STATUSES, int32(c.State)) {
 			if c.ShortChannelId == nil {
 				log.Printf("CLN: GetClosedChannels. Channel does not have "+
 					"ShortChannelId. %x:%d", c.FundingTxid, c.FundingOutnum)
@@ -358,6 +338,65 @@ func (c *ClnClient) GetPeerId(scid *lightning.ShortChannelID) ([]byte, error) {
 	return dest, nil
 }
 
+func (c *ClnClient) GetPeerInfo(peerID []byte) (*lightning.PeerInfo, error) {
+	peerChannels, err := c.client.ListPeerChannels(
+		context.Background(),
+		&rpc.ListpeerchannelsRequest{
+			Id: peerID,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	peers, err := c.client.ListPeers(
+		context.Background(),
+		&rpc.ListpeersRequest{
+			Id: peerID,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	if len(peers.Peers) == 0 {
+		return nil, fmt.Errorf("peer not found")
+	}
+
+	peer := peers.Peers[0]
+	supportsSplicing := supportsSplicing(peer.Features)
+	channels := make([]*lightning.PeerChannel, len(peerChannels.Channels))
+	for i, peerChannel := range peerChannels.Channels {
+		if peerChannel.FundingOutnum == nil {
+			log.Printf("WARN: peerchannel %x has nil funding outnum", peerChannel.FundingTxid)
+			continue
+		}
+
+		outpoint, err := lightning.NewOutPoint(peerChannel.FundingTxid, *peerChannel.FundingOutnum)
+		if err != nil {
+			return nil, err
+		}
+
+		var confirmedScid *lightning.ShortChannelID
+		if peerChannel.ShortChannelId != nil {
+			confirmedScid, _ = lightning.NewShortChannelIDFromString(*peerChannel.ShortChannelId)
+		}
+
+		// TODO: Get isZeroFeeHtlcTx from peerchannels
+		// isZeroFeeHtlcTx := slices.Contains(peerChannel.Features, "option_anchors_zero_fee_htlc_tx")
+		isZeroFeeHtlcTx := true
+		channels[i] = &lightning.PeerChannel{
+			FundingOutpoint: outpoint,
+			ConfirmedScid:   confirmedScid,
+			IsZeroFeeHtlcTx: isZeroFeeHtlcTx,
+		}
+	}
+
+	return &lightning.PeerInfo{
+		SupportsSplicing: supportsSplicing,
+		Channels:         channels,
+	}, nil
+}
+
 var pollingInterval = 400 * time.Millisecond
 
 func (c *ClnClient) WaitOnline(peerID []byte, deadline time.Time) error {
@@ -385,11 +424,7 @@ func (c *ClnClient) WaitChannelActive(peerID []byte, deadline time.Time) error {
 		)
 		if err == nil {
 			for _, c := range peer.Channels {
-				if c.State == nil {
-					continue
-				}
-
-				if slices.Contains(OPEN_STATUSES, int32(*c.State)) {
+				if slices.Contains(OPEN_STATUSES, int32(c.State)) {
 					return nil
 				}
 			}
@@ -438,6 +473,92 @@ func (c *ClnClient) ListChannels() ([]*lightning.Channel, error) {
 	return result, nil
 }
 
+func (c *ClnClient) SpliceIn(
+	req *lightning.SpliceInRequest,
+) (*wire.OutPoint, error) {
+	t := true
+	chanid := lnwire.NewChanIDFromOutPoint(req.ChannelOutpoint)
+	channelid := reverseBytes(chanid[:])
+	psbtResp, err := c.client.FundPsbt(
+		context.Background(),
+		&rpc.FundpsbtRequest{
+			Satoshi: &rpc.AmountOrAll{
+				Value: &rpc.AmountOrAll_Amount{
+					Amount: &rpc.Amount{
+						Msat: req.AdditionalCapacitySat * 1000,
+					},
+				},
+			},
+			Feerate:        mapFeeRate(req.FeeSatPerVByte, req.TargetConf),
+			Minconf:        req.MinConfs,
+			ExcessAsChange: &t,
+		})
+	if err != nil {
+		return nil, fmt.Errorf("failed to fund psbt: %w", err)
+	}
+
+	psbt := psbtResp.Psbt
+	initResp, err := c.client.Splice_Init(
+		context.Background(),
+		&rpc.SpliceInitRequest{
+			ChannelId:      channelid[:],
+			RelativeAmount: int64(req.AdditionalCapacitySat),
+			FeeratePerKw:   &psbtResp.FeeratePerKw,
+			Initialpsbt:    &psbt,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init splice: %w", err)
+	}
+	psbt = initResp.Psbt
+	for {
+		// TODO: Make sure this loop cannot get stuck forever.
+		updateResp, err := c.client.Splice_Update(
+			context.Background(),
+			&rpc.SpliceUpdateRequest{
+				ChannelId: channelid[:],
+				Psbt:      psbt,
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed while waiting for splice update: %w", err)
+		}
+		psbt = updateResp.Psbt
+		if updateResp.CommitmentsSecured {
+			break
+		}
+		<-time.After(time.Millisecond * 50)
+	}
+
+	signed, err := c.client.SignPsbt(
+		context.Background(),
+		&rpc.SignpsbtRequest{
+			Psbt: psbt,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign psbt '%s': %w", initResp.Psbt, err)
+	}
+	psbt = signed.SignedPsbt
+
+	resp, err := c.client.Splice_Signed(
+		context.Background(),
+		&rpc.SpliceSignedRequest{
+			ChannelId: channelid[:],
+			Psbt:      psbt,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("splice signed failed: %w", err)
+	}
+
+	outpoint, err := lightning.NewOutPoint(reverseBytes(resp.Txid), *resp.Outnum)
+	if err != nil {
+		return nil, err
+	}
+	return outpoint, nil
+}
+
 func mapScidsFromChannel(c *rpc.ListpeerchannelsChannels) (*lightning.ShortChannelID, *lightning.ShortChannelID, error) {
 	var confirmedScid *lightning.ShortChannelID
 	var aliasScid *lightning.ShortChannelID
@@ -465,4 +586,37 @@ func reverseBytes(b []byte) []byte {
 	}
 
 	return b
+}
+
+func mapFeeRate(feeSatPerVByte *float64, targetConf *uint32) *rpc.Feerate {
+	var rate *rpc.Feerate
+	if feeSatPerVByte != nil {
+		rate = &rpc.Feerate{
+			Style: &rpc.Feerate_Perkb{
+				Perkb: uint32(*feeSatPerVByte * 1000),
+			},
+		}
+	} else if targetConf != nil {
+		if *targetConf < 3 {
+			rate = &rpc.Feerate{
+				Style: &rpc.Feerate_Urgent{
+					Urgent: true,
+				},
+			}
+		} else if *targetConf < 30 {
+			rate = &rpc.Feerate{
+				Style: &rpc.Feerate_Normal{
+					Normal: true,
+				},
+			}
+		} else {
+			rate = &rpc.Feerate{
+				Style: &rpc.Feerate_Slow{
+					Slow: true,
+				},
+			}
+		}
+	}
+
+	return rate
 }
