@@ -59,6 +59,7 @@ func testRestartLspNode(p *testParams) {
 
 	log.Printf("Connect Bob to LSP again")
 	p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
+	alice.WaitForChannelReady(channel)
 
 	log.Printf("Alice paying")
 	payResp := alice.Pay(outerInvoice.bolt11)
