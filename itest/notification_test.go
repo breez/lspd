@@ -14,7 +14,7 @@ import (
 )
 
 func testOfflineNotificationPaymentRegistered(p *testParams) {
-	alice := lntest.NewClnNode(p.h, p.m, "Alice")
+	alice := lntest.NewLndNode(p.h, p.m, "Alice")
 	alice.Start()
 	alice.Fund(10000000)
 	p.lsp.LightningNode().Fund(10000000)
@@ -91,7 +91,7 @@ func testOfflineNotificationPaymentRegistered(p *testParams) {
 }
 
 func testOfflineNotificationRegularForward(p *testParams) {
-	alice := lntest.NewClnNode(p.h, p.m, "Alice")
+	alice := lntest.NewLndNode(p.h, p.m, "Alice")
 	alice.Start()
 	alice.Fund(10000000)
 	p.lsp.LightningNode().Fund(10000000)
@@ -182,7 +182,7 @@ func testOfflineNotificationRegularForward(p *testParams) {
 }
 
 func testOfflineNotificationZeroConfChannel(p *testParams) {
-	alice := lntest.NewClnNode(p.h, p.m, "Alice")
+	alice := lntest.NewLndNode(p.h, p.m, "Alice")
 	alice.Start()
 	alice.Fund(10000000)
 	p.lsp.LightningNode().Fund(10000000)

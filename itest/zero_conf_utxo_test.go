@@ -11,7 +11,7 @@ import (
 )
 
 func testOpenZeroConfUtxo(p *testParams) {
-	alice := lntest.NewClnNode(p.h, p.m, "Alice")
+	alice := lntest.NewLndNode(p.h, p.m, "Alice")
 	alice.Start()
 	alice.Fund(10000000)
 

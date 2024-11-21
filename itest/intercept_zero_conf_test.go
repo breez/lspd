@@ -12,7 +12,7 @@ import (
 var htlcInterceptorDelay = time.Second * 7
 
 func testOpenZeroConfChannelOnReceive(p *testParams) {
-	alice := lntest.NewClnNode(p.h, p.m, "Alice")
+	alice := lntest.NewLndNode(p.h, p.m, "Alice")
 	alice.Start()
 	alice.Fund(10000000)
 	p.lsp.LightningNode().Fund(10000000)
@@ -66,7 +66,7 @@ func testOpenZeroConfChannelOnReceive(p *testParams) {
 }
 
 func testOpenZeroConfSingleHtlc(p *testParams) {
-	alice := lntest.NewClnNode(p.h, p.m, "Alice")
+	alice := lntest.NewLndNode(p.h, p.m, "Alice")
 	alice.Start()
 	alice.Fund(10000000)
 	p.lsp.LightningNode().Fund(10000000)

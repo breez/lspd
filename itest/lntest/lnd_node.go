@@ -472,11 +472,7 @@ func (n *LndNode) WaitForChannelReady(channel *ChannelInfo) ShortChannelID {
 		if index >= 0 {
 			c := lc.Channels[index]
 			if c.Active {
-				if c.Private {
-					return NewShortChanIDFromInt(c.AliasScids[0])
-				} else {
-					return NewShortChanIDFromInt(c.ChanId)
-				}
+				return NewShortChanIDFromInt(c.ChanId)
 			}
 		} else {
 
