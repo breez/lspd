@@ -99,6 +99,7 @@ func NewLndNodeFromBinary(h *TestHarness, m *Miner, name string, binary string, 
 		fmt.Sprintf("--bitcoind.zmqpubrawtx=%s", m.zmqTxAddress),
 		"--gossip.channel-update-interval=10ms",
 		"--db.batch-commit-interval=10ms",
+		"--maxbackoff=1s",
 	}, extraArgs...)
 
 	logFilePath := filepath.Join(lndDir, "lnd-stdouterr.log")
