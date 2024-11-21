@@ -551,6 +551,10 @@ func (n *LndNode) Pay(bolt11 string) *PayResult {
 	})
 	CheckError(n.harness.T, err)
 
+	if resp.PaymentRoute == nil {
+		n.harness.T.Fatal(fmt.Errorf("missing payment route after pay"))
+	}
+
 	lastHop := resp.PaymentRoute.Hops[len(resp.PaymentRoute.Hops)-1]
 	dest, err := hex.DecodeString(lastHop.PubKey)
 	CheckError(n.harness.T, err)
@@ -593,14 +597,29 @@ func (n *LndNode) GetRoute(destination []byte, amountMsat uint64) *Route {
 }
 
 func (n *LndNode) PayViaRoute(amountMsat uint64, paymentHash []byte, paymentSecret []byte, route *Route) (*PayResult, error) {
-	r := &lnd.Route{}
-
+	firstHopAmtMsat := int64(route.Hops[0].AmountMsat)
+	currentHeight := n.miner.GetBlockHeight()
+	r := &lnd.Route{
+		TotalAmtMsat:  firstHopAmtMsat,
+		TotalTimeLock: currentHeight,
+	}
 	for _, hop := range route.Hops {
+		r.TotalTimeLock += uint32(hop.Delay)
+	}
+
+	currentExpiry := r.TotalTimeLock + uint32(route.Hops[len(route.Hops)-1].Delay)
+	for i, hop := range route.Hops {
+		amtToForwardMsat := hop.AmountMsat
+		if i != len(route.Hops)-1 {
+			currentExpiry -= uint32(hop.Delay)
+			amtToForwardMsat = route.Hops[i+1].AmountMsat
+		}
+
 		r.Hops = append(r.Hops, &lnd.Hop{
 			ChanId:           hop.Channel.ToUint64(),
-			Expiry:           uint32(hop.Delay),
+			Expiry:           currentExpiry,
 			PubKey:           hex.EncodeToString(hop.Id),
-			AmtToForwardMsat: int64(hop.AmountMsat),
+			AmtToForwardMsat: int64(amtToForwardMsat),
 		})
 	}
 
@@ -616,6 +635,34 @@ func (n *LndNode) PayViaRoute(amountMsat uint64, paymentHash []byte, paymentSecr
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if resp.PaymentRoute == nil {
+		payments, err := n.runtime.rpc.ListPayments(n.harness.Ctx, &lnd.ListPaymentsRequest{
+			IncludeIncomplete: true,
+		})
+		CheckError(n.harness.T, err)
+
+		paymentHashStr := hex.EncodeToString(paymentHash)
+		for _, payment := range payments.Payments {
+			if payment.PaymentHash != paymentHashStr {
+				continue
+			}
+
+			switch payment.Htlcs[0].Failure.Code {
+			case lnd.Failure_TEMPORARY_CHANNEL_FAILURE:
+				return nil, fmt.Errorf("WIRE_TEMPORARY_CHANNEL_FAILURE")
+			case lnd.Failure_UNKNOWN_NEXT_PEER:
+				return nil, fmt.Errorf("WIRE_UNKNOWN_NEXT_PEER")
+			case lnd.Failure_UNKNOWN_FAILURE:
+				return nil, fmt.Errorf("WIRE_TEMPORARY_CHANNEL_FAILURE")
+			case lnd.Failure_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS:
+				return nil, fmt.Errorf("WIRE_INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS")
+			}
+		}
+
+		log.Printf("%+v", payments)
+		return nil, fmt.Errorf("missing payment route after pay")
 	}
 
 	lastHop := resp.PaymentRoute.Hops[len(resp.PaymentRoute.Hops)-1]
