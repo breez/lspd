@@ -554,6 +554,7 @@ func (n *ClnNode) SignMessage(message []byte) []byte {
 }
 
 func (n *ClnNode) Pay(bolt11 string) *PayResult {
+	log.Printf("%s: Paying invoice %s", n.name, bolt11)
 	rpcTimeout := getTimeoutSeconds(n.harness.T, n.harness.Deadline())
 	resp, err := n.runtime.rpc.Pay(n.harness.Ctx, &rpc.PayRequest{
 		Bolt11:   bolt11,

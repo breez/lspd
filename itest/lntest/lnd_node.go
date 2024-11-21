@@ -549,6 +549,7 @@ func (n *LndNode) SignMessage(message []byte) []byte {
 }
 
 func (n *LndNode) Pay(bolt11 string) *PayResult {
+	log.Printf("%s: Paying invoice %s", n.name, bolt11)
 	resp, err := n.runtime.rpc.SendPaymentSync(n.harness.Ctx, &lnd.SendRequest{
 		PaymentRequest: bolt11,
 	})
