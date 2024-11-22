@@ -143,7 +143,6 @@ func (i *ClnHtlcInterceptor) intercept() error {
 				if request.Onion == nil ||
 					request.Onion.ShortChannelId == nil ||
 					*request.Onion.ShortChannelId == "" ||
-					request.Onion.SharedSecret == nil ||
 					request.Onion.ForwardMsat == nil ||
 					request.Onion.OutgoingCltvValue == nil {
 
@@ -160,7 +159,7 @@ func (i *ClnHtlcInterceptor) intercept() error {
 				}
 
 				interceptResult := i.interceptor.Intercept(common.InterceptRequest{
-					Identifier:         *request.Onion.SharedSecret,
+					Identifier:         request.Onion.SharedSecret,
 					Scid:               *scid,
 					PaymentHash:        paymentHash,
 					IncomingAmountMsat: request.Htlc.AmountMsat,

@@ -18,8 +18,8 @@ message Onion {
     optional string short_channel_id = 2;
     optional uint64 forward_msat = 3;
     optional uint32 outgoing_cltv_value = 4;
-    optional string shared_secret = 5;
-    optional string next_onion = 6;
+    string shared_secret = 5;
+    string next_onion = 6;
 }
 
 message Htlc {
