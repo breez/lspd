@@ -134,7 +134,7 @@ func testOfflineNotificationRegularForward(p *testParams) {
 		<-delivered
 		log.Printf("Notification was delivered. Starting breez client again")
 		p.BreezClient().Start()
-		p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
+		// p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
 	}()
 
 	url := "http://" + addr + "/api/v1/notify"
