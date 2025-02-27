@@ -72,6 +72,7 @@ func NewClnClient(config *config.ClnConfig) (*ClnClient, error) {
 	conn, err := grpc.Dial(
 		config.GrpcAddress,
 		grpc.WithTransportCredentials(tlsCredentials),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*50)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to CLN gRPC: %w", err)
