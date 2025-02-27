@@ -24,7 +24,6 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	ecies "github.com/ecies/go/v2"
-	"github.com/stretchr/testify/assert"
 	"github.com/tv42/zbase32"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
@@ -408,8 +407,7 @@ func SubscribeNotifications(l LspNode, b BreezClient, url string, continueOnErro
 	msg := append(lightning.SignedMsgPrefix, []byte(url)...)
 	first := sha256.Sum256([]byte(msg))
 	second := sha256.Sum256(first[:])
-	sig, err := ecdsa.SignCompact(b.Node().PrivateKey(), second[:], true)
-	assert.NoError(b.Harness().T, err)
+	sig := ecdsa.SignCompact(b.Node().PrivateKey(), second[:], true)
 	request := notifications.SubscribeNotificationsRequest{
 		Url:       url,
 		Signature: zbase32.EncodeToString(sig),
@@ -440,8 +438,7 @@ func UnsubscribeNotifications(l LspNode, b BreezClient, url string, continueOnEr
 	msg := append(lightning.SignedMsgPrefix, []byte(url)...)
 	first := sha256.Sum256([]byte(msg))
 	second := sha256.Sum256(first[:])
-	sig, err := ecdsa.SignCompact(b.Node().PrivateKey(), second[:], true)
-	assert.NoError(b.Harness().T, err)
+	sig := ecdsa.SignCompact(b.Node().PrivateKey(), second[:], true)
 	request := notifications.UnsubscribeNotificationsRequest{
 		Url:       url,
 		Signature: zbase32.EncodeToString(sig),
