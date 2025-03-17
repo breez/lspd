@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"math"
 	"sync"
 	"time"
 
@@ -274,7 +275,7 @@ func (c *LndClient) OpenChannel(req *lightning.OpenChannelRequest) (*wire.OutPoi
 	}
 
 	if req.FeeSatPerVByte != nil {
-		lnReq.SatPerVbyte = uint64(*req.FeeSatPerVByte)
+		lnReq.SatPerVbyte = uint64(math.Ceil(*req.FeeSatPerVByte))
 	} else if req.TargetConf != nil {
 		lnReq.TargetConf = int32(*req.TargetConf)
 	}
