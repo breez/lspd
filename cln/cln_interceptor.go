@@ -305,6 +305,19 @@ func encodePayloadWithNextHop(payload []byte, scid lightning.ShortChannelID, amo
 		}
 		uTlvMap[uint64(t)] = b
 	}
+
+	if feeMsat != nil {
+		log.Printf("Adding extra_fee record: %d", *feeMsat)
+		feeRecord := tlv.MakePrimitiveRecord(65537, feeMsat)
+		feeBuf := bytes.NewBuffer([]byte{})
+		if err := feeRecord.Encode(feeBuf); err != nil {
+			return nil, fmt.Errorf("failed to encode fee %x: %v", innerPayload[:], err)
+		}
+		uTlvMap[65537] = feeBuf.Bytes()
+	} else {
+		log.Printf("Not adding extra_fee record")
+	}
+
 	tlvRecords := tlv.MapToRecords(uTlvMap)
 	s, err = tlv.NewStream(tlvRecords...)
 	if err != nil {

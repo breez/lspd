@@ -280,6 +280,7 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 					)
 				}
 
+				feeMsat := req.OutgoingAmountMsat - uint64(amt)
 				useLegacyOnionBlob := slices.Contains(i.config.LegacyOnionTokens, token)
 				return common.InterceptResult{
 					Action:             common.INTERCEPT_RESUME_WITH_ONION,
@@ -290,6 +291,7 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 					AmountMsat:         uint64(amt),
 					TotalAmountMsat:    uint64(outgoingAmountMsat),
 					UseLegacyOnionBlob: useLegacyOnionBlob,
+					FeeMsat:            &feeMsat,
 				}, nil
 			}
 
