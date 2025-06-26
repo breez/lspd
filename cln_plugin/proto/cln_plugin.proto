@@ -3,7 +3,6 @@ option go_package="github.com/breez/lspd/cln_plugin/proto";
 
 service ClnPlugin {
     rpc HtlcStream(stream HtlcResolution) returns (stream HtlcAccepted);
-    rpc CustomMsgStream(CustomMessageRequest) returns (stream CustomMessage);
 }
 
 message HtlcAccepted {
@@ -54,10 +53,4 @@ message HtlcFail {
 
 message HtlcResolve {
     string payment_key = 1;
-}
-
-message CustomMessageRequest {}
-message CustomMessage {
-    string peer_id = 1;
-    string payload = 2;
 }

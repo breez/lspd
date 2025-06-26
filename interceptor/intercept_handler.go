@@ -11,9 +11,9 @@ import (
 	"github.com/breez/lspd/chain"
 	"github.com/breez/lspd/common"
 	"github.com/breez/lspd/config"
+	"github.com/breez/lspd/format"
 	"github.com/breez/lspd/history"
 	"github.com/breez/lspd/lightning"
-	"github.com/breez/lspd/lsps0"
 	"github.com/breez/lspd/notifications"
 	"github.com/btcsuite/btcd/wire"
 	"golang.org/x/exp/slices"
@@ -175,7 +175,7 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 				params = &common.OpeningFeeParams{
 					MinFeeMsat:           uint64(i.config.ChannelMinimumFeeMsat),
 					Proportional:         uint32(i.config.ChannelFeePermyriad * 100),
-					ValidUntil:           time.Now().UTC().Add(time.Duration(time.Hour * 24)).Format(lsps0.TIME_FORMAT),
+					ValidUntil:           time.Now().UTC().Add(time.Duration(time.Hour * 24)).Format(format.TIME_FORMAT),
 					MinLifetime:          uint32(i.config.MaxInactiveDuration / 600),
 					MaxClientToSelfDelay: uint32(10000),
 				}
@@ -190,9 +190,9 @@ func (i *Interceptor) Intercept(req common.InterceptRequest) common.InterceptRes
 				}, nil
 			}
 
-			validUntil, err := time.Parse(lsps0.TIME_FORMAT, params.ValidUntil)
+			validUntil, err := time.Parse(format.TIME_FORMAT, params.ValidUntil)
 			if err != nil {
-				log.Printf("paymentHash: %s, time.Parse(%s, %s) failed. Failing channel open: %v", reqPaymentHashStr, lsps0.TIME_FORMAT, params.ValidUntil, err)
+				log.Printf("paymentHash: %s, time.Parse(%s, %s) failed. Failing channel open: %v", reqPaymentHashStr, format.TIME_FORMAT, params.ValidUntil, err)
 				return common.InterceptResult{
 					Action:      common.INTERCEPT_FAIL_HTLC_WITH_CODE,
 					FailureCode: common.FAILURE_TEMPORARY_CHANNEL_FAILURE,

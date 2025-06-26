@@ -786,18 +786,6 @@ func (n *LndNode) LightningClient() lnd.LightningClient {
 	return n.runtime.rpc
 }
 
-func (n *LndNode) SendCustomMessage(msg *CustomMsgRequest) {
-	peer, err := hex.DecodeString(msg.PeerId)
-	CheckError(n.harness.T, err)
-
-	_, err = n.runtime.rpc.SendCustomMessage(n.harness.Ctx, &lnd.SendCustomMessageRequest{
-		Peer: peer,
-		Type: msg.Type,
-		Data: msg.Data,
-	})
-	CheckError(n.harness.T, err)
-}
-
 func (n *LndNode) waitServerActive(conn grpc.ClientConnInterface) error {
 	log.Printf("%s: Waiting for LND rpc to be fully active.", n.name)
 	return n.waitServerState(conn, func(s lnd.WalletState) bool {

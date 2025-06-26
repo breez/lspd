@@ -86,11 +86,6 @@ func (c *lndBreezClient) SetHtlcAcceptor(totalMsat uint64) {
 	// No need for a htlc acceptor in the LND breez client
 }
 
-func (c *lndBreezClient) ReceiveCustomMessage() *lntest.CustomMsgRequest {
-	// TODO: Not implemented.
-	return nil
-}
-
 func (c *lndBreezClient) startChannelAcceptor(ctx context.Context) error {
 	client, err := c.node.LightningClient().ChannelAcceptor(ctx)
 	if err != nil {

@@ -37,7 +37,6 @@ type LightningNode interface {
 	GetRemoteNodeFeatures(nodeId []byte) map[uint32]string
 	GetChannels() []*ChannelDetails
 	SendToAddress(addr string, amountSat uint64)
-	SendCustomMessage(req *CustomMsgRequest)
 }
 
 type OpenChannelOptions struct {
@@ -160,10 +159,4 @@ type ChannelDetails struct {
 	RemoteSpendableMsat uint64
 	LocalAlias          *ShortChannelID
 	RemoteAlias         *ShortChannelID
-}
-
-type CustomMsgRequest struct {
-	PeerId string
-	Type   uint32
-	Data   []byte
 }

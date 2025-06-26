@@ -115,8 +115,3 @@ type LogNotification struct {
 	Level   string `json:"level"`
 	Message string `json:"message"`
 }
-
-type CustomMessageRequest struct {
-	PeerId  string `json:"peer_id"`
-	Payload string `json:"payload"`
-}

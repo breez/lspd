@@ -11,8 +11,8 @@ import (
 
 	"github.com/breez/lspd/btceclegacy"
 	"github.com/breez/lspd/common"
+	"github.com/breez/lspd/format"
 	"github.com/breez/lspd/interceptor"
-	"github.com/breez/lspd/lsps0"
 	lspdrpc "github.com/breez/lspd/rpc"
 	ecies "github.com/ecies/go/v2"
 	"google.golang.org/protobuf/proto"
@@ -142,7 +142,7 @@ func (s *channelOpenerServer) RegisterPayment(
 		pi.OpeningFeeParams = &lspdrpc.OpeningFeeParams{
 			MinMsat:              uint64(node.NodeConfig.ChannelMinimumFeeMsat),
 			Proportional:         uint32(node.NodeConfig.ChannelFeePermyriad * 100),
-			ValidUntil:           time.Now().UTC().Add(time.Duration(time.Hour * 24)).Format(lsps0.TIME_FORMAT),
+			ValidUntil:           time.Now().UTC().Add(time.Duration(time.Hour * 24)).Format(format.TIME_FORMAT),
 			MaxIdleTime:          uint32(node.NodeConfig.MaxInactiveDuration / 600),
 			MaxClientToSelfDelay: uint32(10000),
 		}

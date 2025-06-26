@@ -28,7 +28,6 @@ const (
 var (
 	DefaultSubscriberTimeout     = "1m"
 	DefaultChannelAcceptorScript = ""
-	LspsFeatureBit               = "0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 )
 
 const (
@@ -152,30 +151,6 @@ func (c *ClnPlugin) htlcListenServer() {
 	}
 }
 
-// Listens to responses to custommsg requests from the grpc server.
-func (c *ClnPlugin) custommsgListenServer() {
-	for {
-		select {
-		case <-c.ctx.Done():
-			return
-		default:
-			id, result := c.server.ReceiveCustomMessageResponse()
-
-			// The server may return nil if it is stopped.
-			if result == nil {
-				continue
-			}
-
-			serid, _ := json.Marshal(&id)
-			c.sendToCln(&Response{
-				Id:      serid,
-				JsonRpc: SpecVersion,
-				Result:  result,
-			})
-		}
-	}
-}
-
 func (c *ClnPlugin) processRequest(request *Request) {
 	// Make sure the spec version is expected.
 	if request.JsonRpc != SpecVersion {
@@ -211,8 +186,6 @@ func (c *ClnPlugin) processRequest(request *Request) {
 		})
 	case "setchannelacceptscript":
 		c.handleSetChannelAcceptScript(request)
-	case "custommsg":
-		c.handleCustomMsg(request)
 	default:
 		c.sendError(
 			request.Id,
@@ -261,7 +234,6 @@ func (c *ClnPlugin) handleGetManifest(request *Request) {
 			},
 			Dynamic: false,
 			Hooks: []Hook{
-				{Name: "custommsg"},
 				{Name: "htlc_accepted"},
 				{Name: "openchannel"},
 				{Name: "openchannel2"},
@@ -269,9 +241,6 @@ func (c *ClnPlugin) handleGetManifest(request *Request) {
 			NonNumericIds: true,
 			Subscriptions: []string{
 				"shutdown",
-			},
-			FeatureBits: &FeatureBits{
-				Node: &LspsFeatureBit,
 			},
 		},
 	})
@@ -405,9 +374,8 @@ func (c *ClnPlugin) handleInit(request *Request) {
 		return
 	}
 
-	// Listen for htlc and custommsg responses from the grpc server.
+	// Listen for htlc responses from the grpc server.
 	go c.htlcListenServer()
-	go c.custommsgListenServer()
 
 	// Let cln know the plugin is initialized.
 	c.sendToCln(&Response{
@@ -464,25 +432,6 @@ func (c *ClnPlugin) handleSetChannelAcceptScript(request *Request) {
 		Id:      request.Id,
 		Result:  c.channelAcceptScript,
 	})
-}
-
-func (c *ClnPlugin) handleCustomMsg(request *Request) {
-	var custommsg CustomMessageRequest
-	err := json.Unmarshal(request.Params, &custommsg)
-	if err != nil {
-		c.sendError(
-			request.Id,
-			ParseError,
-			fmt.Sprintf(
-				"Failed to unmarshal custommsg params:%s [%s]",
-				err.Error(),
-				request.Params,
-			),
-		)
-		return
-	}
-
-	c.server.SendCustomMessage(idToString(request.Id), &custommsg)
 }
 
 func unmarshalOpenChannel(request *Request) (r json.RawMessage, err error) {

@@ -36,21 +36,6 @@ WITH token_channels AS (
 		ON p.funding_tx_id = c.funding_tx_id 
 		AND p.funding_tx_outnum = c.funding_tx_outnum
 	WHERE p.tag IS NOT NULL
-	UNION ALL
-	SELECT r.token
-	,      c.nodeid
-	,      c.peerid
-	,      c.funding_tx_id
-	,      c.funding_tx_outnum
-	,      c.alias_scid
-	,      c.confirmed_scid
-	,      b.fee_msat AS channel_fee_msat
-	FROM lsps2.bought_channels b
-	INNER JOIN lsps2.buy_registrations r
-		ON b.registration_id = r.id
-	INNER JOIN public.channels c 
-		ON b.funding_tx_id = c.funding_tx_id 
-		AND b.funding_tx_outnum = c.funding_tx_outnum
 )`
 
 type ExportedForward struct {

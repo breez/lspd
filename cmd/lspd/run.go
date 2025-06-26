@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/breez/lspd/build"
 	"github.com/breez/lspd/chain"
@@ -23,8 +22,6 @@ import (
 	"github.com/breez/lspd/interceptor"
 	"github.com/breez/lspd/lightning"
 	"github.com/breez/lspd/lnd"
-	"github.com/breez/lspd/lsps0"
-	"github.com/breez/lspd/lsps2"
 	"github.com/breez/lspd/mempool"
 	"github.com/breez/lspd/notifications"
 	"github.com/breez/lspd/postgresql"
@@ -100,15 +97,12 @@ func runLspd(cliCtx *cli.Context) error {
 	interceptStore := postgresql.NewPostgresInterceptStore(pool)
 	openingStore := postgresql.NewPostgresOpeningStore(pool)
 	notificationsStore := postgresql.NewNotificationsStore(pool)
-	lsps2Store := postgresql.NewLsps2Store(pool)
 	historyStore := postgresql.NewHistoryStore(pool)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	notificationService := notifications.NewNotificationService(notificationsStore)
 	go notificationService.Start(ctx)
 	openingService := common.NewOpeningService(openingStore, nodesService)
-	lsps2CleanupService := lsps2.NewCleanupService(lsps2Store)
-	go lsps2CleanupService.Start(ctx)
 	notificationCleanupService := notifications.NewCleanupService(notificationsStore)
 	go notificationCleanupService.Start(ctx)
 	channelSync := history.NewChannelSync(nodes, historyStore)
@@ -134,8 +128,8 @@ func runLspd(cliCtx *cli.Context) error {
 
 			forwardSync := lnd.NewForwardSync(node.NodeId, client, historyStore)
 			go forwardSync.ForwardsSynchronize(ctx)
-			interceptor := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, feeStrategy, notificationService)
-			combinedHandler := common.NewCombinedHandler(interceptor)
+			handler := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, feeStrategy, notificationService)
+			combinedHandler := common.NewCombinedHandler(handler)
 			htlcInterceptor, err = lnd.NewLndHtlcInterceptor(node.NodeConfig, client, combinedHandler)
 			if err != nil {
 				log.Fatalf("failed to initialize LND interceptor: %v", err)
@@ -150,36 +144,12 @@ func runLspd(cliCtx *cli.Context) error {
 
 			forwardSync := cln.NewForwardSync(node.NodeId, client, historyStore)
 			go forwardSync.ForwardsSynchronize(ctx)
-			legacyHandler := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, feeStrategy, notificationService)
-			lsps2Handler := lsps2.NewInterceptHandler(lsps2Store, historyStore, openingService, client, feeEstimator, &lsps2.InterceptorConfig{
-				NodeId:                       node.NodeId,
-				AdditionalChannelCapacitySat: uint64(node.NodeConfig.AdditionalChannelCapacity),
-				MinConfs:                     node.NodeConfig.MinConfs,
-				TargetConf:                   node.NodeConfig.TargetConf,
-				FeeStrategy:                  feeStrategy,
-				MinPaymentSizeMsat:           node.NodeConfig.MinPaymentSizeMsat,
-				MaxPaymentSizeMsat:           node.NodeConfig.MaxPaymentSizeMsat,
-				TimeLockDelta:                node.NodeConfig.TimeLockDelta,
-				HtlcMinimumMsat:              node.NodeConfig.MinHtlcMsat,
-				MppTimeout:                   time.Second * 90,
-			})
-			go lsps2Handler.Start(ctx)
-			combinedHandler := common.NewCombinedHandler(lsps2Handler, legacyHandler)
+			handler := interceptor.NewInterceptHandler(client, node.NodeConfig, interceptStore, historyStore, openingService, feeEstimator, feeStrategy, notificationService)
+			combinedHandler := common.NewCombinedHandler(handler)
 			htlcInterceptor, err = cln.NewClnHtlcInterceptor(node.NodeConfig, client, combinedHandler)
 			if err != nil {
 				log.Fatalf("failed to initialize CLN interceptor: %v", err)
 			}
-
-			msgClient := cln.NewCustomMsgClient(node.NodeConfig.Cln, client)
-			go msgClient.Start()
-			msgServer := lsps0.NewServer()
-			protocolServer := lsps0.NewProtocolServer([]uint32{2})
-			lsps2Server := lsps2.NewLsps2Server(openingService, nodesService, node, lsps2Store)
-			lsps0.RegisterProtocolServer(msgServer, protocolServer)
-			lsps2.RegisterLsps2Server(msgServer, lsps2Server)
-			msgClient.WaitStarted()
-			defer msgClient.Stop()
-			go msgServer.Serve(msgClient)
 		}
 
 		if htlcInterceptor == nil {

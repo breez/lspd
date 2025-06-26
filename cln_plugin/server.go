@@ -29,37 +29,20 @@ type htlcResultMsg struct {
 	result interface{}
 }
 
-// Internal custommsg message meant for the sendQueue.
-type custommsgMsg struct {
-	id        string
-	custommsg *CustomMessageRequest
-	timeout   time.Time
-}
-
-// Internal custommsg result message meant for the recvQueue.
-type custommsgResultMsg struct {
-	id     string
-	result interface{}
-}
-
 type server struct {
 	proto.ClnPluginServer
-	ctx                    context.Context
-	cancel                 context.CancelFunc
-	subscriberTimeout      time.Duration
-	grpcServer             *grpc.Server
-	mtx                    sync.Mutex
-	started                chan struct{}
-	startError             chan error
-	htlcnewSubscriber      chan struct{}
-	htlcStream             proto.ClnPlugin_HtlcStreamServer
-	htlcSendQueue          chan *htlcAcceptedMsg
-	htlcRecvQueue          chan *htlcResultMsg
-	inflightHtlcs          *orderedmap.OrderedMap[string, *htlcAcceptedMsg]
-	custommsgNewSubscriber chan struct{}
-	custommsgStream        proto.ClnPlugin_CustomMsgStreamServer
-	custommsgSendQueue     chan *custommsgMsg
-	custommsgRecvQueue     chan *custommsgResultMsg
+	ctx               context.Context
+	cancel            context.CancelFunc
+	subscriberTimeout time.Duration
+	grpcServer        *grpc.Server
+	mtx               sync.Mutex
+	started           chan struct{}
+	startError        chan error
+	htlcnewSubscriber chan struct{}
+	htlcStream        proto.ClnPlugin_HtlcStreamServer
+	htlcSendQueue     chan *htlcAcceptedMsg
+	htlcRecvQueue     chan *htlcResultMsg
+	inflightHtlcs     *orderedmap.OrderedMap[string, *htlcAcceptedMsg]
 }
 
 // Creates a new grpc server
@@ -80,19 +63,16 @@ func NewServer() *server {
 		ctx:    ctx,
 		cancel: cancel,
 		// The send queue exists to buffer messages until a subscriber is active.
-		htlcSendQueue:      make(chan *htlcAcceptedMsg, 10000),
-		custommsgSendQueue: make(chan *custommsgMsg, 10000),
+		htlcSendQueue: make(chan *htlcAcceptedMsg, 10000),
 		// The receive queue exists mainly to allow returning timeouts to the
 		// cln plugin. If there is no subscriber active within the subscriber
 		// timeout period these results can be put directly on the receive queue.
-		htlcRecvQueue:          make(chan *htlcResultMsg, 10000),
-		inflightHtlcs:          orderedmap.New[string, *htlcAcceptedMsg](),
-		custommsgRecvQueue:     make(chan *custommsgResultMsg, 10000),
-		started:                make(chan struct{}),
-		startError:             make(chan error, 1),
-		grpcServer:             grpcServer,
-		htlcnewSubscriber:      make(chan struct{}),
-		custommsgNewSubscriber: make(chan struct{}),
+		htlcRecvQueue:     make(chan *htlcResultMsg, 10000),
+		inflightHtlcs:     orderedmap.New[string, *htlcAcceptedMsg](),
+		started:           make(chan struct{}),
+		startError:        make(chan error, 1),
+		grpcServer:        grpcServer,
+		htlcnewSubscriber: make(chan struct{}),
 	}
 }
 
@@ -127,7 +107,6 @@ func (s *server) initialize(address string, subscriberTimeout time.Duration) (ne
 	go s.logHtlcStates()
 	go s.listenHtlcRequests()
 	go s.listenHtlcResponses()
-	go s.listenCustomMsgRequests()
 	log.Printf("Server starting to listen on %s.", address)
 	config := &net.ListenConfig{Control: reusePort}
 	lis, err := config.Listen(s.ctx, "tcp", address)
@@ -496,157 +475,6 @@ func (s *server) mapHtlcResult(outcome interface{}) interface{} {
 	// result: continue.
 	log.Printf("Unexpected htlc resolution type %T: %+v", outcome, outcome)
 	return s.defaultResult()
-}
-
-// Grpc method that is called when a new client subscribes. There can only be
-// one subscriber active at a time. If there is an error receiving or sending
-// from or to the subscriber, the subscription is closed.
-func (s *server) CustomMsgStream(
-	_ *proto.CustomMessageRequest,
-	stream proto.ClnPlugin_CustomMsgStreamServer,
-) error {
-	err := s.newCustomMsgStream(stream)
-	if err != nil {
-		return err
-	}
-
-	<-stream.Context().Done()
-	log.Printf(
-		"CustomMsgStream context is done. Return: %v",
-		stream.Context().Err(),
-	)
-
-	// Remove the subscriber.
-	s.mtx.Lock()
-	s.custommsgStream = nil
-	s.mtx.Unlock()
-
-	return stream.Context().Err()
-}
-
-func (s *server) newCustomMsgStream(stream proto.ClnPlugin_CustomMsgStreamServer) error {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
-	if s.custommsgStream == nil {
-		log.Printf("Got a new custommsg stream subscription request.")
-	} else {
-		log.Printf("Got a custommsg stream subscription request, but " +
-			"subscription was already active.")
-		return fmt.Errorf("already subscribed")
-	}
-
-	s.custommsgStream = stream
-
-	// Notify listeners that a new subscriber is active. Replace the chan with
-	// a new one immediately in case this subscriber is dropped later.
-	close(s.custommsgNewSubscriber)
-	s.custommsgNewSubscriber = make(chan struct{})
-	return nil
-}
-
-// Enqueues a htlc_accepted message for send to the grpc client.
-func (s *server) SendCustomMessage(id string, c *CustomMessageRequest) {
-	select {
-	case <-s.ctx.Done():
-	case s.custommsgSendQueue <- &custommsgMsg{
-		id:        id,
-		custommsg: c,
-		timeout:   time.Now().Add(s.subscriberTimeout),
-	}:
-	}
-}
-
-// Receives the next custommsg response message from the grpc client. Returns id
-// and message. Blocks until a message is available. Returns a nil message if
-// the server is done. This function effectively waits until a subscriber is
-// active and has sent a message.
-func (s *server) ReceiveCustomMessageResponse() (string, interface{}) {
-	select {
-	case <-s.ctx.Done():
-		return "", nil
-	case msg := <-s.custommsgRecvQueue:
-		return msg.id, msg.result
-	}
-}
-
-// Listens to sendQueue for custommsg requests from cln. The message will be
-// held until a subscriber is active, or the subscriber timeout expires. The
-// messages are sent to the grpc client in fifo order.
-func (s *server) listenCustomMsgRequests() {
-	for {
-		select {
-		case <-s.ctx.Done():
-			log.Printf("listenCustomMsgRequests received done. Stop listening.")
-			return
-		case msg := <-s.custommsgSendQueue:
-			s.handleCustomMsg(msg)
-		}
-	}
-}
-
-// Attempts to send a custommsg message to the grpc client. The message will
-// be held until a subscriber is active, or the subscriber timeout expires.
-func (s *server) handleCustomMsg(msg *custommsgMsg) {
-	for {
-		s.mtx.Lock()
-		stream := s.custommsgStream
-		ns := s.custommsgNewSubscriber
-		s.mtx.Unlock()
-
-		// If there is no active subscription, wait until there is a new
-		// subscriber, or the message times out.
-		if stream == nil {
-			select {
-			case <-s.ctx.Done():
-				log.Printf("handleCustomMsg received server done. Stop processing.")
-				return
-			case <-ns:
-				log.Printf("got a new subscriber. continue handleCustomMsg.")
-				continue
-			case <-time.After(time.Until(msg.timeout)):
-				log.Printf(
-					"WARNING: custommsg with id '%s' timed out after '%v' waiting "+
-						"for grpc subscriber: %+v",
-					msg.id,
-					s.subscriberTimeout,
-					msg.custommsg,
-				)
-
-				// If the subscriber timeout expires while holding the custommsg
-				// we ignore the message by sending the default result
-				// (continue) to cln.
-				s.custommsgRecvQueue <- &custommsgResultMsg{
-					id:     msg.id,
-					result: s.defaultResult(),
-				}
-
-				return
-			}
-		}
-
-		// There is a subscriber. Attempt to send the custommsg message.
-		err := stream.Send(&proto.CustomMessage{
-			PeerId:  msg.custommsg.PeerId,
-			Payload: msg.custommsg.Payload,
-		})
-
-		// If there is no error, we're done, mark the message as handled.
-		if err == nil {
-			s.custommsgRecvQueue <- &custommsgResultMsg{
-				id:     msg.id,
-				result: s.defaultResult(),
-			}
-			return
-		}
-
-		// If we end up here, there was an error sending the message to the
-		// grpc client.
-		// TODO: If the Send errors, but the context is not done, this will
-		// currently retry immediately. Check whether the context is really
-		// done on an error!
-		log.Printf("Error sending custommsg message to subscriber. Retrying: %v", err)
-	}
 }
 
 // Returns a result: continue message.

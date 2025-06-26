@@ -18,14 +18,8 @@ func TestLspd(t *testing.T) {
 		return
 	}
 	testCases := allTestCases
-	var lndTestCases []*testCase
-	for _, c := range testCases {
-		if !c.isLsps2 {
-			lndTestCases = append(lndTestCases, c)
-		}
-	}
-	runTests(t, lndTestCases, "LND-lsp-CLN-client", lndLspFunc, clnClientFunc)
-	runTests(t, lndTestCases, "LND-lsp-LND-client", legacyOnionLndLspFunc, lndClientFunc)
+	runTests(t, testCases, "LND-lsp-CLN-client", lndLspFunc, clnClientFunc)
+	runTests(t, testCases, "LND-lsp-LND-client", legacyOnionLndLspFunc, lndClientFunc)
 	runTests(t, testCases, "CLN-lsp-CLN-client", clnLspFunc, clnClientFunc)
 }
 
@@ -123,7 +117,6 @@ type testCase struct {
 	name          string
 	test          func(t *testParams)
 	skipCreateLsp bool
-	isLsps2       bool
 	timeout       time.Duration
 }
 
@@ -188,42 +181,6 @@ var allTestCases = []*testCase{
 	{
 		name: "testNotificationsUnsubscribe",
 		test: testNotificationsUnsubscribe,
-	},
-	{
-		name:    "testLsps0GetProtocolVersions",
-		test:    testLsps0GetProtocolVersions,
-		isLsps2: true,
-	},
-	{
-		name:    "testLsps2GetVersions",
-		test:    testLsps2GetVersions,
-		isLsps2: true,
-	},
-	{
-		name:    "testLsps2GetInfo",
-		test:    testLsps2GetInfo,
-		isLsps2: true,
-	},
-	{
-		name:    "testLsps2Buy",
-		test:    testLsps2Buy,
-		isLsps2: true,
-	},
-	{
-		name:    "testLsps2HappyFlow",
-		test:    testLsps2HappyFlow,
-		isLsps2: true,
-	},
-	{
-		name:    "testLsps2NoBalance",
-		test:    testLsps2NoBalance,
-		isLsps2: true,
-	},
-	{
-		name:          "testLsps2ZeroConfUtxo",
-		test:          testLsps2ZeroConfUtxo,
-		isLsps2:       true,
-		skipCreateLsp: true,
 	},
 	{
 		name: "testRestartLspNode",

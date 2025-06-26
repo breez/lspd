@@ -9,7 +9,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/breez/lspd/lsps0"
+	"github.com/breez/lspd/format"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 )
@@ -52,7 +52,7 @@ func (s *openingService) GetFeeParamsMenu(token string, privateKey *btcec.Privat
 		params := &OpeningFeeParams{
 			MinFeeMsat:           setting.Params.MinFeeMsat,
 			Proportional:         setting.Params.Proportional,
-			ValidUntil:           validUntil.Format(lsps0.TIME_FORMAT),
+			ValidUntil:           validUntil.Format(format.TIME_FORMAT),
 			MinLifetime:          setting.Params.MinLifetime,
 			MaxClientToSelfDelay: setting.Params.MaxClientToSelfDelay,
 		}
@@ -87,9 +87,9 @@ func (s *openingService) ValidateOpeningFeeParams(params *OpeningFeeParams, publ
 		return false
 	}
 
-	t, err := time.Parse(lsps0.TIME_FORMAT, params.ValidUntil)
+	t, err := time.Parse(format.TIME_FORMAT, params.ValidUntil)
 	if err != nil {
-		log.Printf("validateOpeningFeeParams: time.Parse(%v, %v) error: %v", lsps0.TIME_FORMAT, params.ValidUntil, err)
+		log.Printf("validateOpeningFeeParams: time.Parse(%v, %v) error: %v", format.TIME_FORMAT, params.ValidUntil, err)
 		return false
 	}
 

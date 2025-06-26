@@ -2,16 +2,11 @@ package itest
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"log"
 	"math/rand"
 	"testing"
 
 	"github.com/breez/lspd/itest/lntest"
-	"github.com/breez/lspd/lsps0"
-	"github.com/breez/lspd/lsps0/jsonrpc"
-	"github.com/breez/lspd/lsps2"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -27,7 +22,6 @@ type BreezClient interface {
 	Stop() error
 	SetHtlcAcceptor(totalMsat uint64)
 	ResetHtlcAcceptor()
-	ReceiveCustomMessage() *lntest.CustomMsgRequest
 }
 
 type generateInvoicesRequest struct {
@@ -50,10 +44,6 @@ func GenerateInvoices(n BreezClient, req generateInvoicesRequest) (invoice, invo
 		TxIndex:     0,
 		OutputIndex: 0,
 	}, lspCltvDelta)
-}
-
-func GenerateLsps2Invoices(n BreezClient, req generateInvoicesRequest, scid string) (invoice, invoice) {
-	return generateInvoices(n, req, lntest.NewShortChanIDFromString(scid), lspCltvDelta+2)
 }
 
 func generateInvoices(n BreezClient, req generateInvoicesRequest, scid lntest.ShortChannelID, cltvDelta uint16) (invoice, invoice) {
@@ -134,60 +124,6 @@ func AddHopHint(n BreezClient, invoice string, lsp LspNode, chanid lntest.ShortC
 	lntest.CheckError(n.Harness().T, err)
 
 	return newInvoice
-}
-
-func Lsps2GetInfo(c BreezClient, l LspNode, req lsps2.GetInfoRequest) lsps2.GetInfoResponse {
-	req.Version = lsps2.SupportedVersion
-	r := lsps2RequestResponse(c, l, "lsps2.get_info", req)
-	var resp lsps2.GetInfoResponse
-	err := json.Unmarshal(r, &resp)
-	lntest.CheckError(c.Harness().T, err)
-
-	return resp
-}
-
-func Lsps2Buy(c BreezClient, l LspNode, req lsps2.BuyRequest) lsps2.BuyResponse {
-	req.Version = lsps2.SupportedVersion
-	r := lsps2RequestResponse(c, l, "lsps2.buy", req)
-	var resp lsps2.BuyResponse
-	err := json.Unmarshal(r, &resp)
-	lntest.CheckError(c.Harness().T, err)
-
-	return resp
-}
-
-func lsps2RequestResponse(c BreezClient, l LspNode, method string, req interface{}) []byte {
-	id := RandStringBytes(32)
-	peerId := hex.EncodeToString(l.NodeId())
-	inner, err := json.Marshal(req)
-	lntest.CheckError(c.Harness().T, err)
-	outer, err := json.Marshal(&jsonrpc.Request{
-		JsonRpc: jsonrpc.Version,
-		Method:  method,
-		Id:      id,
-		Params:  inner,
-	})
-	lntest.CheckError(c.Harness().T, err)
-
-	log.Printf(string(outer))
-	c.Node().SendCustomMessage(&lntest.CustomMsgRequest{
-		PeerId: peerId,
-		Type:   lsps0.Lsps0MessageType,
-		Data:   outer,
-	})
-
-	m := c.ReceiveCustomMessage()
-	log.Printf(string(m.Data))
-
-	var resp jsonrpc.Response
-	err = json.Unmarshal(m.Data, &resp)
-	lntest.CheckError(c.Harness().T, err)
-
-	if resp.Id != id {
-		c.Harness().T.Fatalf("Received custom message, but had different id")
-	}
-
-	return resp.Result
 }
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyz"

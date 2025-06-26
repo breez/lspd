@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -61,7 +60,6 @@ type clnBreezClient struct {
 	pluginAddress  string
 	htlcAcceptor   func(*proto.HtlcAccepted) *proto.HtlcResolution
 	cancel         context.CancelFunc
-	customMsgQueue chan *lntest.CustomMsgRequest
 	harness        *lntest.TestHarness
 	isInitialized  bool
 	node           *lntest.ClnNode
@@ -129,8 +127,6 @@ func (c *clnBreezClient) Start() {
 	c.cancel = cancel
 	c.node.Start()
 	c.startHtlcAcceptor(ctx)
-	c.customMsgQueue = make(chan *lntest.CustomMsgRequest, 100)
-	c.startCustomMsgListener(ctx)
 }
 
 func (c *clnBreezClient) ResetHtlcAcceptor() {
@@ -210,64 +206,6 @@ func (c *clnBreezClient) SetHtlcAcceptor(totalMsat uint64) {
 			},
 		}
 	}
-}
-
-func (c *clnBreezClient) startCustomMsgListener(ctx context.Context) {
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(time.Millisecond * 100):
-			}
-
-			conn, err := grpc.DialContext(
-				ctx,
-				c.pluginAddress,
-				grpc.WithTransportCredentials(insecure.NewCredentials()),
-				grpc.WithKeepaliveParams(keepalive.ClientParameters{
-					Time:    time.Duration(10) * time.Second,
-					Timeout: time.Duration(10) * time.Second,
-				}),
-			)
-			if err != nil {
-				log.Printf("%s: Dial htlc acceptor error: %v", c.name, err)
-				continue
-			}
-
-			client := proto.NewClnPluginClient(conn)
-			listener, err := client.CustomMsgStream(ctx, &proto.CustomMessageRequest{})
-			if err != nil {
-				log.Printf("%s: client.CustomMsgStream() error: %v", c.name, err)
-				break
-			}
-			for {
-				if ctx.Err() != nil {
-					return
-				}
-
-				msg, err := listener.Recv()
-				if err != nil {
-					log.Printf("%s: listener.Recv() error: %v", c.name, err)
-					break
-				}
-
-				payload, err := hex.DecodeString(msg.Payload)
-				lntest.CheckError(c.harness.T, err)
-
-				c.customMsgQueue <- &lntest.CustomMsgRequest{
-					PeerId: msg.PeerId,
-					Type:   uint32(binary.BigEndian.Uint16(payload)),
-					Data:   payload[2:],
-				}
-			}
-		}
-	}()
-}
-
-func (c *clnBreezClient) ReceiveCustomMessage() *lntest.CustomMsgRequest {
-	msg := <-c.customMsgQueue
-	return msg
 }
 
 func (c *clnBreezClient) startHtlcAcceptor(ctx context.Context) {

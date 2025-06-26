@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -740,20 +739,6 @@ func (n *ClnNode) GetRemoteNodeFeatures(nodeId []byte) map[uint32]string {
 	}
 	node := resp.Nodes[0]
 	return n.mapFeatures(node.Features)
-}
-
-func (n *ClnNode) SendCustomMessage(req *CustomMsgRequest) {
-	nodeid, err := hex.DecodeString(req.PeerId)
-	CheckError(n.harness.T, err)
-
-	var t [2]byte
-	binary.BigEndian.PutUint16(t[:], uint16(req.Type))
-	msg := append(t[:], req.Data...)
-	_, err = n.runtime.rpc.SendCustomMsg(n.harness.Ctx, &rpc.SendcustommsgRequest{
-		NodeId: nodeid,
-		Msg:    msg,
-	})
-	CheckError(n.harness.T, err)
 }
 
 func (n *ClnNode) mapFeatures(f []byte) map[uint32]string {
