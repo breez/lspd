@@ -5,9 +5,9 @@ on:
   pull_request:    
 env:
   BITCOIN_VERSION: '25.0'
-  LSP_REF: 'breez-node-v0.18.3-beta'
+  LSP_REF: 'breez-node-v0.20.0-beta'
   CLIENT_REF: 'v0.17.5-breez-3'
-  GO_VERSION: '^1.21.4'
+  GO_VERSION: '^1.24.9'
   CLN_VERSION: 'v25.05'
 
 concurrency:
