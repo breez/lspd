@@ -43,7 +43,7 @@ func testRegularForward(p *testParams) {
 		AmountMsat:      amountMsat,
 		IncludeHopHints: true,
 	})
-	log.Printf(bobInvoice.Bolt11)
+	log.Printf("%s", bobInvoice.Bolt11)
 
 	invoiceWithHint := bobInvoice.Bolt11
 	if !ContainsHopHint(p.t, bobInvoice.Bolt11) {

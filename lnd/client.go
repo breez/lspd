@@ -303,9 +303,6 @@ func (c *LndClient) GetChannel(peerID []byte, channelPoint wire.OutPoint) (*ligh
 	}
 
 	channelPointStr := channelPoint.String()
-	if err != nil {
-		return nil, err
-	}
 
 	for _, c := range r.Channels {
 		log.Printf("getChannel(%x): %v", peerID, c.ChanId)
