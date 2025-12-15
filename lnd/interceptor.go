@@ -211,7 +211,7 @@ func (i *LndHtlcInterceptor) constructOnion(
 	}
 
 	var b bytes.Buffer
-	err = hop.PackHopPayload(&b, uint64(0))
+	err = hop.PackHopPayload(&b, uint64(0), true)
 	if err != nil {
 		log.Printf("hop.PackHopPayload(): %v", err)
 		return nil, err

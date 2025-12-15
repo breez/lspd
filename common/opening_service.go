@@ -123,11 +123,7 @@ func createPromise(lspPrivateKey *btcec.PrivateKey, params *OpeningFeeParams) (*
 		return nil, err
 	}
 	// Sign the hash with the private key of the LSP id.
-	sig, err := ecdsa.SignCompact(lspPrivateKey, hash[:], true)
-	if err != nil {
-		log.Printf("createPromise: SignCompact error: %v", err)
-		return nil, err
-	}
+	sig := ecdsa.SignCompact(lspPrivateKey, hash[:], true)
 	promise := hex.EncodeToString(sig)
 	return &promise, nil
 }

@@ -110,15 +110,14 @@ func AddHopHint(n BreezClient, invoice string, lsp LspNode, chanid lntest.ShortC
 	newInvoice, err := rawInvoice.Encode(zpay32.MessageSigner{
 		SignCompact: func(msg []byte) ([]byte, error) {
 			hash := sha256.Sum256(msg)
-			sig, err := ecdsa.SignCompact(n.Node().PrivateKey(), hash[:], true)
+			sig := ecdsa.SignCompact(n.Node().PrivateKey(), hash[:], true)
 			log.Printf(
-				"sign outer invoice. msg: '%x', hash: '%x', sig: '%x', err: %v",
+				"sign outer invoice. msg: '%x', hash: '%x', sig: '%x'",
 				msg,
 				hash,
 				sig,
-				err,
 			)
-			return sig, err
+			return sig, nil
 		},
 	})
 	lntest.CheckError(n.Harness().T, err)

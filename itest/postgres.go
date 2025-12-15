@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/breez/lspd/itest/lntest"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -70,7 +70,7 @@ func (c *PostgresContainer) Start(ctx context.Context) error {
 		}
 	}
 
-	err = c.cli.ContainerStart(ctx, c.id, types.ContainerStartOptions{})
+	err = c.cli.ContainerStart(ctx, c.id, container.StartOptions{})
 	if err != nil {
 		c.cli.Close()
 		return fmt.Errorf("failed to start docker container '%s': %w", c.id, err)
@@ -119,27 +119,27 @@ HealthCheck:
 }
 
 func (c *PostgresContainer) initialize(ctx context.Context) error {
-	image := "postgres:15"
-	_, _, err := c.cli.ImageInspectWithRaw(ctx, image)
+	imageTag := "postgres:15"
+	_, _, err := c.cli.ImageInspectWithRaw(ctx, imageTag)
 	if err != nil {
 		if !client.IsErrNotFound(err) {
-			return fmt.Errorf("could not find docker image '%s': %w", image, err)
+			return fmt.Errorf("could not find docker image '%s': %w", imageTag, err)
 		}
 
-		pullReader, err := c.cli.ImagePull(ctx, image, types.ImagePullOptions{})
+		pullReader, err := c.cli.ImagePull(ctx, imageTag, image.PullOptions{})
 		if err != nil {
-			return fmt.Errorf("failed to pull docker image '%s': %w", image, err)
+			return fmt.Errorf("failed to pull docker image '%s': %w", imageTag, err)
 		}
 		defer pullReader.Close()
 
 		_, err = io.Copy(io.Discard, pullReader)
 		if err != nil {
-			return fmt.Errorf("failed to download docker image '%s': %w", image, err)
+			return fmt.Errorf("failed to download docker image '%s': %w", imageTag, err)
 		}
 	}
 
 	createResp, err := c.cli.ContainerCreate(ctx, &container.Config{
-		Image: image,
+		Image: imageTag,
 		Cmd: []string{
 			"postgres",
 			"-c",
@@ -204,13 +204,13 @@ func (c *PostgresContainer) Cleanup(ctx context.Context) error {
 		return err
 	}
 	defer cli.Close()
-	return cli.ContainerRemove(ctx, c.id, types.ContainerRemoveOptions{
+	return cli.ContainerRemove(ctx, c.id, container.RemoveOptions{
 		Force: true,
 	})
 }
 
 func (c *PostgresContainer) monitorLogs(ctx context.Context) {
-	i, err := c.cli.ContainerLogs(ctx, c.id, types.ContainerLogsOptions{
+	i, err := c.cli.ContainerLogs(ctx, c.id, container.LogsOptions{
 		ShowStderr: true,
 		ShowStdout: true,
 		Timestamps: false,

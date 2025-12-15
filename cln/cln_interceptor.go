@@ -224,7 +224,11 @@ func (i *ClnHtlcInterceptor) resumeWithOnion(request *proto.HtlcAccepted, interc
 
 	newPayloadStr := hex.EncodeToString(newPayload)
 
-	chanId := lnwire.NewChanIDFromOutPoint(interceptResult.ChannelPoint).String()
+	if interceptResult.ChannelPoint == nil {
+		log.Printf("paymenthash: %s, failed to forward htlc. Onion intercept result does not contain channelpoint", request.Htlc.PaymentHash)
+		return i.failWithCode(request, common.FAILURE_TEMPORARY_CHANNEL_FAILURE)
+	}
+	chanId := lnwire.NewChanIDFromOutPoint(*interceptResult.ChannelPoint).String()
 	log.Printf("paymenthash: %s, forwarding htlc to the destination node and a new private channel was opened", request.Htlc.PaymentHash)
 	return &proto.HtlcResolution{
 		Correlationid: request.Correlationid,
