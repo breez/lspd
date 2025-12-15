@@ -61,6 +61,7 @@ func (c *PostgresContainer) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("could not create docker client: %w", err)
 	}
+	c.cli.NegotiateAPIVersion(ctx)
 
 	if !c.isInitialized {
 		err := c.initialize(ctx)
