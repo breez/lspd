@@ -552,19 +552,22 @@ func (n *LndNode) Pay(bolt11 string) *PayResult {
 	})
 	CheckError(n.harness.T, err)
 
-	if resp.PaymentRoute == nil {
-		n.harness.T.Fatal(fmt.Errorf("missing payment route after pay"))
+	var amountMsat uint64
+	var amountSentMsat uint64
+	var dest []byte
+	if resp.PaymentRoute != nil {
+		lastHop := resp.PaymentRoute.Hops[len(resp.PaymentRoute.Hops)-1]
+		dest, err = hex.DecodeString(lastHop.PubKey)
+		CheckError(n.harness.T, err)
+		amountMsat = uint64(lastHop.AmtToForwardMsat)
+		amountSentMsat = uint64(resp.PaymentRoute.TotalAmtMsat)
 	}
-
-	lastHop := resp.PaymentRoute.Hops[len(resp.PaymentRoute.Hops)-1]
-	dest, err := hex.DecodeString(lastHop.PubKey)
-	CheckError(n.harness.T, err)
 
 	return &PayResult{
 		PaymentHash:     resp.PaymentHash,
-		AmountMsat:      uint64(lastHop.AmtToForwardMsat),
+		AmountMsat:      amountMsat,
 		Destination:     dest,
-		AmountSentMsat:  uint64(resp.PaymentRoute.TotalAmtMsat),
+		AmountSentMsat:  amountSentMsat,
 		PaymentPreimage: resp.PaymentPreimage,
 	}
 }
