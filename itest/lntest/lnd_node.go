@@ -214,7 +214,7 @@ func (n *LndNode) Start() {
 
 	if n.isInitialized {
 		err = n.unlockWallet(tmpConn)
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), "already unlocked") {
 			PerformCleanup(cleanups)
 			n.harness.T.Fatalf("%s: unlockWallet: %v", n.name, err)
 		}
