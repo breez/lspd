@@ -204,10 +204,10 @@ func (n *LndNode) Start() {
 		PerformCleanup(cleanups)
 		n.harness.T.Fatalf("%s: failed to create grpc connection: %v", n.name, err)
 	}
-	defer tmpConn.Close()
 
 	err = n.waitServerStarted(tmpConn)
 	if err != nil {
+		tmpConn.Close()
 		PerformCleanup(cleanups)
 		n.harness.T.Fatalf("%s: waitServerStarted: %v", n.name, err)
 	}
@@ -215,12 +215,14 @@ func (n *LndNode) Start() {
 	if n.isInitialized {
 		err = n.unlockWallet(tmpConn)
 		if err != nil && !strings.Contains(err.Error(), "already unlocked") {
+			tmpConn.Close()
 			PerformCleanup(cleanups)
 			n.harness.T.Fatalf("%s: unlockWallet: %v", n.name, err)
 		}
 	} else {
 		mac, priv, _, err := n.initWallet(tmpConn)
 		if err != nil {
+			tmpConn.Close()
 			PerformCleanup(cleanups)
 			n.harness.T.Fatalf("%s: initWallet: %v", n.name, err)
 		}
@@ -229,7 +231,19 @@ func (n *LndNode) Start() {
 		n.isInitialized = true
 	}
 
-	err = n.waitServerActive(tmpConn)
+	// Close the temporary connection after unlock/init, as the WalletUnlocker service
+	// becomes unavailable after the wallet is unlocked
+	tmpConn.Close()
+
+	// Create a new connection to wait for the server to become active
+	tmpConn2, err := grpc.DialContext(n.harness.Ctx, n.grpcAddress, opts...)
+	if err != nil {
+		PerformCleanup(cleanups)
+		n.harness.T.Fatalf("%s: failed to create grpc connection: %v", n.name, err)
+	}
+	defer tmpConn2.Close()
+
+	err = n.waitServerActive(tmpConn2)
 	if err != nil {
 		PerformCleanup(cleanups)
 		n.harness.T.Fatalf("%s: waitServerActive: %v", n.name, err)
