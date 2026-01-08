@@ -169,9 +169,13 @@ func (n *LndNode) Start() {
 					sig = syscall.SIGKILL
 				}
 
-				return syscall.Kill(-proc.Pid, sig)
+				err := syscall.Kill(-proc.Pid, sig)
+				if err != nil {
+					log.Printf("%s: Error sending signal: %v", n.name, err)
+				}
 			}
 
+			// Wait for the process to fully exit
 			<-done
 			return nil
 		},

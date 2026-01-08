@@ -59,6 +59,7 @@ func testOfflineNotificationPaymentRegistered(p *testParams) {
 	}
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	delivered := make(chan struct{})
+	started := make(chan struct{})
 
 	notify := newNotificationDeliveryService(addr, func(resp http.ResponseWriter, req *http.Request) {
 		var body PaymentReceivedPayload
@@ -76,6 +77,7 @@ func testOfflineNotificationPaymentRegistered(p *testParams) {
 		p.BreezClient().SetHtlcAcceptor(innerAmountMsat)
 		p.BreezClient().Start()
 		p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
+		close(started)
 	}()
 
 	// TODO: Fix race waiting for htlc interceptor.
@@ -88,6 +90,7 @@ func testOfflineNotificationPaymentRegistered(p *testParams) {
 	route := constructRoute(p.lsp.LightningNode(), p.BreezClient().Node(), channelId, lntest.NewShortChanIDFromString("1x0x0"), outerAmountMsat)
 	_, err = alice.PayViaRoute(outerAmountMsat, outerInvoice.paymentHash, outerInvoice.paymentSecret, route)
 	assert.Nil(p.t, err)
+	<-started // Wait for breez-client goroutine to complete before test ends
 }
 
 func testOfflineNotificationRegularForward(p *testParams) {
@@ -121,6 +124,7 @@ func testOfflineNotificationRegularForward(p *testParams) {
 	}
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	delivered := make(chan struct{})
+	started := make(chan struct{})
 
 	notify := newNotificationDeliveryService(addr, func(resp http.ResponseWriter, req *http.Request) {
 		var body PaymentReceivedPayload
@@ -135,6 +139,7 @@ func testOfflineNotificationRegularForward(p *testParams) {
 		log.Printf("Notification was delivered. Starting breez client again")
 		p.BreezClient().Start()
 		// p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
+		close(started)
 	}()
 
 	url := "http://" + addr + "/api/v1/notify"
@@ -175,6 +180,7 @@ func testOfflineNotificationRegularForward(p *testParams) {
 
 	log.Printf("Alice paying")
 	payResp := alice.Pay(invoiceWithHint)
+	<-started // Wait for breez-client to be fully started
 	invoiceResult := p.BreezClient().Node().GetInvoice(bobInvoice.PaymentHash)
 
 	assert.Equal(p.t, payResp.PaymentPreimage, invoiceResult.PaymentPreimage)
@@ -267,6 +273,7 @@ func testOfflineNotificationZeroConfChannel(p *testParams) {
 	}
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	delivered := make(chan struct{})
+	started := make(chan struct{})
 
 	notify := newNotificationDeliveryService(addr, func(resp http.ResponseWriter, req *http.Request) {
 		var body PaymentReceivedPayload
@@ -281,6 +288,7 @@ func testOfflineNotificationZeroConfChannel(p *testParams) {
 		log.Printf("Starting breez client again")
 		p.BreezClient().Start()
 		p.BreezClient().Node().ConnectPeer(p.lsp.LightningNode())
+		close(started)
 	}()
 
 	url := "http://" + addr + "/api/v1/notify"
@@ -288,6 +296,7 @@ func testOfflineNotificationZeroConfChannel(p *testParams) {
 
 	log.Printf("Alice paying zero conf invoice")
 	payResp := alice.Pay(invoiceWithHint)
+	<-started // Wait for breez-client to be fully started
 	invoiceResult := p.BreezClient().Node().GetInvoice(bobInvoice.PaymentHash)
 
 	assert.Equal(p.t, payResp.PaymentPreimage, invoiceResult.PaymentPreimage)
