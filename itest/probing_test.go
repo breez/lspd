@@ -67,6 +67,9 @@ func testProbing(p *testParams) {
 	log.Printf("Stopping breez client")
 	p.BreezClient().Stop()
 
+	// Wait a bit to ensure the client is fully offline
+	<-time.After(2 * time.Second)
+
 	log.Printf("Alice paying with fake payment hash with Bob offline %x", fakePaymentHash)
 	_, err = alice.PayViaRoute(outerAmountMsat, fakePaymentHash, outerInvoice.paymentSecret, route)
 
